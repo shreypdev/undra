@@ -61,6 +61,8 @@ jobs:
         run: bash scripts/wt-ci-check.test.sh
       - name: wt.sh merge and clean (the push, the verification and the deletions, against scratch repositories)
         run: bash scripts/wt-cleanup.test.sh
+      - name: jitpack-install.sh (a failed SDK component download is tried again, nothing else is)
+        run: bash runtimes/kotlin/undra-runtime/scripts/jitpack-install.test.sh
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test

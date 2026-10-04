@@ -618,3 +618,38 @@ Open after this checkpoint: CI flakes seen this week and not yet fixed at their 
 
 `origin` has `main` only and no pull request is open. What remains is the founder's: `docs/RELEASING.md` (nine steps, no secret; the `v1.0.0-rc.1` rehearsal tag is required), reserving the npm scope `@undra`, and the announcement (drafts in `.10x/launch/` on his machine, not committed). Not verified anywhere: pnpm against the release-asset URLs; a physical device. The Android emulator CI job for the Kotlin Android modules is still on hold until he says go.
 
+
+### Checkpoint 37 (2026-10-04) - v1.0.0 is published; JitPack's build of the tag failed on JitPack's side
+
+The founder asked the integrator to carry out `docs/RELEASING.md` steps 3 to 8 (everything but the announcement and
+step 2, the repository's settings). npm stays out: nothing is published to a registry.
+
+| Piece | Landed (squash) | What it is |
+|---|---|---|
+| **release-smoke** (#22) | `7279bb6` | The workflow *Release smoke* walks a published release on clean runners as a new engineer would: the installer (macOS, Linux), `cargo install` from the tag, `undra init`, the web, iOS and Android builds, `undra bindgen --check`. It starts by itself after each Release run; `gh workflow run release-smoke.yml -f version=<V>` runs it by hand. |
+| **state-polish** (#20) | `dd845dc` | Checkpoint 36. Contract S04's order check takes its margins from the gap between the delays and counts only valid trials (up to 30). `signals/keyed_10k/move` gets a 2x baseline tolerance: on the runner it reads about 12 us or 19 us for a whole process (eight runs listed beside it in `bench/budgets.toml`; the cause is not established). |
+| **1.0.0-rc.1** (#21) | `3ed288c` | The version, and what a prerelease exposed: `scripts/bump-version.sh` did not know the Bazel rules (their module, the runtime package they build, the `bazel_dep` of the example and of the guide and its copy in the search index, the example core's requirement, which is the whole version); the CLI's upgrade test rebuilt the runtime range from two parts of the version; the concurrent-writers test of `undra-signals` did not tolerate a stale index in `update_at` as it did in `remove`. |
+| **1.0.0** (#23) | `a941e3e` | `scripts/bump-version.sh 1.0.0`. The migration notes stay under `1.0.0-rc.1`, which is tagged. |
+| **state-release** (this) | | `jitpack-install.sh` tries a failed Android SDK component download again (three attempts, nothing else is retried), with a test and a CI step; the release guide says how a failed JitPack build is retried; this checkpoint. |
+
+**Published and verified**
+
+* `v1.0.0-rc.1` (on `3ed288c`): Release run 37177651681, a prerelease with the four CLI tarballs, the three npm
+  tarballs and `checksums.txt`. Release smoke run 37178553860, green on both jobs: the installer, `cargo install` from
+  the tag, a new app built for web (`@undra/runtime@1.0.0-rc.1` from the asset), iOS (`xcodebuild`, the Swift package
+  from the tag) and Android (`assembleDebug`, the six Kotlin modules from JitPack), `undra bindgen --check`.
+* `v1.0.0` (on `a941e3e`, whose tree is the tested head's): Release run 37180690410, green; the same eight assets;
+  it is the latest release, so the installer serves it. Release smoke run 37181037000: the Linux job is green (the
+  installer, `cargo install` from the tag, a new web app).
+
+**Open: JitPack has not built `v1.0.0`.** Its build ended in `Error` on JitPack's machine: Build-Tools 34 arrived as a
+broken archive ("Archive is not a ZIP archive"), an hour after the same tree built as `v1.0.0-rc.1`. So the Mac job of
+run 37181037000 stopped at its JitPack wait, and for `v1.0.0` the iOS and Android builds from the published release
+are **not verified yet**; an Android app of `v1.0.0` cannot resolve its Kotlin modules until the build is redone. Only
+the founder can redo it: sign in at https://jitpack.io/#shreypdev/undra with the GitHub account, remove the failed
+`v1.0.0` build, ask for the pom again (step 7's `curl`); JitPack allows it until 2026-10-11. Then
+`gh workflow run release-smoke.yml -f version=1.0.0`, and the hashes JitPack serves go into the release notes
+(step 7). The other way is a patch release.
+
+Still the founder's: step 2 (the `release` environment and the tag ruleset), the announcement (step 9). Not verified
+anywhere: pnpm against the release-asset URLs; a physical device. The Android emulator CI job is still on hold.
