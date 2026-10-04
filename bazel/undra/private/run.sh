@@ -223,7 +223,7 @@ fi
     echo "directory = \"$VENDOR_DIR\""
   fi
   if [ -n "$UNDRA_FILES" ] && [ "$MODE" != cli ]; then
-    # The core depends on `undra = "0.1"` like any app; this is where the checkout stands in for the registry.
+    # The core depends on the `undra` crate by version like any app; this is where the checkout stands in for the registry.
     echo '[patch.crates-io]'
     for crate in "$WORK"/undra/crates/*/; do
       crate="${crate%/}"

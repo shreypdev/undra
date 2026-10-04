@@ -89,8 +89,9 @@ GitHub (`gh workflow run launch-rehearsal.yml`).
 scripts/bump-version.sh 1.0.0
 ```
 
-It sets the workspace and `Cargo.lock`, the three npm packages and their locks, every `"@undra/runtime"` range and
-the runtimes' `Hello` versions, and lists the files. It also files the migration notes kept under a version that was
+It sets the workspace and `Cargo.lock`, the three npm packages and their locks, every `"@undra/runtime"` range, the
+runtimes' `Hello` versions and the Bazel rules (their module, the runtime package they build, the example's and the
+guide's dependency on them, the example core's `undra` requirement), and lists the files. It also files the migration notes kept under a version that was
 never released (no tag `v<old>`: the first entry of `crates/undra-cli/src/migrations.rs`, "Since v1.0", kept under
 `0.1.0`) under the new one, so `undra upgrade` prints them to the projects of a `0.1.0` CLI; after step 3 they stay
 under `1.0.0-rc.1`, which a `0.1.0` project crosses too. Verify: `bash scripts/bump-version.sh --check 1.0.0` says

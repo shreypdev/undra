@@ -48,7 +48,7 @@ SDK and builds (by hand: CI does not run it, since `rules_android` then download
 
 ## Notes
 
-* The Undra crates are not on crates.io yet, so the core says `undra = "0.1"` and the rules (and `.cargo/config.toml`, for a plain
+* The Undra crates are not on crates.io yet, so the core names the `undra` crate by version (`scripts/bump-version.sh` keeps it at the checkout's) and the rules (and `.cargo/config.toml`, for a plain
   `cargo test` here) stand the checkout in for the registry with `[patch.crates-io]`.
 * `.bazelrc` sets `DO_NOT_TRACK=1`: `aspect_rules_js` and `aspect_rules_ts` depend on a telemetry module that reports the rulesets a
   build uses to Aspect.
