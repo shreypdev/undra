@@ -202,6 +202,16 @@ A tag is immutable and projects pin it: never move or delete one. Fix forward wi
   in the repository, it is a patch release. Android apps of `v1.0.0` cannot build until the tag builds on JitPack.
   It happened to `v1.0.0` itself (2026-10-04: Build-Tools 34 arrived as a broken archive on JitPack's machine, an
   hour after the same tree built as `v1.0.0-rc.1`); since then `jitpack-install.sh` tries that one failure again.
+  Do the retry in this order, or the log link of the tag keeps showing the failed build: remove the build, ask for
+  the pom once, wait for `"status" : "ok"` from `https://jitpack.io/api/builds/com.github.shreypdev/undra/v1.0.0`,
+  and only then open `build.log` (the first rebuild of `v1.0.0`, whose log was read while it ran, kept the old log;
+  the second, done this way, shows the new one). A rebuild gives the two jars new bytes: record the hashes again
+  (step 7) and run the *Release smoke* workflow again.
+* **A build named `1.0.0` beside `v1.0.0` on JitPack**: JitPack builds a `v` tag under the name without the `v` too,
+  by itself, for the latest stable release (Lottie, Glide and MPAndroidChart have the same pairs). It is the same
+  commit, nothing of Undra's asks for it, and removing it lasts until the next visit to the repository's page on
+  jitpack.io. Leave it. The tags keep their `v`: the installer, the workflows and every generated project pin
+  `v<version>`.
 * **The Swift package or the crates**: a broken tag is a patch release; `undra upgrade` moves projects to it.
 * **cargo**: nothing to roll back; users pin `--tag`.
 
