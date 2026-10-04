@@ -67,7 +67,7 @@
 <p>Pin Bazel in <code>.bazelversion</code> (8.8.1 is what the rules are tested with) and put the rules and the toolchain in <code>MODULE.bazel</code>. The core is an ordinary Cargo crate that depends on <code>undra</code>; <code>undra.toml</code> stays the project file.</p>
 <p>If you use <code>undra_ts_library</code>, add <code>common --repo_env=DO_NOT_TRACK=1</code> to your <code>.bazelrc</code>. The TypeScript rules it loads (<code>aspect_rules_js</code>) report which rulesets and versions your build uses to Aspect unless that variable is set, and only your repository can set it: a module cannot do it for you. The other rules never load them.</p>
 <details class="reveal-code"><summary>Show MODULE.bazel and BUILD.bazel</summary>
-<div class="code"><div class="code-bar"><span>MODULE.bazel</span></div><pre><code data-lang="python">bazel_dep(name = "undra_rules", version = "1.0.0-rc.1")
+<div class="code"><div class="code-bar"><span>MODULE.bazel</span></div><pre><code data-lang="python">bazel_dep(name = "undra_rules", version = "1.0.0")
 bazel_dep(name = "rules_rust", version = "0.74.0")
 
 # The compiler Undra's goldens and size gate are recorded on, and the targets the cores are built for.

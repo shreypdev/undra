@@ -358,7 +358,7 @@ so building each platform in turn (or in separate CI jobs, uploading to one dire
 ```json
 {
   "version": 1,
-  "undra": "0.1.0",
+  "undra": "1.0.0",
   "artifacts": [
     {
       "platform": "android",            // ios | android | web | host
