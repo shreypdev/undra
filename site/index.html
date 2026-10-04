@@ -3,21 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Undra: the Rust core for native apps</title>
+<title>Undra: one Rust core for iOS, Android and web apps</title>
 <meta name="description" content="Undra is a Rust framework for sharing business logic across iOS, Android and web. It generates Swift, Kotlin and TypeScript; your UI stays native.">
 <link rel="canonical" href="https://shreypdev.github.io/undra/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Undra">
-<meta property="og:title" content="Undra: the Rust core for native apps">
-<meta property="og:description" content="Write your domain once in Rust. Undra generates native Swift, Kotlin and TypeScript; your UI stays SwiftUI, Compose, React or React Native.">
+<meta property="og:title" content="Undra: one Rust core for iOS, Android and web apps">
+<meta property="og:description" content="Write your app&#39;s logic once in Rust. Undra generates Swift, Kotlin and TypeScript; the UI stays SwiftUI, Jetpack Compose, React or React Native.">
 <meta property="og:url" content="https://shreypdev.github.io/undra/">
 <meta property="og:image" content="https://shreypdev.github.io/undra/assets/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Undra: the Rust core for native apps">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Undra: the Rust core for native apps">
-<meta name="twitter:description" content="Write your domain once in Rust. Undra generates native Swift, Kotlin and TypeScript; your UI stays SwiftUI, Compose, React or React Native.">
+<meta name="twitter:title" content="Undra: one Rust core for iOS, Android and web apps">
+<meta name="twitter:description" content="Write your app&#39;s logic once in Rust. Undra generates Swift, Kotlin and TypeScript; the UI stays SwiftUI, Jetpack Compose, React or React Native.">
 <meta name="twitter:image" content="https://shreypdev.github.io/undra/assets/og.png">
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
@@ -70,7 +70,7 @@
 
     <div class="hero-grid">
       <div>
-        <p class="hero-sub">Your app's logic, state and data in one Rust core, under SwiftUI, Compose, React and React Native.</p>
+        <p class="hero-sub"><span class="hero-lead">Undra is a Rust framework for iOS, Android and web apps.</span> Write your logic, state and data once; the UI stays native: SwiftUI, Jetpack Compose, React or React Native.</p>
         <div class="cta-row">
           <a class="btn btn-primary" href="docs/getting-started.html">Get started <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
           <a class="btn btn-ghost" href="#live">See it live</a>
@@ -92,7 +92,7 @@
         </div>
 <svg class="dg dg-wide is-static" viewBox="0 0 1200 608" role="img" aria-labelledby="dgw-t dgw-d" data-by="268" focusable="false">
     <title id="dgw-t">How Undra works</title>
-    <desc id="dgw-d">Four native UIs (SwiftUI, Compose, React, React Native) sit above the Rust core. A write from any UI crosses the boundary once per transaction. The core commits one binary change-set, which fans out to every UI's local mirror. Reads never cross the boundary.</desc>
+    <desc id="dgw-d">Four native UIs (SwiftUI on iOS, Jetpack Compose on Android, React on the web, React Native on iOS and Android) sit above the Rust core. A write from any UI crosses the language boundary once per transaction. The core commits one binary change-set, which fans out to every UI's local mirror. Reads never cross the language boundary.</desc>
     <defs>
       <radialGradient id="dgw-halo" cx="50%" cy="50%" r="50%"><stop offset="0" style="stop-color:var(--accent);stop-opacity:.34"/><stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/></radialGradient>
       <radialGradient id="dgw-core" cx="50%" cy="0%" r="75%"><stop offset="0" style="stop-color:var(--accent);stop-opacity:.42"/><stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/></radialGradient>
@@ -123,14 +123,14 @@
       <g transform="translate(20,257)"><rect class="chip-bg" width="146" height="22" rx="11"/><circle cx="11" cy="11" r="3" class="bnum"/><text class="chip-tx mono" x="21" y="15" style="font-size:11px">reads never cross</text></g>
       <g transform="translate(228,257)"><rect class="chip-bg" width="216" height="22" rx="11"/><circle cx="11" cy="11" r="3" class="bnum"/><text class="chip-tx mono" x="21" y="15" style="font-size:11px">one crossing per transaction</text></g>
       <g transform="translate(524,257)"><rect class="chip-bg" width="152" height="22" rx="11"/><circle cx="11" cy="11" r="3" class="bnum"/><text class="chip-tx mono" x="21" y="15" style="font-size:11px">binary change-sets</text></g>
-      <text class="h-lbl mono" x="1180" y="272" text-anchor="end" style="font-size:10.5px">the boundary</text>
+      <text class="h-lbl mono" x="1180" y="272" text-anchor="end" style="font-size:10.5px">the language boundary</text>
     </g>
     <g data-node="0">
       <rect class="halo" data-role="halo" x="52" y="-6" width="304" height="262" fill="url(#dgw-halo)"/>
       <rect class="frame" x="80" y="28" width="248" height="194" rx="18"/>
       <rect class="frame-hot" data-role="hot" x="80" y="28" width="248" height="194" rx="18"/>
       <text class="t-title" x="98" y="64">SwiftUI</text>
-      <text class="t-tag mono" x="310" y="63" text-anchor="end">@Observable</text>
+      <text class="t-tag mono" x="310" y="63" text-anchor="end">iOS · @Observable</text>
       <g data-role="call"><rect class="call-bg" x="96" y="78" width="155" height="24" rx="7"/><text class="call-tx mono" x="106" y="94.5">add(title: &quot;milk&quot;)</text></g>
       <text data-role="idle" class="t-dim mono" x="98" y="95" opacity="0">reads stay local</text>
       <text data-role="badge" data-before="1 left" data-after="2 left" class="t-badge mono" x="310" y="95" text-anchor="end">2 left</text>
@@ -146,7 +146,7 @@
       <rect class="frame" x="344" y="28" width="248" height="194" rx="18"/>
       <rect class="frame-hot" data-role="hot" x="344" y="28" width="248" height="194" rx="18"/>
       <text class="t-title" x="362" y="64">Compose</text>
-      <text class="t-tag mono" x="574" y="63" text-anchor="end">StateFlow</text>
+      <text class="t-tag mono" x="574" y="63" text-anchor="end">Android · StateFlow</text>
       <g data-role="call" opacity="0"><rect class="call-bg" x="360" y="78" width="103" height="24" rx="7"/><text class="call-tx mono" x="370" y="94.5">add(&quot;milk&quot;)</text></g>
       <text data-role="idle" class="t-dim mono" x="362" y="95">reads stay local</text>
       <text data-role="badge" data-before="1 left" data-after="2 left" class="t-badge mono" x="574" y="95" text-anchor="end">2 left</text>
@@ -162,7 +162,7 @@
       <rect class="frame" x="608" y="28" width="248" height="194" rx="18"/>
       <rect class="frame-hot" data-role="hot" x="608" y="28" width="248" height="194" rx="18"/>
       <text class="t-title" x="626" y="64">React</text>
-      <text class="t-tag mono" x="838" y="63" text-anchor="end">useSignal</text>
+      <text class="t-tag mono" x="838" y="63" text-anchor="end">Web · useSignal</text>
       <g data-role="call" opacity="0"><rect class="call-bg" x="624" y="78" width="103" height="24" rx="7"/><text class="call-tx mono" x="634" y="94.5">add(&quot;milk&quot;)</text></g>
       <text data-role="idle" class="t-dim mono" x="626" y="95">reads stay local</text>
       <text data-role="badge" data-before="1 left" data-after="2 left" class="t-badge mono" x="838" y="95" text-anchor="end">2 left</text>
@@ -178,7 +178,7 @@
       <rect class="frame" x="872" y="28" width="248" height="194" rx="18"/>
       <rect class="frame-hot" data-role="hot" x="872" y="28" width="248" height="194" rx="18"/>
       <text class="t-title" x="890" y="64">React Native</text>
-      <text class="t-tag mono" x="1102" y="63" text-anchor="end">useSignal</text>
+      <text class="t-tag mono" x="1102" y="63" text-anchor="end">iOS + Android</text>
       <g data-role="call" opacity="0"><rect class="call-bg" x="888" y="78" width="103" height="24" rx="7"/><text class="call-tx mono" x="898" y="94.5">add(&quot;milk&quot;)</text></g>
       <text data-role="idle" class="t-dim mono" x="890" y="95">reads stay local</text>
       <text data-role="badge" data-before="1 left" data-after="2 left" class="t-badge mono" x="1102" y="95" text-anchor="end">2 left</text>
@@ -215,7 +215,7 @@
   </svg>
 <svg class="dg dg-narrow is-static" viewBox="0 0 360 642" role="img" aria-labelledby="dgn-t dgn-d" data-by="340" focusable="false">
     <title id="dgn-t">How Undra works</title>
-    <desc id="dgn-d">Four native UIs (SwiftUI, Compose, React, React Native) sit above the Rust core. A write from any UI crosses the boundary once per transaction. The core commits one binary change-set, which fans out to every UI's local mirror. Reads never cross the boundary.</desc>
+    <desc id="dgn-d">Four native UIs (SwiftUI on iOS, Jetpack Compose on Android, React on the web, React Native on iOS and Android) sit above the Rust core. A write from any UI crosses the language boundary once per transaction. The core commits one binary change-set, which fans out to every UI's local mirror. Reads never cross the language boundary.</desc>
     <defs>
       <radialGradient id="dgn-halo" cx="50%" cy="50%" r="50%"><stop offset="0" style="stop-color:var(--accent);stop-opacity:.34"/><stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/></radialGradient>
       <radialGradient id="dgn-core" cx="50%" cy="0%" r="75%"><stop offset="0" style="stop-color:var(--accent);stop-opacity:.42"/><stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/></radialGradient>
@@ -252,9 +252,10 @@
       <rect class="frame" x="8" y="14" width="132" height="138" rx="14"/>
       <rect class="frame-hot" data-role="hot" x="8" y="14" width="132" height="138" rx="14"/>
       <text class="t-title" x="19" y="38" style="font-size:13px">SwiftUI</text>
+      <text class="t-tag mono" x="19" y="51" style="font-size:9.5px">iOS</text>
       <text data-role="badge" data-before="1" data-after="2" class="t-badge mono" x="128" y="38" text-anchor="end" style="font-size:12px;fill:var(--accent)">2</text>
-      <g data-role="call"><text class="call-tx mono" x="19" y="57" style="font-size:10.5px">store.add()</text></g>
-      <text data-role="idle" class="t-dim mono" x="19" y="57" style="font-size:10.5px" opacity="0">local reads</text>
+      <g data-role="call"><text class="call-tx mono" x="19" y="63" style="font-size:10.5px">store.add()</text></g>
+      <text data-role="idle" class="t-dim mono" x="19" y="63" style="font-size:10.5px" opacity="0">local reads</text>
       <rect class="mirror" x="16" y="68" width="116" height="76" rx="8"/>
       <g class="row"><circle class="check check-on" cx="30" cy="86" r="4.6"/><rect class="bar" x="42" y="82.5" width="81" height="7" rx="3.5"/></g>
       <g class="row"><circle class="check" cx="30" cy="110" r="4.6"/><rect class="bar" x="42" y="106.5" width="64" height="7" rx="3.5"/></g>
@@ -265,9 +266,10 @@
       <rect class="frame" x="220" y="14" width="132" height="138" rx="14"/>
       <rect class="frame-hot" data-role="hot" x="220" y="14" width="132" height="138" rx="14"/>
       <text class="t-title" x="231" y="38" style="font-size:13px">Compose</text>
+      <text class="t-tag mono" x="231" y="51" style="font-size:9.5px">Android</text>
       <text data-role="badge" data-before="1" data-after="2" class="t-badge mono" x="340" y="38" text-anchor="end" style="font-size:12px;fill:var(--accent)">2</text>
-      <g data-role="call" opacity="0"><text class="call-tx mono" x="231" y="57" style="font-size:10.5px">store.add()</text></g>
-      <text data-role="idle" class="t-dim mono" x="231" y="57" style="font-size:10.5px">local reads</text>
+      <g data-role="call" opacity="0"><text class="call-tx mono" x="231" y="63" style="font-size:10.5px">store.add()</text></g>
+      <text data-role="idle" class="t-dim mono" x="231" y="63" style="font-size:10.5px">local reads</text>
       <rect class="mirror" x="228" y="68" width="116" height="76" rx="8"/>
       <g class="row"><circle class="check check-on" cx="242" cy="86" r="4.6"/><rect class="bar" x="254" y="82.5" width="81" height="7" rx="3.5"/></g>
       <g class="row"><circle class="check" cx="242" cy="110" r="4.6"/><rect class="bar" x="254" y="106.5" width="64" height="7" rx="3.5"/></g>
@@ -278,9 +280,10 @@
       <rect class="frame" x="8" y="168" width="132" height="138" rx="14"/>
       <rect class="frame-hot" data-role="hot" x="8" y="168" width="132" height="138" rx="14"/>
       <text class="t-title" x="19" y="192" style="font-size:13px">React</text>
+      <text class="t-tag mono" x="19" y="205" style="font-size:9.5px">Web</text>
       <text data-role="badge" data-before="1" data-after="2" class="t-badge mono" x="128" y="192" text-anchor="end" style="font-size:12px;fill:var(--accent)">2</text>
-      <g data-role="call" opacity="0"><text class="call-tx mono" x="19" y="211" style="font-size:10.5px">store.add()</text></g>
-      <text data-role="idle" class="t-dim mono" x="19" y="211" style="font-size:10.5px">local reads</text>
+      <g data-role="call" opacity="0"><text class="call-tx mono" x="19" y="217" style="font-size:10.5px">store.add()</text></g>
+      <text data-role="idle" class="t-dim mono" x="19" y="217" style="font-size:10.5px">local reads</text>
       <rect class="mirror" x="16" y="222" width="116" height="76" rx="8"/>
       <g class="row"><circle class="check check-on" cx="30" cy="240" r="4.6"/><rect class="bar" x="42" y="236.5" width="81" height="7" rx="3.5"/></g>
       <g class="row"><circle class="check" cx="30" cy="264" r="4.6"/><rect class="bar" x="42" y="260.5" width="64" height="7" rx="3.5"/></g>
@@ -291,9 +294,10 @@
       <rect class="frame" x="220" y="168" width="132" height="138" rx="14"/>
       <rect class="frame-hot" data-role="hot" x="220" y="168" width="132" height="138" rx="14"/>
       <text class="t-title" x="231" y="192" style="font-size:13px">React Native</text>
+      <text class="t-tag mono" x="231" y="205" style="font-size:9.5px">iOS + Android</text>
       <text data-role="badge" data-before="1" data-after="2" class="t-badge mono" x="340" y="192" text-anchor="end" style="font-size:12px;fill:var(--accent)">2</text>
-      <g data-role="call" opacity="0"><text class="call-tx mono" x="231" y="211" style="font-size:10.5px">store.add()</text></g>
-      <text data-role="idle" class="t-dim mono" x="231" y="211" style="font-size:10.5px">local reads</text>
+      <g data-role="call" opacity="0"><text class="call-tx mono" x="231" y="217" style="font-size:10.5px">store.add()</text></g>
+      <text data-role="idle" class="t-dim mono" x="231" y="217" style="font-size:10.5px">local reads</text>
       <rect class="mirror" x="228" y="222" width="116" height="76" rx="8"/>
       <g class="row"><circle class="check check-on" cx="242" cy="240" r="4.6"/><rect class="bar" x="254" y="236.5" width="81" height="7" rx="3.5"/></g>
       <g class="row"><circle class="check" cx="242" cy="264" r="4.6"/><rect class="bar" x="254" y="260.5" width="64" height="7" rx="3.5"/></g>
@@ -327,9 +331,9 @@
           <li><i></i> <span>change-sets</span></li>
         </ul>
         <ol class="steps" aria-label="What the animation shows">
-          <li><b>Write</b><span>Once per transaction.</span></li>
-          <li><b>Commit</b><span>One change-set.</span></li>
-          <li><b>Apply</b><span>Every mirror.</span></li>
+          <li><b>Write</b><span>A tap calls Rust once.</span></li>
+          <li><b>Commit</b><span>Rust answers with one change-set.</span></li>
+          <li><b>Apply</b><span>Every screen's copy updates.</span></li>
         </ol>
       </div>
     </div>
@@ -352,12 +356,13 @@
       <div class="live-side">
         <dl class="counters" aria-label="Live measurements from the demo">
           <div data-stress hidden><dt>Generated</dt><dd><span class="num" data-stat="gen">–</span><small>/ s</small></dd></div>
-          <div><dt>Applied after merge</dt><dd><span class="num" data-stat="rate">–</span><small>/ s</small><small class="sub" data-stat="merge"></small></dd></div>
-          <div><dt>Apply p50</dt><dd><span class="num" data-stat="p50">–</span></dd></div>
-          <div><dt>Apply p99</dt><dd><span class="num" data-stat="p99">–</span></dd></div>
+          <div><dt>Applied (merged per frame)</dt><dd><span class="num" data-stat="rate">–</span><small>/ s</small><small class="sub" data-stat="merge"></small></dd></div>
+          <div><dt>Apply, average</dt><dd><span class="num" data-stat="avg">–</span><small class="sub" data-stat="avg-of"></small></dd></div>
+          <div><dt>Slowest drain</dt><dd><span class="num" data-stat="max">–</span></dd></div>
           <div data-stress hidden><dt>Dropped frames</dt><dd><span class="num" data-stat="dropped">–</span></dd></div>
         </dl>
-        <details class="measured"><summary>Measured in your browser</summary><p>The time the mirror spends on one drain: applying what the core sent since the last frame to the local signals and notifying subscribers, over the last two seconds, taken with <code>performance.now()</code>. Browsers round that clock (Chrome to 0.1&nbsp;ms), so the smallest values read as &ldquo;under&rdquo; the step. <em>Push it</em> makes the core generate 10,000 updates a second on its own timer. The counters then also show how many it generated, how many entries the mirror applied after merging what arrived between two frames (and what share of those received), and the frames this page dropped, counted with <code>requestAnimationFrame</code>. Nothing here is a recording.</p></details>
+        <p class="clock-note">Your browser's clock rounds to <span data-clock-step>0.1 ms</span>, so anything faster reads &ldquo;&lt; <span data-clock-step>0.1 ms</span>&rdquo;. Measured with a real clock, one change-set of 100 signals takes <!--measured:row-changeset-100-->2.3 µs<!--/measured-->.</p>
+        <details class="measured"><summary>Measured in your browser</summary><p>A drain is the mirror applying what the core sent since the last frame to the local signals and notifying subscribers, timed with <code>performance.now()</code>. Browsers round that clock (Chrome to 0.1&nbsp;ms, Firefox and Safari to 1&nbsp;ms), so one drain faster than the step reads as &ldquo;under&rdquo; it. The average is a batch: every drain of the last two seconds, their times added up and divided by their number. Each reading is off by less than a step, too high or too low, and across a batch those errors even out, so the average is a real number below the step; it reads &ldquo;under&rdquo; only when the whole batch took less than one step. The slowest drain is one reading, so it is shown as a bound: under one step more than it read. <em>Push it</em> makes the core generate 10,000 updates a second on its own timer. The counters then also show how many it generated, how many entries the mirror applied after merging what arrived between two frames (and what share of those received), and the frames this page dropped, counted with <code>requestAnimationFrame</code>. Nothing here is a recording.</p></details>
         <div class="cta-row left">
           <a class="btn btn-ghost" href="playground/">Open the playground</a>
           <!-- pushit:start -->
@@ -373,7 +378,7 @@
 <section class="section" id="numbers">
   <div class="wrap">
     <span class="kicker reveal">Numbers</span>
-    <h2 class="h2 reveal">The boundary is cheap. <em>Measured,</em> not promised.</h2>
+    <h2 class="h2 reveal">Calling Rust is cheap. <em>Measured,</em> not promised.</h2>
     <p class="lede reveal" data-d="1">Every number links to its source.</p>
     <!-- numbers:start -->
     <div class="stats" role="group" aria-label="Benchmark results, measured on Apple M5 Pro, 18 cores, macOS 26.5">
@@ -406,11 +411,11 @@
 <section class="section" id="how">
   <div class="wrap">
     <span class="kicker reveal">How it works</span>
-    <h2 class="h2 reveal">Describe once. Generate native. <em>Write once per change.</em></h2>
+    <h2 class="h2 reveal">Write the core. Generate the API. <em>Keep your screens.</em></h2>
     <div class="how">
-      <article class="how-card reveal"><span class="n" aria-hidden="true"></span><h3>Describe it</h3><p>Rust is the source of truth.</p></article>
-      <article class="how-card reveal" data-d="1"><span class="n" aria-hidden="true"></span><h3>Generate it</h3><p>Swift, Kotlin, TypeScript.</p></article>
-      <article class="how-card reveal" data-d="2"><span class="n" aria-hidden="true"></span><h3>Write once</h3><p>Reads stay local.</p></article>
+      <article class="how-card reveal"><span class="n" aria-hidden="true"></span><h3>Write the core</h3><p>Your logic and state, in Rust.</p></article>
+      <article class="how-card reveal" data-d="1"><span class="n" aria-hidden="true"></span><h3>Generate the API</h3><p>Swift, Kotlin and TypeScript.</p></article>
+      <article class="how-card reveal" data-d="2"><span class="n" aria-hidden="true"></span><h3>Keep your screens</h3><p>Reads are local; a change crosses once.</p></article>
     </div>
     <details class="reveal-code">
       <summary>Show the generated code</summary>
@@ -567,9 +572,9 @@ pub async fn create_remote_todo(ctx: &amp;Ctx, list: String, title: String) -&gt
       <!-- trust:start -->
       <article class="tcard t-tests reveal" data-bar>
       <h3><a href="https://github.com/shreypdev/undra#why-you-can-trust-it" rel="noopener">Tests</a></h3>
-      <div class="big"><span data-count="7414" data-dec="0" data-final="7,414">7,414</span></div>
-      <div class="seg" role="img" aria-label="Rust 3,689, TypeScript 1,864, Kotlin 881, Swift 870, React Native 110"><i style="--w:49.8%"></i><i style="--w:25.1%"></i><i style="--w:11.9%"></i><i style="--w:11.7%"></i><i style="--w:1.5%"></i></div>
-      <ul class="seg-key" role="list"><li>Rust<b>3,689</b></li><li>TypeScript<b>1,864</b></li><li>Kotlin<b>881</b></li><li>Swift<b>870</b></li><li>React Native<b>110</b></li></ul>
+      <div class="big"><span data-count="7770" data-dec="0" data-final="7,770">7,770</span></div>
+      <div class="seg" role="img" aria-label="Rust 3,812, TypeScript 2,043, Swift 914, Kotlin 890, React Native 111"><i style="--w:49.1%"></i><i style="--w:26.3%"></i><i style="--w:11.8%"></i><i style="--w:11.5%"></i><i style="--w:1.4%"></i></div>
+      <ul class="seg-key" role="list"><li>Rust<b>3,812</b></li><li>TypeScript<b>2,043</b></li><li>Swift<b>914</b></li><li>Kotlin<b>890</b></li><li>React Native<b>111</b></li></ul>
       </article>
       <article class="tcard t-cells reveal" data-bar data-d="1">
       <h3><a href="https://github.com/shreypdev/undra/blob/main/contract-tests/scenarios.md" rel="noopener">35 scenarios on 3 platforms</a></h3>

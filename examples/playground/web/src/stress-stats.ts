@@ -97,6 +97,8 @@ export interface DrainWindowSnapshot {
   /** Nearest-rank percentiles of the drain durations, in microseconds; 0 with no drains. */
   readonly p50Us: number;
   readonly p99Us: number;
+  /** The longest single drain, in microseconds; 0 with no drains. */
+  readonly maxUs: number;
   /** Sum of drain time over sum of change-sets, in nanoseconds; 0 with no change-sets. */
   readonly nsPerChangeSet: number;
 }
@@ -126,6 +128,7 @@ const EMPTY_WINDOW: DrainWindowSnapshot = {
   appliedPerSec: 0,
   p50Us: 0,
   p99Us: 0,
+  maxUs: 0,
   nsPerChangeSet: 0,
 };
 
@@ -202,6 +205,7 @@ export class DrainWindow {
       appliedPerSec: perSec(appliedEntries),
       p50Us: percentile(durationsUs, 0.5),
       p99Us: percentile(durationsUs, 0.99),
+      maxUs: durationsUs[durationsUs.length - 1] ?? 0,
       nsPerChangeSet: (totalMs * 1e6) / changeSets,
     };
   }
@@ -479,6 +483,10 @@ export interface StressSnapshot {
   /** Median and 99th-percentile duration of one drain, in microseconds. */
   readonly drainP50Us: number;
   readonly drainP99Us: number;
+  /** The drains in the window, all their time together in microseconds, and the longest one. */
+  readonly drains: number;
+  readonly drainTotalUs: number;
+  readonly drainMaxUs: number;
   /** Drain time over change-sets in the window, in nanoseconds. */
   readonly nsPerChangeSet: number;
   /** Dropped frames since the last reset, and in the last five seconds. */
@@ -593,6 +601,9 @@ export class StressMeter {
       drainsPerSec: drains.drainsPerSec,
       drainP50Us: drains.p50Us,
       drainP99Us: drains.p99Us,
+      drains: drains.drains,
+      drainTotalUs: drains.totalMs * 1000,
+      drainMaxUs: drains.maxUs,
       nsPerChangeSet: drains.nsPerChangeSet,
       droppedFrames: frames?.dropped ?? 0,
       droppedFramesRecent: frames?.droppedRecent ?? 0,

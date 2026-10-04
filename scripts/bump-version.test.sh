@@ -64,6 +64,7 @@ grep -qx "export const RUNTIME_VERSION = \"$new\";" "$copy/runtimes/ts/@undra/ru
 grep -qx "internal const val UNDRA_RUNTIME_VERSION: String = \"$new\"" \
   "$copy/runtimes/kotlin/undra-runtime/runtime/src/main/kotlin/dev/undra/runtime/UndraLog.kt" ||
   fail "the Kotlin runtime's UNDRA_RUNTIME_VERSION does not say $new"
+# Every tracked manifest, so one that names the range but is missing from the script's list fails here.
 stale=$(cd "$copy" && git ls-files -- '*package.json' '*package-lock.json' | grep -v '/tests/fixtures/' |
   xargs grep -l "\"@undra/runtime\": \"^$old\"" || true)
 [ -z "$stale" ] || fail "still naming ^$old: $stale"
@@ -102,10 +103,25 @@ if grep -q "^    version: \"$old\",$" "$repo/crates/undra-cli/src/migrations.rs"
   grep -q "^    version: \"$new\",$" "$copy/crates/undra-cli/src/migrations.rs" ||
     fail "the notes of the released $new moved"
 fi
-bump "$new" >/dev/null || fail "bump back to $new failed"
 pass "the notes of a released version stay where they are"
 
-# Outside a git checkout (an unpacked source archive) the manifests are found by walking the tree.
+# Back to $new on a slow runner, planted: a copy of the script that pauses for a second between
+# truncating the React Native host's package.json and writing it. Nothing may read a file the script is
+# rewriting (the list of files used to be made while the files were written, and found this one empty).
+slow="$copy/scripts/bump-version.slow.sh"
+awk -v line="      printf '%s' \"\${new%x}\" >\"\$file\"" '
+  $0 == line { print "      { case $file in runtimes/rn/*/package.json) sleep 1 ;; esac; printf '\''%s'\'' \"${new%x}\"; } >\"$file\""; n++; next }
+  { print }
+  END { exit n != 1 }' "$copy/scripts/bump-version.sh" >"$slow" || fail "the write the slow copy pauses is not in bump-version.sh"
+(cd "$copy" && bash scripts/bump-version.slow.sh "$new" >/dev/null) || fail "bump back to $new failed"
+rm "$slow"
+for dir in runtimes/ts/@undra/testkit runtimes/rn/@undra/react-native; do
+  grep -q "\"@undra/runtime\": \"^$new\"" "$copy/$dir/package.json" || fail "$dir/package.json's peer range was left behind by a slow write"
+done
+bump --check "$new" >/dev/null || fail "--check $new fails after a slow bump"
+pass "a pause in the middle of a write leaves nothing behind"
+
+# Outside a git checkout (an unpacked source archive) the script visits the same files: its list is fixed.
 rm -rf "$copy/.git"
 bump --check "$new" >/dev/null || fail "--check without git"
 pass "it works without git"

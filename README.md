@@ -10,8 +10,8 @@
 
 Undra owns everything **under the pixels** of your iOS, Android and web apps (domain
 logic, reactive state, the data layer, persistence, and the dev loop) while the UI stays
-100% native: SwiftUI, Jetpack Compose, React and React Native, written by hand, the way
-platform engineers want to write them.
+100% native: SwiftUI on iOS, Jetpack Compose on Android, React on the web, and React
+Native, written by hand, the way platform engineers want to write them.
 
 It is the opposite of a cross-platform UI framework. Your screens never leave the
 platform. Your *logic* stops being written three times.
@@ -73,11 +73,11 @@ Sustained-load results (a firehose, keyed churn, fan-out, a 60-second soak) are 
 
 ## Why you can trust it
 
-* **<!--trust:tests-total-->7,414<!--/trust--> tests across the platforms**: Rust
-  <!--trust:tests-rust-->3,689<!--/trust--> · TypeScript <!--trust:tests-typescript-->1,864<!--/trust--> ·
-  Kotlin <!--trust:tests-kotlin-->881<!--/trust--> · Swift <!--trust:tests-swift-->870<!--/trust--> ·
-  React Native <!--trust:tests-react-native-->110<!--/trust-->. These are the counts at the last merge, after the full matrix
-  ran (the ledger is [`.10x/status.md`](.10x/status.md)).
+* **<!--trust:tests-total-->7,770<!--/trust--> tests across the platforms**: Rust
+  <!--trust:tests-rust-->3,812<!--/trust--> · TypeScript <!--trust:tests-typescript-->2,043<!--/trust--> ·
+  Kotlin <!--trust:tests-kotlin-->890<!--/trust--> · Swift <!--trust:tests-swift-->914<!--/trust--> ·
+  React Native <!--trust:tests-react-native-->111<!--/trust-->. These are the tests that passed in a recent green CI
+  run, each suite's own count ([`site/data/tests.json`](site/data/tests.json) names the run).
 * **<!--trust:scenarios-->35<!--/trust--> wire-level contract scenarios, run on every platform**
   (<!--trust:cells-->101<!--/trust-->/<!--trust:cells-->101<!--/trust--> cells pass; two scenarios are about the web
   host and run on TypeScript only): sync/async calls, typed errors, cancellation, stream backpressure, keyed patches,

@@ -215,7 +215,11 @@ extension ContractScenarios {
             try await waitUntil("100 rows") { feed.data.count == 100 && !feed.fetchingNextPage }
             nextPage.stop()
             try check(nextPage.values.first == false && nextPage.values.contains(true) && nextPage.values.last == false, "fetchingNextPage went true and then false: \(nextPage.values)")
-            try checkEqual(shared.data.count, 100, "the shared handle follows")
+            // The page reaches the two handles in one transaction, but as one change-set per store, handed over one after the
+            // other from the core's thread: a frame can drain the first before the second arrives. So the shared handle is
+            // waited for on its own, and then holds the same rows.
+            try await waitUntil("the shared handle to follow to 100 rows") { shared.data.count == 100 }
+            try checkEqual(shared.data.map(\.id), feed.data.map(\.id), "the shared handle follows: the same rows as the first")
             let patch = rawFeed.entries(of: 0)
             try checkEqual(patch.count, 1, "data entries for the next page")
             try checkEqual(patch[0].op, .keyedPatch, "form of the data entry for the next page")

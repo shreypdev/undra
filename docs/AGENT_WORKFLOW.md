@@ -52,7 +52,11 @@ CLAUDE.md), and `scripts/check-no-em-dash.sh`, the first step of CI, fails on a 
 step of CI, Bench, Two cores and Site, in a clone of your commit, read from the workflow files (docs/ONBOARDING.md,
 "Before you push a branch"); and `scripts/ci-local.sh --slow` when the piece adds or touches a test that waits, times or
 races (it runs the timing-sensitive suites throttled, so the failures a slower runner would show are found here, once,
-not one push at a time). Do not merge, rebase onto, or
+not one push at a time). Two rules for such code, each from a check that passed on a pull request and failed on `main`
+for the same tree: make the whole list of what a step will touch before the step changes any of it (the version bump
+built its list in a process beside the loop rewriting those files, and read one while it was empty); and wait for the
+exact condition you assert, never for a neighbour of it (S32 waited for one handle to hold 100 rows and then read a
+second handle, whose change-set the frame had not drained yet). Do not merge, rebase onto, or
 push `main` from a worktree: the integrator merges. Pushing the piece's own `wt/<slug>` branch (which starts its CI
 run, section 4) is the integrator's too, unless the brief says the author does it. Do not edit `.10x/status.md` or
 `.10x/handoff.md` from a worktree (guaranteed conflicts); record your piece in

@@ -33,6 +33,9 @@ class WsTestServer(port: Int = 0) : AutoCloseable {
     /** When set, the upgrade is answered with this status line instead of `101` (for example `HTTP/1.1 403 Forbidden`). */
     @Volatile var rejectWith: String? = null
 
+    /** How many upgrade requests were answered with [rejectWith]. */
+    val rejected = AtomicInteger()
+
     /** When `true` the `Sec-WebSocket-Accept` of the upgrade response is wrong. */
     @Volatile var corruptAccept = false
 
@@ -114,6 +117,7 @@ class WsTestServer(port: Int = 0) : AutoCloseable {
                 if (status != null) {
                     out.write("$status\r\nContent-Length: 0\r\n\r\n".toByteArray())
                     out.flush()
+                    rejected.incrementAndGet()
                     throw IOException("rejected the upgrade")
                 }
                 out.write(

@@ -73,8 +73,7 @@ jobs:
           java-version: "17"
       - name: The Android NDK and cargo-ndk
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION"
+          bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
           cargo install cargo-ndk
       - name: The undra CLI and both cores (before the emulator boots, so they do not compete for the cores)
@@ -86,6 +85,11 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      # The action installs the emulator and the system image with one sdkmanager call each, and an HTTP 502 from
+      # dl.google.com failed the job once: installed here with retries (scripts/android-sdk-install.sh), the action
+      # finds them present.
+      - name: The emulator and its system image (a failed download is tried again)
+        run: bash scripts/android-sdk-install.sh emulator platform-tools "platforms;android-34" "system-images;android-34;google_apis;x86_64"
       - name: Install, launch, read the app's checks
         uses: reactivecircus/android-emulator-runner@v2
         with:

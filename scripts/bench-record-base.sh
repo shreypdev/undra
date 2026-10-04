@@ -14,6 +14,11 @@
 #
 # (that is what .github/workflows/bench.yml does for a pull request and for a push to main).
 #
+# Minutes apart is still two moments of a shared runner: a slow stretch during the head's run alone
+# would fail a scenario whose code did not change. So a sustained scenario that misses only this
+# baseline is decided by rounds of the base's binary (recorded in the file) and the head's, in turn,
+# best against best (bench/tests/stress.rs, `interleave`).
+#
 # How: a throwaway worktree of <base-rev> gets THIS tree's bench/ directory (so harness changes
 # never read as regressions: only the core crates differ), builds into a target directory of its
 # own, and runs the budgets test and the stress test with UNDRA_BENCH_RECORD=<out.toml>: best of
@@ -78,6 +83,10 @@ cd "$WORK/tree"
 export CARGO_TARGET_DIR="$TARGET"
 export UNDRA_BENCH_RECORD="$OUT"
 export UNDRA_STRESS_SECONDS="$SECONDS_PER_SCENARIO"
+# The stress test writes its own binary's path into the file (`stress_binary`): the head's stress test runs it
+# again, in turn with its own runs, for a scenario that misses only this baseline (bench/tests/stress.rs,
+# `interleave`). It lives in $TARGET, which outlives the worktree.
+export UNDRA_BENCH_RECORD_BINARY=1
 unset UNDRA_BENCH_BASELINE UNDRA_STRESS_JSON UNDRA_BENCH_RESULTS_DIR
 
 # Recording must not fail because the BASE misses an absolute budget: the file is written before

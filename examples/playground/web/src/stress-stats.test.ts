@@ -94,6 +94,20 @@ describe("DrainWindow", () => {
     expect(s.nsPerChangeSet).toBeCloseTo(400_000 / 166, 6);
   });
 
+  test("the batch: every drain of the window, their time added up, and the longest one", () => {
+    const clock = fakeClock();
+    const window = new DrainWindow({ now: clock.now });
+    expect(window.snapshot()).toMatchObject({ drains: 0, totalMs: 0, maxUs: 0 });
+    for (const ms of [0, 0.1, 0, 0, 0.3, 0]) {
+      clock.advance(16);
+      window.record(drain(ms, 1, 1));
+    }
+    const s = window.snapshot();
+    expect(s.drains).toBe(6);
+    expect(s.totalMs).toBeCloseTo(0.4, 9);
+    expect(s.maxUs).toBeCloseTo(300, 6);
+  });
+
   test("the rate uses the time since the start while that is shorter than the window", () => {
     const clock = fakeClock(1000);
     const window = new DrainWindow({ now: clock.now });

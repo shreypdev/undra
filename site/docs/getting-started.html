@@ -102,7 +102,7 @@ undra doctor      # prints what is missing, with the fix</code></pre></div>
 cargo install --path crates/undra-cli    # the `undra` command
 source scripts/env.sh                   # PATH, JDK and Kotlin jars, Xcode fallback, per shell</code></pre></div>
 <h2 id="3-create-a-project">3. Create a project<a class="anchor" href="#3-create-a-project" aria-label="Link to this section">#</a></h2>
-<div class="code"><div class="code-bar"><span><span class="lang">bash</span></span></div><pre><code data-lang="bash">undra init myapp                        # core + SwiftUI + Compose + React shells
+<div class="code"><div class="code-bar"><span><span class="lang">bash</span></span></div><pre><code data-lang="bash">undra init myapp                        # core + shells: SwiftUI on iOS, Jetpack Compose on Android, React on the web
 undra init myapp --platforms ios,web    # only some of them
 undra init myapp --id dev.acme.myapp    # application id / bundle identifier
 cd myapp</code></pre></div>

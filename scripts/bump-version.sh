@@ -26,9 +26,10 @@ Sets the version of the release (for example 1.0.0, or 1.0.0-rc.1) in:
   runtimes/ts/@undra/testkit/package.json          @undra/testkit, a release asset
   runtimes/rn/@undra/react-native/package.json     @undra/react-native, a release asset
   their package-lock.json                          the two version fields of each
-  "@undra/runtime": "^<version>"                   in every package.json and package-lock.json of the
-                                                   repository: the peer range of the testkit and the
-                                                   React Native host, and of every generated package
+  "@undra/runtime": "^<version>"                   in the package.json and package-lock.json files that
+                                                   name it (a fixed list, range_files): the peer range
+                                                   of the testkit and the React Native host, and of
+                                                   every generated package the repository keeps
   runtimes/ts/@undra/runtime/src/version.ts        RUNTIME_VERSION, and the Kotlin runtime's
   runtimes/kotlin/.../dev/undra/runtime/UndraLog.kt  UNDRA_RUNTIME_VERSION: what each sends in its Hello
   crates/undra-cli/src/migrations.rs               the migration notes filed under the outgoing version
@@ -128,16 +129,25 @@ rewrite_hello_version() { # the version a runtime reports in its Hello: TypeScri
 # The npm packages of a release (crates/undra-cli/src/dist.rs, NPM_PACKAGES).
 packages="runtimes/ts/@undra/runtime runtimes/ts/@undra/testkit runtimes/rn/@undra/react-native"
 
-# Every package manifest and lock file of the repository (git's list when this is a checkout; the
-# directories' otherwise), never a dependency's, and not the test fixtures, which are projects of
-# older releases on purpose (`undra upgrade`'s).
-manifests() {
-  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    git ls-files -- '*package.json' '*package-lock.json'
-  else
-    find . \( -name node_modules -o -name target -o -name .git \) -prune -o \
-      \( -name package.json -o -name package-lock.json \) -type f -print | sed 's|^\./||' | sort
-  fi | grep -v '/tests/fixtures/' || true
+# Every package manifest and lock file that names the runtime by a range "^<version>": the testkit's and
+# the React Native host's, and every generated package the repository keeps (the generators' golden
+# files, the examples' generated bindings, the lock of the playground's React Native app). A fixed list,
+# so a git checkout and an unpacked source archive visit exactly the same files, and nothing a build or
+# an install left in the tree (a dependency's manifest, another checkout) is ever read. A pattern that
+# matches nothing stays as written and stops the script ("missing"). Never the test fixtures: they are
+# projects of older releases on purpose (`undra upgrade`'s). scripts/bump-version.test.sh fails when a
+# tracked manifest that names the range is left out of this list.
+range_files() {
+  printf '%s\n' \
+    runtimes/ts/@undra/testkit/package.json \
+    runtimes/ts/@undra/testkit/package-lock.json \
+    runtimes/rn/@undra/react-native/package.json \
+    runtimes/rn/@undra/react-native/package-lock.json \
+    crates/undra-bindgen/tests/golden/*/ts/package.json \
+    crates/undra-cli/tests/golden/*/ts/package.json \
+    examples/*/generated/ts/package.json \
+    examples/two-cores/*/generated/ts/package.json \
+    examples/playground/rn/package-lock.json
 }
 
 files_and_kinds() {
@@ -153,13 +163,15 @@ files_and_kinds() {
     [ ! -f "$dir/package-lock.json" ] || printf 'package_lock %s/package-lock.json\n' "$dir"
   done
   local file
-  while read -r file; do
-    [ -f "$file" ] || continue
-    grep -q '"@undra/runtime": "\^' "$file" && printf 'runtime_range %s\n' "$file"
-  done < <(manifests)
-  return 0
+  for file in $(range_files); do
+    printf 'runtime_range %s\n' "$file"
+  done
 }
 
+# The whole plan is made before the first file is written. (It used to be read from a process
+# substitution while the loop below rewrote files: the listing grepped a manifest for the range at the
+# moment the loop had truncated it to rewrite its version, found nothing, and left its range behind.)
+plan=$(files_and_kinds)
 changed=()
 while read -r kind file; do
   [ -f "$file" ] || die "missing $file"
@@ -171,7 +183,7 @@ while read -r kind file; do
       printf '%s' "${new%x}" >"$file"
     fi
   fi
-done < <(files_and_kinds)
+done <<<"$plan"
 
 # A file can need more than one rewrite (a package.json with its version and a peer range): list it once.
 # (No mapfile: macOS still ships bash 3.2.)

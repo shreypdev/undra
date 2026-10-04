@@ -109,7 +109,12 @@ let adapters = Adapters.platformDefault
 * `URLSessionWebSocketAdapter(session:)` makes each connection a `session.webSocketTask`, so the session's configuration, delegate
   (server trust and the pinning built on it, challenges) and delegate queue apply to the upgrade request. The adapter is the task's
   delegate for the handshake and the close frame (`URLSessionTask.delegate`, iOS 15); the session's delegate keeps answering everything
-  else. The adapter never invalidates a session it was given. A background session cannot run WebSocket tasks.
+  else. The adapter never invalidates a session it was given.
+* **Not a background session.** A session made from `URLSessionConfiguration.background(withIdentifier:)` runs no WebSocket task and
+  takes no task delegate, and URLSession answers either with an Objective-C exception that aborts the app. The three adapters check
+  first and answer with a typed error instead: `connect` is `WsError.refused(status: nil, …)` (from `URLSessionWebSocketAdapter(session:)`
+  or `(configuration:)`), `open` is `SseError.refused(status: nil, …)`, a request is `HttpError.network`. `BackgroundSessionTests` runs
+  each in a child process, so the old abort is a failed test, not a dead suite.
 * **Give event streams a session of their own with the same delegate**: an event stream may stay quiet for minutes and a stream holds
   its HTTP/1.1 connection, so the session needs a `timeoutIntervalForRequest` that allows a quiet stream and an
   `httpMaximumConnectionsPerHost` above the number of streams open at once (the defaults of `URLSessionSseAdapter.makeDefaultSession()`:

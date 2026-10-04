@@ -42,6 +42,9 @@ public final class URLSessionWebSocketAdapter: WebSocketAdapter, UndraAdapter, @
 
     /// Opens connections with sessions made from `configuration` (copied), accepting messages up
     /// to `maximumMessageSize` bytes (URLSession's default is 1 MiB).
+    ///
+    /// A background configuration (`URLSessionConfiguration.background(withIdentifier:)`) cannot run a WebSocket task:
+    /// `connect` refuses it with ``WsError/refused(status:message:)`` and no status.
     public init(configuration: URLSessionConfiguration = .default, maximumMessageSize: Int = 16 * 1024 * 1024) {
         self.source = .configuration(configuration.copy() as? URLSessionConfiguration ?? .default)
         self.maximumMessageSize = maximumMessageSize
@@ -51,8 +54,12 @@ public final class URLSessionWebSocketAdapter: WebSocketAdapter, UndraAdapter, @
     ///
     /// The session's delegate, configuration and delegate queue apply to every connection (a delegate that pins certificates or
     /// answers authentication challenges sees the upgrade request as it sees any other); the adapter takes the connection's task
-    /// delegate for the handshake and the close frame and never invalidates `session`. The session must not be a background
-    /// session (those do not support WebSocket tasks).
+    /// delegate for the handshake and the close frame and never invalidates `session`.
+    ///
+    /// A background session (made from `URLSessionConfiguration.background(withIdentifier:)`) cannot run a WebSocket task
+    /// and takes no task delegate; asking it for either raises an Objective-C exception that no Swift code can catch, and the
+    /// app aborts. So `connect` refuses such a session before a task exists, with ``WsError/refused(status:message:)`` and no
+    /// status. Pass a default or ephemeral session.
     public init(session: URLSession, maximumMessageSize: Int = 16 * 1024 * 1024) {
         self.source = .session(session)
         self.maximumMessageSize = maximumMessageSize
@@ -65,6 +72,22 @@ public final class URLSessionWebSocketAdapter: WebSocketAdapter, UndraAdapter, @
               target.host != nil
         else {
             throw WsError.refused(status: nil, message: "invalid URL: \(url)")
+        }
+        // A background session (the only kind with an identifier) runs no WebSocket task and takes no task delegate: asking
+        // for either raises an Objective-C exception that would abort the app, so the connection is refused before a task exists.
+        let identifier: String?
+        switch source {
+        case .configuration(let configuration):
+            identifier = configuration.identifier
+        case .session(let session):
+            identifier = session.configuration.identifier
+        }
+        guard identifier == nil else {
+            throw WsError.refused(
+                status: nil,
+                message: "a background URLSession cannot carry a WebSocket (it runs no WebSocket task): "
+                    + "give URLSessionWebSocketAdapter a default or ephemeral session"
+            )
         }
         var request = URLRequest(url: target)
         for header in headers {

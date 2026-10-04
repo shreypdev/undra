@@ -24,6 +24,9 @@ const SNAPSHOT: StressSnapshot = {
   drainsPerSec: 59.96,
   drainP50Us: 300.000_000_000_001_4,
   drainP99Us: 449.96,
+  drains: 120,
+  drainTotalUs: 36_000.04,
+  drainMaxUs: 500.000_000_000_001,
   nsPerChangeSet: 1795.6,
   droppedFrames: 3,
   droppedFramesRecent: 1,
@@ -38,28 +41,66 @@ const SNAPSHOT: StressSnapshot = {
   applies: { value: 120, progress: 40_000 },
 };
 
+/** A window of drains with the numbers the base message reads. */
+const windowOf = (w: { changeSetsPerSec: number; p50Us: number; p99Us: number; drains?: number; totalMs?: number; maxUs?: number }) => ({
+  drains: 0,
+  totalMs: 0,
+  maxUs: 0,
+  ...w,
+});
+
 describe("toStatsMessage", () => {
   test("types the message and rounds to a tenth", () => {
-    expect(toStatsMessage({ changeSetsPerSec: 9.987654, p50Us: 100.00000000000142, p99Us: 249.96 }, 99.99999999999)).toEqual({
+    expect(
+      toStatsMessage(windowOf({ changeSetsPerSec: 9.987654, p50Us: 100.00000000000142, p99Us: 249.96, drains: 120, totalMs: 0.30000000000000004, maxUs: 200.00000000000003 }), 99.99999999999),
+    ).toEqual({
       type: "undra-stats",
       changeSetsPerSec: 10,
       applyP50Us: 100,
       applyP99Us: 250,
       timerResolutionUs: 100,
+      applyBatchDrains: 120,
+      applyBatchUs: 300,
+      applyMaxUs: 200,
     });
-    expect(toStatsMessage({ changeSetsPerSec: 0, p50Us: 0, p99Us: 0 }, 0)).toEqual({
+    expect(toStatsMessage(windowOf({ changeSetsPerSec: 0, p50Us: 0, p99Us: 0 }), 0)).toEqual({
       type: "undra-stats",
       changeSetsPerSec: 0,
       applyP50Us: 0,
       applyP99Us: 0,
       timerResolutionUs: 0,
+      applyBatchDrains: 0,
+      applyBatchUs: 0,
+      applyMaxUs: 0,
     });
   });
 
-  test("the base message has exactly the four fields a consumer of the first version reads", () => {
-    expect(Object.keys(toStatsMessage({ changeSetsPerSec: 1, p50Us: 2, p99Us: 3 }, 4)).sort()).toEqual(
-      ["applyP50Us", "applyP99Us", "changeSetsPerSec", "timerResolutionUs", "type"].sort(),
+  test("the base message keeps the four fields a consumer of the first version reads, and adds the batch", () => {
+    expect(Object.keys(toStatsMessage(windowOf({ changeSetsPerSec: 1, p50Us: 2, p99Us: 3 }), 4)).sort()).toEqual(
+      ["applyP50Us", "applyP99Us", "changeSetsPerSec", "timerResolutionUs", "type", "applyBatchDrains", "applyBatchUs", "applyMaxUs"].sort(),
     );
+  });
+
+  test("a batch resolves an average drain far below the clock's step", () => {
+    // 1,000 drains of 2.3 us each, read by a clock with a 100 us step and a random phase: most read 0, about one in
+    // forty reads one step. One reading says nothing; the batch's sum says what they took together.
+    let seed = 7;
+    const random = () => ((seed = (seed * 16_807) % 2_147_483_647) / 2_147_483_647);
+    const stepMs = 0.1;
+    const read = (t: number) => Math.floor(t / stepMs) * stepMs;
+    let totalMs = 0;
+    let maxUs = 0;
+    for (let i = 0; i < 1_000; i++) {
+      const start = random() * 1_000;
+      const took = read(start + 0.0023) - read(start);
+      totalMs += took;
+      maxUs = Math.max(maxUs, took * 1000);
+    }
+    const message = toStatsMessage(windowOf({ changeSetsPerSec: 60, p50Us: 0, p99Us: 100, drains: 1_000, totalMs, maxUs }), 100);
+    expect(message.applyP50Us).toBe(0);
+    expect(message.applyBatchUs / message.applyBatchDrains).toBeGreaterThan(1.3);
+    expect(message.applyBatchUs / message.applyBatchDrains).toBeLessThan(3.3);
+    expect(message.applyMaxUs).toBe(100);
   });
 });
 
@@ -75,6 +116,9 @@ describe("toStressMessage", () => {
       applyP50Us: 300,
       applyP99Us: 450,
       timerResolutionUs: 100,
+      applyBatchDrains: 120,
+      applyBatchUs: 36_000,
+      applyMaxUs: 500,
       // The stress fields.
       generatedPerSec: 10_000,
       entriesReceivedPerSec: 10_020.7,
@@ -152,7 +196,7 @@ describe("timerResolutionUs", () => {
 });
 
 describe("StatsChannel", () => {
-  const message = toStatsMessage({ changeSetsPerSec: 1, p50Us: 2, p99Us: 3 }, 4);
+  const message = toStatsMessage(windowOf({ changeSetsPerSec: 1, p50Us: 2, p99Us: 3 }), 4);
 
   test("posts to the parent, addressed to the origin it was given", () => {
     const posted: Array<{ message: unknown; origin: string }> = [];
@@ -205,7 +249,7 @@ describe("startStatsPoster", () => {
     expect(posted).toEqual([]);
     vi.advanceTimersByTime(1);
     // The fake clock never moves by itself, so no timer step can be observed.
-    expect(posted).toEqual([{ message: { type: "undra-stats", changeSetsPerSec: 0, applyP50Us: 0, applyP99Us: 0, timerResolutionUs: 0 }, origin: "*" }]);
+    expect(posted).toEqual([{ message: { type: "undra-stats", changeSetsPerSec: 0, applyP50Us: 0, applyP99Us: 0, timerResolutionUs: 0, applyBatchDrains: 0, applyBatchUs: 0, applyMaxUs: 0 }, origin: "*" }]);
 
     vi.advanceTimersByTime(1000);
     expect(posted).toHaveLength(3);

@@ -2,9 +2,10 @@
  * The live numbers the landing page shows next to the embedded playground, and how they are
  * measured. In embed mode (`?embed=1`, inside an iframe) the page posts
  *
- *   { type: "undra-stats", changeSetsPerSec, applyP50Us, applyP99Us, timerResolutionUs, ...}
+ *   { type: "undra-stats", changeSetsPerSec, applyP50Us, applyP99Us, timerResolutionUs,
+ *     applyBatchDrains, applyBatchUs, applyMaxUs, ...}
  *
- * to its parent every 500 ms. The four fields above are the base shape and always there; the
+ * to its parent every 500 ms. The fields above are the base shape and always there; the
  * stress screen (`?screen=stress`) adds the optional fields of {@link StatsMessage}, so a consumer
  * that knows only the base keeps working.
  *
@@ -31,8 +32,10 @@
  * is set by the browser, not by this code: about 100 microseconds in Chrome and 1 millisecond in
  * Firefox and Safari for a page that is not cross-origin isolated (5 microseconds in Chrome when it
  * is). A drain that takes less than the step reads as 0 or as one step of it. `timerResolutionUs` is
- * the step this page measured at start-up: show a time at or below it as "under <step>", not as a
- * precise value. Second, it is the mirror's apply time, not the latency of a write: it says nothing
+ * the step this page measured at start-up: show a single time at or below it as "under <step>", not
+ * as a precise value. A batch is finer: the window's drain times added up (`applyBatchUs`, over
+ * `applyBatchDrains` drains) carry a reading error of under a step each, which evens out across the
+ * batch, so their average is a real number once the batch spans a few steps. Second, it is the mirror's apply time, not the latency of a write: it says nothing
  * about the core call, which the page does not time.
  */
 
@@ -42,8 +45,8 @@ import { DrainWindow, type DrainWindowSnapshot, type MirrorLike, type StressSnap
 export type StressModeName = "firehose" | "progress";
 
 /**
- * The message the page posts to its parent: what the landing page's counters read. The first four
- * fields are the base shape; the rest are present on the stress screen only.
+ * The message the page posts to its parent: what the landing page's counters read. The fields up
+ * to `applyMaxUs` are the base shape; the rest are present on the stress screen only.
  */
 export interface StatsMessage {
   readonly type: "undra-stats";
@@ -58,6 +61,16 @@ export interface StatsMessage {
    * stats started: durations at or below it are not resolved. 0 when no step could be observed.
    */
   readonly timerResolutionUs: number;
+  /**
+   * The batch: every drain of the window (`applyBatchDrains` of them) and their durations added up
+   * (`applyBatchUs`, microseconds). Each duration is read to the clock's step, too high or too low by
+   * less than a step, and over a batch those errors even out: `applyBatchUs / applyBatchDrains` is the
+   * average drain, resolved below the step once the batch spans a few steps. 0 with no drains.
+   */
+  readonly applyBatchDrains: number;
+  readonly applyBatchUs: number;
+  /** The longest single drain of the window, in microseconds: one reading, good to a step. 0 with no drains. */
+  readonly applyMaxUs: number;
   /** Stress: updates per second the core's generator committed. */
   readonly generatedPerSec?: number;
   /** Stress: entries per second the change-sets carried. */
@@ -99,13 +112,19 @@ const tenth = (value: number): number => Math.round(value * 10) / 10;
 const fraction = (value: number): number => Math.round(value * 10_000) / 10_000;
 
 /** The base message for a window of drains and the clock's resolution: numbers rounded to a tenth. */
-export function toStatsMessage(window: Pick<DrainWindowSnapshot, "changeSetsPerSec" | "p50Us" | "p99Us">, timerResolutionUs: number): StatsMessage {
+export function toStatsMessage(
+  window: Pick<DrainWindowSnapshot, "changeSetsPerSec" | "p50Us" | "p99Us" | "drains" | "totalMs" | "maxUs">,
+  timerResolutionUs: number,
+): StatsMessage {
   return {
     type: "undra-stats",
     changeSetsPerSec: tenth(window.changeSetsPerSec),
     applyP50Us: tenth(window.p50Us),
     applyP99Us: tenth(window.p99Us),
     timerResolutionUs: tenth(timerResolutionUs),
+    applyBatchDrains: window.drains,
+    applyBatchUs: tenth(window.totalMs * 1000),
+    applyMaxUs: tenth(window.maxUs),
   };
 }
 
@@ -127,6 +146,9 @@ export function toStressMessage(snapshot: StressSnapshot, context: StressContext
     applyP50Us: tenth(snapshot.drainP50Us),
     applyP99Us: tenth(snapshot.drainP99Us),
     timerResolutionUs: tenth(snapshot.timerResolutionUs),
+    applyBatchDrains: snapshot.drains,
+    applyBatchUs: tenth(snapshot.drainTotalUs),
+    applyMaxUs: tenth(snapshot.drainMaxUs),
     generatedPerSec: tenth(snapshot.generatedPerSec),
     entriesReceivedPerSec: tenth(snapshot.entriesReceivedPerSec),
     entriesAppliedPerSec: tenth(snapshot.appliedPerSec),

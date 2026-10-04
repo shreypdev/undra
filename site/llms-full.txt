@@ -23,7 +23,7 @@ Undra owns the part of your app that is not pixels: domain logic, reactive state
 
 ## The idea in four sentences
 
-You write your domain in Rust and mark it with a handful of attributes. Undra generates idiomatic Swift, Kotlin and TypeScript from the schema those attributes produce, so the UI stays SwiftUI, Compose, React or React Native. Each platform keeps a local mirror of your state, so reads never cross the language boundary. A write crosses once per transaction, and the core answers with one compact binary change-set that patches every mirror.
+You write your domain in Rust and mark it with a handful of attributes. Undra generates idiomatic Swift, Kotlin and TypeScript from the schema those attributes produce, so the UI stays SwiftUI on iOS, Jetpack Compose on Android, React on the web, and React Native. Each platform keeps a local mirror of your state, so reads never cross the language boundary. A write crosses once per transaction, and the core answers with one compact binary change-set that patches every mirror.
 
 **Where these pages come from.** Everything here is digested from the repository: the README, the specification in `docs/SPEC.md`, the onboarding guide, the benchmark results and the playground app. When a page and the spec disagree, the spec wins; the [repository](https://github.com/shreypdev/undra) is the record.
 
@@ -140,7 +140,7 @@ source scripts/env.sh                   # PATH, JDK and Kotlin jars, Xcode fallb
 bash
 
 ```bash
-undra init myapp                        # core + SwiftUI + Compose + React shells
+undra init myapp                        # core + shells: SwiftUI on iOS, Jetpack Compose on Android, React on the web
 undra init myapp --platforms ios,web    # only some of them
 undra init myapp --id dev.acme.myapp    # application id / bundle identifier
 cd myapp
@@ -4815,7 +4815,7 @@ It assumes a team that can carry Rust, a real cost that the [default-choice post
 - **Ports.** Ten platform services with adapters and deterministic fakes; WebSocket, server-sent events and SQLite; the app's own OkHttp, URLSession or fetch underneath.
 - **The dev loop.** `undra dev` serves one core to every running app and keeps its state across a rebuild, except in a web page started with `npm run dev`, which reloads and starts fresh; devtools with a change-set timeline; `undra schema diff` marks each API change breaking or additive.
 - **Platforms.** SwiftUI, Compose, React and React Native, built from Xcode, Gradle, Vite or Bazel. iOS 15 and 16 get `ObservableObject` stores, proven by compilation and a probe on iOS 26.5, not yet on an iOS 15 or 16 runtime, simulator or device.
-- **Proof.** 35 contract scenarios against the real core on Swift, Kotlin and TypeScript (two run on TypeScript only), 101 of 101 cells passing; 7,414 tests at the 2 October count, with more added since; an adversarial review before every feature merged.
+- **Proof.** 35 contract scenarios against the real core on Swift, Kotlin and TypeScript (two run on TypeScript only), 101 of 101 cells passing; 7,770 tests at the 2 October count, with more added since; an adversarial review before every feature merged.
 
 Sizes are gated in CI. The hello-world web core, a WebAssembly module, is 113.1 KB gzipped in the committed record, against a budget of 120 KB. The JavaScript runtime a hello page loads up front is 15.8 KB gzipped against 16 KB. The hello-world Android library for arm64-v8a is 898.2 KB, stripped and uncompressed, against 1.2 MB per ABI. The [roadmap](https://shreypdev.github.io/undra/roadmap/) lists everything by group.
 
@@ -5010,7 +5010,7 @@ A team choosing how to share logic across iOS, Android and the web asks one ques
 
 ## The matrix
 
-The catalogue's matrix lists 36 things a team needs. On 1 October Undra was marked as having 10 of them, part of 9 and none of 16, with one not applicable. Since then every code piece of the v1.x program has merged, each feature after an adversarial review recorded in the repository. At the last merge the contract grid passed 101 of 101 cells over 35 scenarios, and the test suites ran 3,689 Rust, 1,864 TypeScript, 881 Kotlin, 870 Swift and 110 React Native tests. Counting again today: 28 solved, 5 partial, 2 open and 1 left out by decision. The count is ours, row by row in the ledger, and it is the part of this page we most want checked. The table groups the 36 rows into 12 classes. It leaves out Crux, which [its own post](https://shreypdev.github.io/undra/blog/undra-vs-uniffi-and-crux/) covers, and reads "Flutter / React Native" as those two with the logic written in the UI's language.
+The catalogue's matrix lists 36 things a team needs. On 1 October Undra was marked as having 10 of them, part of 9 and none of 16, with one not applicable. Since then every code piece of the v1.x program has merged, each feature after an adversarial review recorded in the repository. At the last merge the contract grid passed 101 of 101 cells over 35 scenarios, and the test suites ran 3,812 Rust, 2,043 TypeScript, 890 Kotlin, 914 Swift and 111 React Native tests. Counting again today: 28 solved, 5 partial, 2 open and 1 left out by decision. The count is ours, row by row in the ledger, and it is the part of this page we most want checked. The table groups the 36 rows into 12 classes. It leaves out Crux, which [its own post](https://shreypdev.github.io/undra/blog/undra-vs-uniffi-and-crux/) covers, and reads "Flutter / React Native" as those two with the logic written in the UI's language.
 
 | Class | Kotlin Multiplatform | UniFFI | Flutter / React Native | Undra |
 | --- | --- | --- | --- | --- |

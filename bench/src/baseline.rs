@@ -445,6 +445,24 @@ impl Baseline {
     }
 }
 
+/// The best of several runs of one scenario: the highest throughput, the lowest tails (each
+/// metric on its own, as a recording keeps them). `None` for no runs.
+pub fn best_of(runs: &[StressObserved]) -> Option<StressObserved> {
+    let (first, rest) = runs.split_first()?;
+    let mut best = StressObserved {
+        per_sec: first.per_sec,
+        p99_ns: first.p99_ns,
+        p999_ns: first.p999_ns,
+        ..StressObserved::default()
+    };
+    for run in rest {
+        best.per_sec = best.per_sec.max(run.per_sec);
+        best.p99_ns = best_low(best.p99_ns, run.p99_ns);
+        best.p999_ns = best_low(best.p999_ns, run.p999_ns);
+    }
+    Some(best)
+}
+
 fn best_low(a: Option<f64>, b: Option<f64>) -> Option<f64> {
     match (a, b) {
         (Some(a), Some(b)) => Some(a.min(b)),
@@ -630,6 +648,39 @@ impl Selected {
         Some(failures)
     }
 
+    /// The verdict of interleaved rounds: the base and the head of scenario `name` measured in
+    /// turn on this machine (base, head, base, head, ...), the best of each side compared with the
+    /// factors of [`stress_failures_with`](Selected::stress_failures_with): the highest throughput
+    /// and the lowest p99 of the head against those of the base.
+    ///
+    /// A baseline recorded minutes before the head ran compares two moments of a shared runner as
+    /// well as two trees: a slow stretch during the head alone fails a scenario whose code did not
+    /// change. Interleaved, a slow stretch lowers whichever rounds it covers, on both sides, and
+    /// the best of each side comes from its fastest moment; a real regression is slower in every
+    /// round. `None` when a side has no sample or the baseline has no row for `name`.
+    pub fn interleaved_stress_failures(
+        &self,
+        name: &str,
+        base: &[StressObserved],
+        head: &[StressObserved],
+        row_tolerance: Option<f64>,
+    ) -> Option<Vec<String>> {
+        let recorded = self.baseline.stress.get(name)?;
+        let best_base = best_of(base)?;
+        let best_head = best_of(head)?;
+        let mut interleaved = self.clone();
+        interleaved.baseline.stress.insert(
+            name.to_owned(),
+            StressBaseline {
+                per_sec: best_base.per_sec,
+                p99_ns: best_base.p99_ns,
+                p999_ns: best_base.p999_ns,
+                tolerance: recorded.tolerance,
+            },
+        );
+        interleaved.stress_failures_with(name, &best_head, row_tolerance)
+    }
+
     /// A line for the top of a run: which baseline gates it and how.
     pub fn describe(&self) -> String {
         let meta = |key: &str| {
@@ -783,6 +834,76 @@ per_sec = 28_000_000
         // A row's own factor wins.
         assert_eq!(sel.bench_gate("a/b").unwrap().tolerance, 3.0);
         assert!(sel.bench_gate("not/a/row").is_none());
+    }
+
+    #[test]
+    fn interleaved_rounds_compare_the_best_of_each_side() {
+        let dir = tempdir("interleaved");
+        std::fs::write(dir.join("m.toml"), SAMPLE).unwrap();
+        let sel =
+            Selected::resolve(dir.join("m.toml").to_str().unwrap(), &dir, None, None).unwrap();
+        let name = "stream/backpressure";
+        let rounds = |rates: &[f64]| -> Vec<StressObserved> {
+            rates.iter().map(|&r| observed(r, None)).collect()
+        };
+        // The same code on a runner whose speed swings: the recorded 28 M/s came from a fast moment and
+        // the head's first try (12.4 M/s) from a slow one, but in turn each side has a fast round.
+        let first_try = sel
+            .stress_failures(name, &observed(12_400_000.0, None))
+            .unwrap();
+        assert_eq!(first_try.len(), 1, "{first_try:?}");
+        let same = sel
+            .interleaved_stress_failures(
+                name,
+                &rounds(&[19e6, 12e6, 13e6]),
+                &rounds(&[12.5e6, 18.5e6, 12e6]),
+                None,
+            )
+            .unwrap();
+        assert!(same.is_empty(), "{same:?}");
+        // A real 2x regression is slower in every round, however the runner swings.
+        let slower = sel
+            .interleaved_stress_failures(
+                name,
+                &rounds(&[19e6, 12e6, 13e6]),
+                &rounds(&[9e6, 6e6, 6.5e6]),
+                None,
+            )
+            .unwrap();
+        assert!(
+            slower.len() == 1 && slower[0].contains("throughput"),
+            "{slower:?}"
+        );
+        // The scenario's own factor still applies, and nothing is judged without samples or a row.
+        let roomy = sel
+            .interleaved_stress_failures(name, &rounds(&[19e6]), &rounds(&[9e6]), Some(2.5))
+            .unwrap();
+        assert!(roomy.is_empty(), "{roomy:?}");
+        assert_eq!(
+            sel.interleaved_stress_failures(name, &[], &rounds(&[1.0]), None),
+            None
+        );
+        assert_eq!(
+            sel.interleaved_stress_failures(
+                "not/a/scenario",
+                &rounds(&[1.0]),
+                &rounds(&[1.0]),
+                None
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn the_best_of_runs_takes_each_metric_on_its_own() {
+        let runs = [
+            observed(10.0, Some(300.0)),
+            observed(30.0, Some(500.0)),
+            observed(20.0, None),
+        ];
+        let best = best_of(&runs).unwrap();
+        assert_eq!((best.per_sec, best.p99_ns), (30.0, Some(300.0)));
+        assert_eq!(best_of(&[]), None);
     }
 
     #[test]

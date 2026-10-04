@@ -33,6 +33,7 @@ on:
       - "runtimes/ts/@undra/testkit/package.json"
       - "runtimes/swift/UndraRuntime/Package.swift"
       - "scripts/bump-version.sh"
+      - "scripts/android-sdk-install.sh"
       - "packaging/**"
       - ".github/workflows/release.yml"
       - "jitpack.yml"
@@ -81,8 +82,7 @@ jobs:
           xcodebuild -version
       - name: The Android NDK and cargo-ndk
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION"
+          bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
           cargo install cargo-ndk
       - name: Rehearse the release

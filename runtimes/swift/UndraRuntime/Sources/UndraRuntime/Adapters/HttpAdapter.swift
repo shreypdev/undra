@@ -7,7 +7,9 @@ import Foundation
 ///
 /// The default session is ephemeral (no cookies, no disk cache): the core has its own query
 /// cache and decides what to persist. Pass a configured `URLSession` for anything else (a
-/// custom trust policy, a proxy, a background configuration is not supported).
+/// custom trust policy, a proxy). A background session is not supported: it takes no task
+/// delegate, and every request on it fails with `Network` before a task exists (instead of the
+/// Objective-C exception URLSession would raise, which aborts the app).
 ///
 /// Failures map to `HttpError`: an unparsable or non-HTTP(S) URL is `InvalidUrl`, an expired
 /// timeout is `Timeout`, a cancelled call is `Cancelled`, and any other transport failure is
@@ -54,6 +56,15 @@ public final class HttpAdapter: UndraAdapter, @unchecked Sendable {
               !host.isEmpty
         else {
             throw HttpAdapter.portError(.invalidUrl(request.url))
+        }
+        // A background session (the only kind with an identifier) takes no task delegate and no completion handler, and
+        // `data(for:)` needs one: URLSession raises an Objective-C exception that would abort the app, so the request fails
+        // before a task exists.
+        guard session.configuration.identifier == nil else {
+            throw HttpAdapter.portError(.network(
+                "a background URLSession cannot carry the core's requests (it takes no task delegate): "
+                    + "give HttpAdapter a default or ephemeral session"
+            ))
         }
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = request.method.name

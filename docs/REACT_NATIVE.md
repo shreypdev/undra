@@ -367,6 +367,7 @@ pending states in a table that the source's destructor empties.
 |---|---|
 | `Property 'TextDecoder' doesn't exist` at start | something imported `@undra/runtime` (your bindings) before `@undra/react-native`: import it first (Install, step 6) |
 | `'import.meta' is currently unsupported` from the Hermes compiler | add `@undra/react-native/babel-plugin` (step 3) |
+| `Export namespace should be first transformed by @babel/plugin-transform-export-namespace-from` from Metro | add `@undra/react-native/babel-plugin` (step 3): it rewrites the runtime's `export * as codecs` |
 | `the UndraNative TurboModule is not linked into this app` | the package is not a dependency of the app, or `pod install` / the Gradle sync did not run after adding it |
 | ``cannot load the Undra core `acme_pay`, libacme_pay.so`` (Android) | the core's `jniLibs` are not packaged (step 5), or not built for the device's ABI |
 | ``no Undra core `acme_pay` is linked into this app (there is no class UndraCoreTable_acme_pay)`` (iOS) | the core's pod is missing from the Podfile, or `pod install` did not run after adding it (step 4) |

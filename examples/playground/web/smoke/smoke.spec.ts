@@ -318,7 +318,7 @@ test("embedded, the stress screen posts the extended undra-stats message to its 
   );
   console.log(`embedded stress message: ${JSON.stringify(message)}`);
   // The base shape is still there, for a consumer that knows only that.
-  for (const field of ["changeSetsPerSec", "applyP50Us", "applyP99Us", "timerResolutionUs"]) expect(typeof message[field], field).toBe("number");
+  for (const field of ["changeSetsPerSec", "applyP50Us", "applyP99Us", "timerResolutionUs", "applyBatchDrains", "applyBatchUs", "applyMaxUs"]) expect(typeof message[field], field).toBe("number");
   // And the stress fields.
   expect(message["mode"]).toBe("firehose");
   expect(message["targetRate"]).toBe(10_000);

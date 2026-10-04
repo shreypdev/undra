@@ -353,9 +353,7 @@ jobs:
           java-version: "17"
       - name: Gradle builds the core in its undraBuild task
         run: |
-          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$sdkmanager" --licenses > /dev/null || true
-          "$sdkmanager" "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          bash scripts/android-sdk-install.sh "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0"
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
           UNDRA_TEST_BUILD_SYSTEMS=1 cargo test -p undra-cli --test build_systems -- gradle --nocapture
       - name: Fieldbook's Android app assembles (Gradle's undraBuild task builds the core)

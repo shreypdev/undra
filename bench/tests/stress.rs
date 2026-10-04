@@ -20,6 +20,13 @@
 //!   (`bench/baselines/<name>.toml`, or a file recorded earlier in the same CI job): throughput
 //!   under 1/1.5 of the baseline's, or a p99 over 2.5x it, fails. `UNDRA_BENCH_RECORD=path` runs
 //!   every scenario all three times and records the best of each metric as a baseline.
+//! * A baseline recorded minutes earlier on the same machine (CI's, `scripts/bench-record-base.sh`)
+//!   names the base's stress binary (`stress_binary`). A scenario that misses **only** that baseline
+//!   is then decided by rounds of base and head in turn (base, head, base, head, base, head), the
+//!   best of each side compared with the same factors: a slow stretch of a shared runner lowers the
+//!   rounds it covers on both sides, and cannot fail a scenario whose code did not change; a real
+//!   regression is slower in every round. `UNDRA_BENCH_SCENARIO=name` runs one scenario by its exact
+//!   name and `UNDRA_STRESS_ATTEMPTS=n` sets the attempts (what a round asks of the base's binary).
 //! * Every scenario runs for a **warm-up** first, results discarded (thread start-up, cold caches,
 //!   the first allocations): a tenth of the measured run, at most 200 ms, then the measured run
 //!   of `UNDRA_STRESS_SECONDS`. `UNDRA_STRESS_WARMUP_MS=0` measures from the first operation,
@@ -54,7 +61,23 @@ use common::stress::{BYTES_EXACT, Fault, Scenario, StressConfig, StressReport, s
 /// Timing tests must not overlap: a second test thread would be noise in the first.
 static SERIAL: Mutex<()> = Mutex::new(());
 
+/// Attempts a scenario gets when it misses a gate (`UNDRA_STRESS_ATTEMPTS` overrides it: the interleaved
+/// rounds run the base's binary with 1, one measurement per round).
 const ATTEMPTS: usize = 3;
+
+/// Rounds of base and head, in turn, that decide a scenario that missed only the baseline (see
+/// `interleave`): three of each, the best of each side compared.
+const ROUNDS: usize = 3;
+
+fn attempts() -> usize {
+    match std::env::var("UNDRA_STRESS_ATTEMPTS") {
+        Ok(text) => match text.parse::<usize>() {
+            Ok(n) if n >= 1 => n,
+            _ => panic!("UNDRA_STRESS_ATTEMPTS must be a whole number, at least 1, not `{text}`"),
+        },
+        Err(_) => ATTEMPTS,
+    }
+}
 
 /// Operations a debug smoke run does at least, whatever the clock says (`StressConfig::min_ops`):
 /// a machine that is slow or busy takes longer; it does not run fewer and report "nothing ran".
@@ -135,6 +158,11 @@ fn warmup_override() -> Option<Duration> {
 
 fn selected() -> Vec<(&'static str, Scenario)> {
     let all = scenarios();
+    // One scenario by its exact name (what an interleaved round asks of the base's binary): a filter
+    // matches substrings, and `churn_10k/sustained` is in two names.
+    if let Ok(exact) = std::env::var("UNDRA_BENCH_SCENARIO") {
+        return all.into_iter().filter(|(name, _)| *name == exact).collect();
+    }
     match std::env::var("UNDRA_BENCH_FILTER") {
         Ok(filter) if !filter.is_empty() => all
             .into_iter()
@@ -303,6 +331,18 @@ fn stress() {
             "no baseline selected (UNDRA_BENCH_BASELINE): only the absolute budgets gate this run"
         ),
     }
+    let attempts = attempts();
+    // The base's own binary, when the baseline was recorded by one that is still here (CI: the same job,
+    // scripts/bench-record-base.sh): a scenario that misses only the baseline is decided by rounds of base
+    // and head in turn, not by a number recorded minutes earlier.
+    let base_binary = baseline.as_ref().and_then(base_stress_binary);
+    if let Some(binary) = &base_binary {
+        eprintln!(
+            "a scenario that misses only the baseline is measured again, base and head in turn ({ROUNDS} rounds, \
+             the best of each compared), with the base's binary {}",
+            binary.display()
+        );
+    }
     header();
     for (name, run) in &scenarios {
         let Some(budget) = budgets.stress.get(*name) else {
@@ -314,7 +354,7 @@ fn stress() {
         // What a recording keeps: the best of each metric over the attempts.
         let mut best: Option<StressBaseline> = None;
         let mut passed = false;
-        for attempt in 1..=ATTEMPTS {
+        for attempt in 1..=attempts {
             let report = run(&cfg);
             let broken = report.broken();
             if !broken.is_empty() {
@@ -340,6 +380,7 @@ fn stress() {
                     .iter()
                     .map(|check| check.what.clone()),
             );
+            let others = verdict.failures.len();
             // What a machine class measured earlier: a regression on it fails whatever the budgets say.
             match baseline.as_ref().map(|b| {
                 (
@@ -359,6 +400,84 @@ fn stress() {
             }
             for notice in &verdict.notices {
                 eprintln!("    notice: {notice}");
+            }
+            // Only the baseline was missed, and the base can be measured again: base and head in turn decide.
+            if let (Some(b), Some(binary), None, false, 0) = (
+                baseline.as_ref(),
+                base_binary.as_deref(),
+                recording.as_ref(),
+                verdict.passed(),
+                others,
+            ) {
+                row(
+                    &report,
+                    &format!("OVER the baseline (attempt {attempt}): base and head in turn"),
+                );
+                for problem in &verdict.failures {
+                    eprintln!("    x {problem}");
+                }
+                match interleave(name, *run, &cfg, binary) {
+                    Err(broken) => {
+                        for what in &broken {
+                            eprintln!("    x {what}");
+                            failures.push(format!("{name}: {what}"));
+                        }
+                        final_reports.push(Finished {
+                            report,
+                            attempt,
+                            failures: broken,
+                        });
+                        break;
+                    }
+                    Ok(None) => {
+                        eprintln!(
+                            "    notice: the base could not be measured again (see above): the scenario keeps its \
+                             attempts against the recorded baseline"
+                        );
+                    }
+                    Ok(Some((base, head, last))) => {
+                        let over = b
+                            .interleaved_stress_failures(
+                                name,
+                                &base,
+                                &head,
+                                budget.baseline_tolerance,
+                            )
+                            .unwrap_or_default();
+                        let rates = |runs: &[StressObserved]| {
+                            runs.iter()
+                                .map(|r| human_rate(r.per_sec))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        };
+                        eprintln!(
+                            "    base {} / head {}: {}",
+                            rates(&base),
+                            rates(&head),
+                            if over.is_empty() {
+                                "ok, best against best"
+                            } else {
+                                "OVER, best against best"
+                            }
+                        );
+                        let over: Vec<String> = over
+                            .into_iter()
+                            .map(|f| {
+                                format!("{f}, the best of {ROUNDS} rounds of base and head in turn")
+                            })
+                            .collect();
+                        for problem in &over {
+                            eprintln!("    x {problem}");
+                            failures.push(format!("{name}: {problem}"));
+                        }
+                        final_reports.push(Finished {
+                            report: last,
+                            attempt,
+                            failures: over,
+                        });
+                        break;
+                    }
+                }
             }
             if recording.is_some() {
                 let mine = StressBaseline {
@@ -381,7 +500,7 @@ fn stress() {
                 let tag = if attempt == 1 || recording.is_some() {
                     "ok".to_owned()
                 } else {
-                    retried.push(format!("{name} (attempt {attempt} of {ATTEMPTS})"));
+                    retried.push(format!("{name} (attempt {attempt} of {attempts})"));
                     format!("ok (attempt {attempt})")
                 };
                 row(&report, &tag);
@@ -400,12 +519,12 @@ fn stress() {
             }
             row(
                 &report,
-                &format!("OVER a gate (attempt {attempt} of {ATTEMPTS})"),
+                &format!("OVER a gate (attempt {attempt} of {attempts})"),
             );
             for problem in &verdict.failures {
                 eprintln!("    x {problem}");
             }
-            if attempt == ATTEMPTS && !passed {
+            if attempt == attempts && !passed {
                 for problem in &verdict.failures {
                     failures.push(format!("{name}: {problem}"));
                 }
@@ -518,7 +637,7 @@ fn write_results(
             .unwrap_or_default();
         let text = format!(
             "{{\n  \"scenario\": {},\n  \"kind\": \"sustained\",\n  \"date\": {},\n  \"tag\": {},\n  \"command\": {},\n  {},\n  \
-             \"run\": {{\"seconds\": {}, \"warmup_ms\": {}, \"elapsed_s\": {}, \"attempt\": {}, \"attempts\": {ATTEMPTS}, \"scale\": {}, \"baseline\": {}}},\n  \
+             \"run\": {{\"seconds\": {}, \"warmup_ms\": {}, \"elapsed_s\": {}, \"attempt\": {}, \"attempts\": {}, \"scale\": {}, \"baseline\": {}}},\n  \
              \"result\": {{\"ops\": {}, \"per_sec\": {}, \"p50_ns\": {}, \"p99_ns\": {}, \"p999_ns\": {}, \"max_ns\": {}, \"bytes_per_op\": {}, \"rss_growth_pct\": {}, \"rss_baseline_bytes\": {}, \"rss_final_bytes\": {}}},\n  \
              \"gate\": {{\"budget\": {}, \"passed\": {}, \"failures\": [{}]}},\n  \"invariants\": [{}],\n  \"notes\": [{}]\n}}\n",
             json_string(report.name),
@@ -531,6 +650,7 @@ fn write_results(
             report.warmup.as_millis(),
             json_number(report.elapsed.as_secs_f64()),
             attempt,
+            attempts(),
             json_number(scale),
             baseline.map_or_else(
                 || "null".to_owned(),
@@ -595,11 +715,98 @@ fn record(path: &std::path::Path, mut baseline: Baseline, load_before: Option<f6
     ] {
         baseline.meta.entry(key.to_owned()).or_insert(value);
     }
+    // The binary that measured this, for a head gated against it to measure it again in turn
+    // (scripts/bench-record-base.sh asks for it; a committed baseline carries no local path).
+    let asked =
+        std::env::var_os("UNDRA_BENCH_RECORD_BINARY").is_some_and(|v| !v.is_empty() && v != "0");
+    if let (true, Ok(me)) = (asked, std::env::current_exe()) {
+        baseline
+            .meta
+            .insert("stress_binary".to_owned(), me.display().to_string());
+    }
     let rows = baseline.stress.len();
     if let Err(e) = baseline.record_into(path, undra_bench::baseline::record_keeps_best()) {
         panic!("cannot write UNDRA_BENCH_RECORD to {}: {e}", path.display());
     }
     eprintln!("recorded {rows} scenarios to {}", path.display());
+}
+
+/// The base's stress binary named by the baseline (`stress_binary` in its `[meta]`), when it is a file
+/// here and not this binary.
+fn base_stress_binary(baseline: &Selected) -> Option<PathBuf> {
+    let path = PathBuf::from(baseline.baseline.meta.get("stress_binary")?);
+    let me = std::env::current_exe().ok();
+    (path.is_file() && me.as_deref() != Some(path.as_path())).then_some(path)
+}
+
+/// Measures `name` in [`ROUNDS`] rounds of base and head in turn on this machine: the base's binary
+/// runs the scenario once (`UNDRA_STRESS_ATTEMPTS=1`, recording into a file of its own), then this
+/// binary runs it once. Returns the base's runs, the head's runs and the head's last report; `Ok(None)`
+/// when the base's binary did not record the scenario (it then cannot be compared in turn); `Err` with
+/// what broke when an invariant of the head broke (never noise).
+#[allow(clippy::type_complexity)]
+fn interleave(
+    name: &str,
+    run: Scenario,
+    cfg: &StressConfig,
+    base_binary: &std::path::Path,
+) -> Result<Option<(Vec<StressObserved>, Vec<StressObserved>, StressReport)>, Vec<String>> {
+    let mut base = Vec::new();
+    let mut head = Vec::new();
+    let mut last = None;
+    for round in 1..=ROUNDS {
+        let out = std::env::temp_dir().join(format!(
+            "undra-stress-base-{}-{}-{round}.toml",
+            std::process::id(),
+            name.replace('/', "-")
+        ));
+        let _ = std::fs::remove_file(&out);
+        let child = std::process::Command::new(base_binary)
+            .args(["stress", "--exact", "--nocapture", "--test-threads=1"])
+            .env("UNDRA_BENCH_SCENARIO", name)
+            .env("UNDRA_BENCH_RECORD", &out)
+            .env("UNDRA_STRESS_ATTEMPTS", "1")
+            .env("UNDRA_BENCH_BUDGETS", budgets_path())
+            .env_remove("UNDRA_BENCH_BASELINE")
+            .env_remove("UNDRA_BENCH_RECORD_BEST")
+            .env_remove("UNDRA_BENCH_RECORD_BINARY")
+            .env_remove("UNDRA_BENCH_FILTER")
+            .env_remove("UNDRA_STRESS_JSON")
+            .env_remove("UNDRA_BENCH_RESULTS_DIR")
+            .output();
+        let measured = Baseline::load(&out)
+            .ok()
+            .and_then(|b| b.stress.get(name).cloned());
+        let _ = std::fs::remove_file(&out);
+        let Some(recorded) = measured else {
+            let why = match child {
+                Ok(o) => String::from_utf8_lossy(&o.stderr)
+                    .lines()
+                    .rev()
+                    .take(5)
+                    .collect::<Vec<_>>()
+                    .join(" | "),
+                Err(e) => e.to_string(),
+            };
+            eprintln!("    the base's binary recorded nothing for {name} in round {round}: {why}");
+            return Ok(None);
+        };
+        base.push(StressObserved {
+            per_sec: recorded.per_sec,
+            p99_ns: recorded.p99_ns,
+            p999_ns: recorded.p999_ns,
+            ..StressObserved::default()
+        });
+        let report = run(cfg);
+        let broken: Vec<String> = report.broken().iter().map(|i| i.what.clone()).collect();
+        if !broken.is_empty() {
+            row(&report, "INVARIANT BROKEN");
+            return Err(broken);
+        }
+        head.push(observed(&report));
+        last = Some(report);
+    }
+    Ok(last.map(|last| (base, head, last)))
 }
 
 /// The words of every invariant that broke when `scenario` ran with `fault`: a run of no set time

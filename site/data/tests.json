@@ -1,13 +1,13 @@
 {
-  "note": "The landing page's test-count card and contract grid, and the same numbers in README.md, rendered by site/scripts/build-trust.mjs. Update this file after a merge that moves them (the integrator's matrix line in .10x/status.md is the source) and run node site/scripts/build-all.mjs. The grid's scenarios and which platform runs each come from contract-tests/scenarios.md; cellsPassing must equal the number of cells it defines, or the build fails.",
-  "source": "https://github.com/shreypdev/undra/blob/main/.10x/status.md",
-  "asOf": "2026-10-02, the reload-handles branch after its merge with generics-fn-obj (.10x/reviews/2026-10-02-reload-handles-review.md): the suites run on this Mac under Rust 1.99.0 and Node 24",
+  "note": "The landing page's test-count card and contract grid, and the same numbers in README.md, rendered by site/scripts/build-trust.mjs. Update this file from the latest green Gate run (each suite's own summary line in its CI job, counting what passed) and run node site/scripts/build-all.mjs. The grid's scenarios and which platform runs each come from contract-tests/scenarios.md; cellsPassing must equal the number of cells it defines, or the build fails.",
+  "source": "https://github.com/shreypdev/undra/actions/runs/37166026801",
+  "asOf": "2026-10-04, Gate run 37166026801 (the no-em-dash pull request, 8fdb1dc), green: the tests that passed, from each suite's own summary line in its CI job: Rust, the test results of `cargo test --workspace` in Rust (Linux); TypeScript, the runtime's vitest run (2043 passed, 12 skipped); Kotlin, test-local.sh's runtime suites (891 cases, 1 skipped); Swift, `swift test` of the runtime package (914 executed); React Native, the package's vitest run",
   "suites": [
-    { "name": "Rust", "slug": "rust", "count": 3689 },
-    { "name": "TypeScript", "slug": "typescript", "count": 1864 },
-    { "name": "Kotlin", "slug": "kotlin", "count": 881 },
-    { "name": "Swift", "slug": "swift", "count": 870 },
-    { "name": "React Native", "slug": "react-native", "count": 110 }
+    { "name": "Rust", "slug": "rust", "count": 3812 },
+    { "name": "TypeScript", "slug": "typescript", "count": 2043 },
+    { "name": "Kotlin", "slug": "kotlin", "count": 890 },
+    { "name": "Swift", "slug": "swift", "count": 914 },
+    { "name": "React Native", "slug": "react-native", "count": 111 }
   ],
   "cellsPassing": 101
 }

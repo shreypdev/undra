@@ -277,7 +277,10 @@ export async function pagingSteps(core: UndraCore, mode: { readonly sync: boolea
     expect(updates.length).toBeGreaterThan(0);
     expect(updates.length, "at most 50 updates").toBeLessThanOrEqual(50);
     expect(updates.every((op) => op.op === "update")).toBe(true);
-    expect(shared.data.peek().every((row) => row.version === (row.id % 2 === 0 ? 7 : 0)), "the shared entry follows").toBe(true);
+    // The refetch reaches both handles in one transaction but as one change-set per store, which a core in a worker posts
+    // one after the other: the shared handle is waited for on its own, then holds the same rows as the first.
+    await waitFor("the shared entry to follow", () => shared.data.peek().length === 100 && shared.data.peek().every((row) => row.version === (row.id % 2 === 0 ? 7 : 0)));
+    expect(shared.data.peek(), "the shared entry follows: the same rows as the first").toEqual(feed.data.peek());
 
     // The even-only feed is its own entry: 2, 4, .., 100.
     const evens = await FeedQueryHandle.create(true, core);

@@ -63,6 +63,9 @@ private fun serve(
     }
 }
 
+/** A deadline that only detects a hang: no step waited for under it depends on a timer of its own. */
+private const val HANG_MS = 60_000L
+
 private fun policy(max: Int = Int.MAX_VALUE) = ReconnectPolicy(random = { 0.0 }, maxAttempts = max)
 
 private class Loaded(val core: UndraCore, val states: CopyOnWriteArrayList<ConnectionState>) : AutoCloseable {
@@ -257,18 +260,29 @@ class RemoteReconnectTests : Suite() {
         }
 
         case("the policy gives up after maxAttempts and closes the core as failed") {
-            val probe = WsTestServer()
-            serve(probe)
-            val sleeper = RecordingSleeper()
-            load(probe.url, sleeper, reconnect = policy(max = 3)).use { loaded ->
-                probe.close()
-                eventually("the core is closed") { loaded.states.last() is ConnectionState.Closed }
-                assertEq(ClosedReason.FAILED, (loaded.states.last() as ConnectionState.Closed).reason)
-                // A core that was lost for good answers every call as unreachable, not as one the app closed.
-                val afterwards = assertThrows<UndraTransportException> { loaded.core.callSync(TARGET, METHOD, NO_BYTES) }
-                assertEq(UndraTransportException.Reason.CONNECTION_LOST, afterwards.reason)
-                assertEq(listOf(250L, 500L, 1000L), sleeper.waits.toList())
-                assertEq(listOf("connecting", "connected", "reconnecting 1", "reconnecting 2", "reconnecting 3", "closed:FAILED"), loaded.states.map(::short))
+            // The server stays up and refuses every reconnect as soon as it is asked (a 503 to the upgrade), so each attempt
+            // ends when it is answered. (It used to close the server: an attempt on a closed port is refused at once only
+            // while no other socket holds the port, which came from the ephemeral range; one that is not answered waits out
+            // its 5 s, and two of those overran the 10 s wait.) Each event is waited for on its own, with a deadline that
+            // only detects a hang.
+            WsTestServer().use { probe ->
+                serve(probe)
+                val sleeper = RecordingSleeper()
+                load(probe.url, sleeper, reconnect = policy(max = 3)).use { loaded ->
+                    probe.rejectWith = "HTTP/1.1 503 Service Unavailable"
+                    probe.connections.first().drop()
+                    for (n in 1..3) {
+                        eventually("reconnect attempt $n", HANG_MS) { "reconnecting $n" in loaded.states.map(::short) }
+                    }
+                    eventually("the core is closed", HANG_MS) { loaded.states.last() is ConnectionState.Closed }
+                    assertEq(ClosedReason.FAILED, (loaded.states.last() as ConnectionState.Closed).reason)
+                    assertEq(3, probe.rejected.get(), "the reconnects the server refused")
+                    // A core that was lost for good answers every call as unreachable, not as one the app closed.
+                    val afterwards = assertThrows<UndraTransportException> { loaded.core.callSync(TARGET, METHOD, NO_BYTES) }
+                    assertEq(UndraTransportException.Reason.CONNECTION_LOST, afterwards.reason)
+                    assertEq(listOf(250L, 500L, 1000L), sleeper.waits.toList())
+                    assertEq(listOf("connecting", "connected", "reconnecting 1", "reconnecting 2", "reconnecting 3", "closed:FAILED"), loaded.states.map(::short))
+                }
             }
         }
 

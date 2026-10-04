@@ -12,11 +12,14 @@
 #   4. Run the install command of jitpack.yml, as JitPack would on the tag, into a local Maven repository.
 #   5. Hide the snapshot, then `undra init rehearsal` (no --undra-path) with UNDRA_DIST_GIT_URL,
 #      UNDRA_DIST_RELEASE_URL and UNDRA_DIST_MAVEN_REPO pointing at the three stand-ins, and build the web app
-#      (npm install && npm run build), the iOS app for the simulator (xcodebuild, the Swift package resolved
-#      from the bare clone) and the Android app (./gradlew :app:assembleDebug).
+#      (npm install && npm run build, then the same with pnpm and with yarn, each that is on PATH or that
+#      corepack holds without a download; one copy of @undra/runtime in node_modules each time), the iOS app
+#      for the simulator (xcodebuild, the Swift package resolved from the bare clone) and the Android app
+#      (./gradlew :app:assembleDebug).
 #
 # It fails when a step fails, and when the project or a build names the checkout or the snapshot (a step that
-# needed a checkout). The summary says, per platform, whether it built and how long it took.
+# needed a checkout). The summary says, per platform, whether it built and how long it took; a package manager
+# that is not here is "skipped: not installed" (only one that ran and failed fails the rehearsal).
 #
 #   bash packaging/rehearse-launch.sh                          # every platform this machine can build
 #   bash packaging/rehearse-launch.sh --platforms web,android  # some
@@ -188,11 +191,64 @@ build() { # <label> <dir> <log> <command...>
   fi
 }
 
+# The command that runs package manager $1 here without downloading it, or nothing: the one on PATH, else corepack's.
+# Each is asked for its version with corepack's network off, so a corepack shim or corepack itself answers only from
+# what it already holds.
+manager() {
+  local candidate
+  for candidate in "$1" "corepack $1"; do
+    command -v "${candidate%% *}" >/dev/null 2>&1 || continue
+    # shellcheck disable=SC2086 # the candidate is a command and its first argument
+    if (cd "$tmp" && COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_DOWNLOAD_PROMPT=0 $candidate --version) >/dev/null 2>&1; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
+}
+# How many copies of @undra/runtime the app's node_modules holds, whatever the manager: real directories only (pnpm's
+# node_modules/@undra/runtime is a link into its store, which find does not follow). Two copies would be two runtimes,
+# each with its own core registry.
+runtime_copies() {
+  find "$1/node_modules" -path '*/@undra/runtime/package.json' 2>/dev/null | grep -vc '/@undra/runtime/node_modules/' || true
+}
+one_runtime() { # <label> <dir>
+  local copies
+  copies=$(runtime_copies "$2")
+  if [ "$copies" = 1 ]; then
+    record "$1: one runtime" ok "from $release_url/v$version"
+  else
+    record "$1: one runtime" FAIL "$copies copies in node_modules"
+    status=1
+  fi
+}
+
 if has web; then
   build "web (npm run build)" "$project/web" "$tmp/web.log" \
     sh -c 'npm install --no-audit --no-fund --prefer-offline && npm run build'
   grep -q "\"@undra/runtime\": \"$release_url/v$version/undra-runtime-$version.tgz\"" "$project/web/package.json" ||
     { record "web: runtime by URL" FAIL "web/package.json"; status=1; }
+  one_runtime "web (npm)" "$project/web"
+  # The same app, as generated, with pnpm and with yarn: the runtime is a dependency by URL (the release asset), and
+  # every manager must install it once and build. Each starts from no node_modules and reads no other manager's lockfile
+  # (pnpm and yarn ignore package-lock.json). On CI pnpm installs with --frozen-lockfile unless told otherwise, and
+  # yarn 2+ refuses to write a lockfile: the app has none for them, as a new project does not. Yarn 2+ is also asked
+  # for a node_modules (its default, Plug'n'Play, has none to count).
+  for pm in pnpm yarn; do
+    run=$(manager "$pm")
+    if [ -z "$run" ]; then
+      record "web ($pm)" skip "skipped: not installed"
+      continue
+    fi
+    case $pm in
+      pnpm) install="$run install --no-frozen-lockfile" ;;
+      yarn) install="$run install" ;;
+    esac
+    rm -rf "$project/web/node_modules" "$project/web/dist"
+    build "web ($pm run build)" "$project/web" "$tmp/web-$pm.log" \
+      env COREPACK_ENABLE_NETWORK=0 YARN_NODE_LINKER=node-modules YARN_ENABLE_IMMUTABLE_INSTALLS=false \
+      sh -c "$install && $run run build"
+    one_runtime "web ($pm)" "$project/web"
+  done
 fi
 if has ios; then
   build "iOS (xcodebuild, simulator)" "$project/ios" "$tmp/ios.log" \

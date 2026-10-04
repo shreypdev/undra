@@ -29,6 +29,11 @@ name: Bench
 #     harness) the run carries a warning saying so, and the gates are the absolute budgets and the
 #     ratios. A noisy row on the runner gets `baseline_tolerance` in its budgets.toml table (the
 #     baseline is recorded afresh in every job, so it cannot carry one), never a looser default.
+#     Minutes apart is still two moments of a shared runner (stream/backpressure measured 12 to 24
+#     M/s on main with byte-identical code), so a sustained scenario that misses ONLY the baseline
+#     is decided by three rounds of the base's binary and the head's in turn, best against best
+#     (bench/tests/stress.rs, `interleave`): a slow stretch lowers both sides' rounds, a regression
+#     only the head's.
 #
 # Harsh conditions (the stress and soak steps): the sustained scenarios of `bench/tests/stress.rs`
 # run for 2 s each (UNDRA_STRESS_SECONDS) at rates far above any UI, with 8 threads completing port
@@ -211,9 +216,7 @@ jobs:
         run: cargo install cargo-ndk
       - name: The NDK r27 (the Android cores are linked with it)
         run: |
-          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$sdkmanager" --licenses > /dev/null || true
-          "$sdkmanager" "ndk;27.2.12479018" > /dev/null
+          bash scripts/android-sdk-install.sh "ndk;27.2.12479018"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
       - name: Native size gate (Android, hello-world core per ABI, bytes as shipped)
         run: bash scripts/native-size.sh --platform android
