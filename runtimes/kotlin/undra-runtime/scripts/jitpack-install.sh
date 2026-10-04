@@ -21,12 +21,27 @@ repo_local="${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}"
 build="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "Publishing the Undra Kotlin runtime as $group:<module>:$VERSION into $repo_local"
-(
+# The build machine downloads the Android SDK components the Android modules ask for, and a download can
+# arrive broken: JitPack's first build of v1.0.0 ended in "Archive is not a ZIP archive" for Build-Tools 34
+# (2026-10-04), an hour after the same tree built as v1.0.0-rc.1. Only that failure is tried again, three
+# times in all; any other failure ends the build at once. UNDRA_GRADLE names another gradle (the test's).
+gradle="${UNDRA_GRADLE:-./gradlew}"
+log="$(mktemp)"
+trap 'rm -f "$log"' EXIT
+attempt=1
+until (
   cd "$build"
-  ./gradlew --no-daemon --console=plain \
+  "$gradle" --no-daemon --console=plain \
     -PundraGroup="$group" -PundraVersion="$VERSION" -Dmaven.repo.local="$repo_local" \
     publishToMavenLocal
-)
+) 2>&1 | tee "$log"; do
+  if [ "$attempt" -ge 3 ] || ! grep -q 'Failed to install the following SDK components' "$log"; then
+    exit 1
+  fi
+  echo "An Android SDK component did not install (attempt $attempt of 3); trying again in ${UNDRA_SDK_RETRY_PAUSE:-20} seconds" >&2
+  attempt=$((attempt + 1))
+  sleep "${UNDRA_SDK_RETRY_PAUSE:-20}"
+done
 
 # Every module an app can depend on (crates/undra-cli/src/dist.rs, MAVEN_MODULES).
 missing=()

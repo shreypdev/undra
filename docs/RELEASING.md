@@ -196,8 +196,12 @@ A tag is immutable and projects pin it: never move or delete one. Fix forward wi
 * **A broken GitHub Release**: `gh release edit v1.0.0 --prerelease` stops the installer's "latest" from choosing it
   (`gh release edit <previous tag> --latest` pins the previous one). Do not delete it: projects pin its assets.
 * **JitPack's build failed**: read the log (step 7). A failure on JitPack's side (a timeout, a missing SDK
-  component) can be retried from https://jitpack.io/#shreypdev/undra (the tag's row); a failure in the repository is
-  a patch release. Android apps of `v1.0.0` cannot build until a tag builds on JitPack.
+  component) can be retried from https://jitpack.io/#shreypdev/undra: sign in there with the GitHub account that
+  owns the repository, remove the failed build in the tag's row, then ask for the pom again (step 7's `curl`),
+  which starts a new build. JitPack allows this for seven days after the first build; after that, and for a failure
+  in the repository, it is a patch release. Android apps of `v1.0.0` cannot build until the tag builds on JitPack.
+  It happened to `v1.0.0` itself (2026-10-04: Build-Tools 34 arrived as a broken archive on JitPack's machine, an
+  hour after the same tree built as `v1.0.0-rc.1`); since then `jitpack-install.sh` tries that one failure again.
 * **The Swift package or the crates**: a broken tag is a patch release; `undra upgrade` moves projects to it.
 * **cargo**: nothing to roll back; users pin `--tag`.
 

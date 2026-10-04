@@ -56,6 +56,16 @@ findings not taken on are U2 (Xcode 27, needs the reporter's crash log) and U6 (
 
 **After checkpoint 35 (status checkpoint 36):** the single Gate check (#16), no Homebrew tap (#17), no em-dash in any tracked file with a CI check (#18) and the launch polish (#19) are on `main` (`3797ae7`). Rules that came out of them: one required check, `All green`, the Gate's last job; no em-dash (U+2014) in anything tracked, in a commit message or in a pull request (a plain hyphen is fine); a script that lists files and rewrites them makes its whole plan first; a test that follows one handle waits for the other on its own condition.
 
+**The release (2026-10-04, status checkpoint 37).** `v1.0.0-rc.1` and `v1.0.0` are tagged and published from
+GitHub (the founder asked the integrator to carry out `docs/RELEASING.md` steps 3 to 8; this replaces "nothing is
+tagged" and "an agent must not create tags" below, for that request only). The rehearsal passed on clean runners for
+every channel. For `v1.0.0` the CLI, cargo and the web channel are verified; **JitPack's build of `v1.0.0` failed on
+JitPack's side** (a broken Build-Tools download), so Android apps of `v1.0.0` do not build until the founder signs in at
+jitpack.io, removes the failed build and requests it again (until 2026-10-11), and the iOS and Android checks of the
+*Release smoke* workflow have not run for `v1.0.0`. After that: `gh workflow run release-smoke.yml -f version=1.0.0`.
+Nothing is announced. Rules that came out of it: a version change is rehearsed as a prerelease first (it found three
+defects 0.1.0 could not show); `scripts/bump-version.sh` owns every file that names the version, Bazel's included.
+
 **Launch readiness (2026-10-03, status checkpoint 35).** The site for launch (#11), the posts' fact-check (#13), the web
 size re-record (#12) and distribution from GitHub (#14, ADR-063) are on `main` (`da087cc`); `origin` has `main` only.
 The live site already reads as on launch day: its installer and cargo commands become true with the release (there is no
