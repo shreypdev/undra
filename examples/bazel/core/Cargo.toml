@@ -9,4 +9,4 @@ description = "The Undra core of the Bazel example"
 # A plain library, like every Undra core. Under Bazel the `undra_core` rule builds it: the CLI links it with the C ABI
 # into the library each platform loads, from a vendored, offline copy of every dependency (ADR-061).
 [dependencies]
-undra = "1.0.0-rc.1"
+undra = "1.0.0"
