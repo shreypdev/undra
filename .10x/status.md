@@ -653,3 +653,24 @@ the founder can redo it: sign in at https://jitpack.io/#shreypdev/undra with the
 
 Still the founder's: step 2 (the `release` environment and the tag ruleset), the announcement (step 9). Not verified
 anywhere: pnpm against the release-asset URLs; a physical device. The Android emulator CI job is still on hold.
+
+### Checkpoint 38 (2026-10-04) - v1.0.0 is verified on every channel
+
+Closes checkpoint 37's open item. The founder removed the failed `v1.0.0` build on jitpack.io; the next request for the
+pom started a new build, which passed: status `ok` on `a941e3e`, the six modules, each with its pom, Gradle metadata
+and jar or aar, under `com.github.shreypdev.undra:<module>:v1.0.0`. Release smoke run 37189475077 (asked for by hand
+with `-f version=1.0.0`) is green on both jobs: `undra 1.0.0 (a941e3e)` from the installer on macOS and Linux,
+`cargo install` from the tag, and a new app built for web (`@undra/runtime@1.0.0` from the Release's asset), iOS (the
+Swift package from the tag) and Android (the Kotlin modules from JitPack), then `undra bindgen --check`. The SHA-256 of
+the six artifacts JitPack serves are in the release notes of `v1.0.0` (step 7).
+
+Two things on JitPack that are not defects of the release: the log link of `v1.0.0` still returns the log of the failed
+first build (JitPack did not replace the file; its status and its artifacts are the new build's), and a second build
+named `1.0.0` exists from a "Get it" click (nothing names it; projects ask for `v1.0.0`).
+
+What remains is the founder's: step 2 (the `release` environment and the tag ruleset) and the announcement (step 9).
+Follow-ups that are safe as small pull requests: `scripts/wt.sh merge` loses its last read of the checks when the hourly
+GitHub API quota runs out (it watches with `gh pr checks --watch`; it stopped twice on 2026-10-04 with every check
+green); the landing page, the README and Getting started never mention `undra adopt` for an app that already exists,
+and `adopt` does not detect a React Native app. Not verified anywhere: pnpm against the release-asset URLs; a physical
+device. The Android emulator CI job is still on hold.

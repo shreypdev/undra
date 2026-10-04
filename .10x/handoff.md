@@ -56,6 +56,11 @@ findings not taken on are U2 (Xcode 27, needs the reporter's crash log) and U6 (
 
 **After checkpoint 35 (status checkpoint 36):** the single Gate check (#16), no Homebrew tap (#17), no em-dash in any tracked file with a CI check (#18) and the launch polish (#19) are on `main` (`3797ae7`). Rules that came out of them: one required check, `All green`, the Gate's last job; no em-dash (U+2014) in anything tracked, in a commit message or in a pull request (a plain hyphen is fine); a script that lists files and rewrites them makes its whole plan first; a test that follows one handle waits for the other on its own condition.
 
+**The release is verified (2026-10-04, status checkpoint 38).** After the founder removed the failed build on
+jitpack.io, JitPack built `v1.0.0` and the *Release smoke* workflow passed for 1.0.0 on clean runners: the installer,
+cargo, web, iOS and Android. Nothing about the Android channel is open any more; the paragraph below is how it got
+there. What remains is his: step 2 of `docs/RELEASING.md` and the announcement.
+
 **The release (2026-10-04, status checkpoint 37).** `v1.0.0-rc.1` and `v1.0.0` are tagged and published from
 GitHub (the founder asked the integrator to carry out `docs/RELEASING.md` steps 3 to 8; this replaces "nothing is
 tagged" and "an agent must not create tags" below, for that request only). The rehearsal passed on clean runners for
