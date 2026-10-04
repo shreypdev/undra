@@ -89,8 +89,9 @@ GitHub (`gh workflow run launch-rehearsal.yml`).
 scripts/bump-version.sh 1.0.0
 ```
 
-It sets the workspace and `Cargo.lock`, the three npm packages and their locks, every `"@undra/runtime"` range and
-the runtimes' `Hello` versions, and lists the files. It also files the migration notes kept under a version that was
+It sets the workspace and `Cargo.lock`, the three npm packages and their locks, every `"@undra/runtime"` range, the
+runtimes' `Hello` versions and the Bazel rules (their module, the runtime package they build, the example's and the
+guide's dependency on them, the example core's `undra` requirement), and lists the files. It also files the migration notes kept under a version that was
 never released (no tag `v<old>`: the first entry of `crates/undra-cli/src/migrations.rs`, "Since v1.0", kept under
 `0.1.0`) under the new one, so `undra upgrade` prints them to the projects of a `0.1.0` CLI; after step 3 they stay
 under `1.0.0-rc.1`, which a `0.1.0` project crosses too. Verify: `bash scripts/bump-version.sh --check 1.0.0` says
@@ -154,6 +155,11 @@ An app that wants to hold JitPack to those bytes commits Gradle's dependency ver
 artifact then fails its build (ADR-063, section 4).
 
 ### 8. Check each channel from a clean machine
+
+The same walk runs on clean GitHub runners, a Mac and a Linux machine, as the `Release smoke` workflow
+(`.github/workflows/release-smoke.yml`): it starts by itself when the Release workflow finishes for a tag, and by hand
+with `gh workflow run release-smoke.yml -f version=1.0.0 && gh run watch`. Green there is this step done; the
+commands below are the same walk on your own machine.
 
 Use clean locations; the version is the tag's and the commit its first seven characters.
 

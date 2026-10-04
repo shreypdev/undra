@@ -786,9 +786,15 @@ fn concurrent_writers_and_a_re_observer_never_strand_an_op() {
                         match (i + writer) % 4 {
                             0 | 1 => list.push(todo(id, "w", i % 3 == 0)),
                             2 => {
+                                // The length is read before the write, so another writer's `remove` can
+                                // land in between and leave the index one past the end: `update_at` then
+                                // refuses it, as `remove` does below. Neither refusal is what this test is
+                                // about (a runner hit it once in the Gate of 2026-10-04).
                                 let len = list.with(Vec::len);
                                 if len > 0 {
-                                    list.update_at(id as usize % len, |t| t.done = !t.done);
+                                    let _ = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                                        list.update_at(id as usize % len, |t| t.done = !t.done);
+                                    }));
                                 }
                             }
                             _ => {

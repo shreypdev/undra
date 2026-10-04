@@ -67,7 +67,7 @@ impl Migration {
 
 /// Every release with notes, oldest first.
 pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: "0.1.0",
+    version: "1.0.0-rc.1",
     title: "Since v1.0: the UNDR wire, frame-coalesced delivery, typed call errors, reconnecting apps",
     notes: &[
         Note {

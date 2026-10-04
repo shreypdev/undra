@@ -634,10 +634,9 @@ fn upgrade_regenerates_the_bindings_for_real() {
             .unwrap()
             .contains(&format!("tag = \"v{CURRENT}\""))
     );
-    let line = CURRENT.rsplit_once('.').unwrap().0;
     let ts = std::fs::read_to_string(root.join("generated/ts/package.json")).unwrap();
     assert!(
-        ts.contains(&format!("^{line}.0")),
+        ts.contains(&format!("\"@undra/runtime\": \"^{CURRENT}\"")),
         "the regenerated package names the new runtime:\n{ts}"
     );
 }
