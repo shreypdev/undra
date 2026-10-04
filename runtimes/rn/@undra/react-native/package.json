@@ -1,6 +1,6 @@
 {
   "name": "@undra/react-native",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "description": "Undra for React Native: the native Undra core under a React Native app, through JSI, with the TypeScript runtime's mirror and the generated bindings on top (ADR-038).",
   "license": "MIT OR Apache-2.0",
   "repository": {
@@ -44,7 +44,7 @@
     "node": ">=20"
   },
   "peerDependencies": {
-    "@undra/runtime": "^0.1.0",
+    "@undra/runtime": "^1.0.0-rc.1",
     "react-native": ">=0.82"
   },
   "codegenConfig": {
