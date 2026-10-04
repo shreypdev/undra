@@ -54,6 +54,8 @@ status checkpoints 32 and 33 - and then the feedback wave of checkpoint 34: the 
 open: `origin` has `main` only.** What each review left recorded is listed at the end of checkpoint 34; the two
 findings not taken on are U2 (Xcode 27, needs the reporter's crash log) and U6 (GraphQL).
 
+**After checkpoint 35 (status checkpoint 36):** the single Gate check (#16), no Homebrew tap (#17), no em-dash in any tracked file with a CI check (#18) and the launch polish (#19) are on `main` (`3797ae7`). Rules that came out of them: one required check, `All green`, the Gate's last job; no em-dash (U+2014) in anything tracked, in a commit message or in a pull request (a plain hyphen is fine); a script that lists files and rewrites them makes its whole plan first; a test that follows one handle waits for the other on its own condition.
+
 **Launch readiness (2026-10-03, status checkpoint 35).** The site for launch (#11), the posts' fact-check (#13), the web
 size re-record (#12) and distribution from GitHub (#14, ADR-063) are on `main` (`da087cc`); `origin` has `main` only.
 The live site already reads as on launch day: its installer and cargo commands become true with the release (there is no

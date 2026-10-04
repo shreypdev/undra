@@ -304,9 +304,16 @@ blueprint = "Keyed patch on 10,000 items, one insert: <= 20 us iOS (A15), <= 40 
 budget_ns = 1400
 measured_ns = 277.4
 
+# 2x against a baseline, not 1.5x: on the CI runner this row reads one of two speeds for a whole
+# process (about 12 us or 19 us on the EPYC 7763), so the three attempts of one run share a mode and
+# the base's run may have drawn the other. Eight Gate runs of 2026-10-03/04, the same code on both
+# sides in each: 0.99x, 1.49x, 1.01x, 1.02x, 0.99x, 1.00x, 0.75x, 1.58x. The cause is not established
+# (the row moves an item across 8,000 of the 10,000 rows; the placement of the list's allocation is
+# the suspect). Its neighbours, insert and update, stay within 1.02x and keep the 1.5x gate.
 [bench."signals/keyed_10k/move"]
 budget_ns = 48000
 measured_ns = 9523.1
+baseline_tolerance = 2
 
 # The fallback: the same one-row edit through the raw `Signal::update`, which the commit finds by
 # diffing the list against what the host has. Patches are computed by diffing the whole list, so this
