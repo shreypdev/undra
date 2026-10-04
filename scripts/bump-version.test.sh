@@ -64,6 +64,19 @@ grep -qx "export const RUNTIME_VERSION = \"$new\";" "$copy/runtimes/ts/@undra/ru
 grep -qx "internal const val UNDRA_RUNTIME_VERSION: String = \"$new\"" \
   "$copy/runtimes/kotlin/undra-runtime/runtime/src/main/kotlin/dev/undra/runtime/UndraLog.kt" ||
   fail "the Kotlin runtime's UNDRA_RUNTIME_VERSION does not say $new"
+# The Bazel rules: their module, the example's and the guide's dependency on it, the runtime package they build, and the
+# example core's requirement (the whole version: a release candidate is only matched by a requirement that names one).
+grep -qx "    version = \"$new\"," "$copy/bazel/MODULE.bazel" || fail "bazel/MODULE.bazel does not say $new"
+for f in examples/bazel/MODULE.bazel site/docs/bazel.html; do
+  grep -q "bazel_dep(name = \"undra_rules\", version = \"$new\")" "$copy/$f" || fail "$f does not depend on undra_rules $new"
+done
+[ "$(grep -c -F -e "    version = \"$new\"," -e "\\\"version\\\": \\\"$new\\\"" "$copy/bazel/undra/private/runtimes/ts.BUILD")" -eq 2 ] ||
+  fail "the runtime package the Bazel rules build does not say $new twice"
+grep -q -F "bazel_dep(name = \\\"undra_rules\\\", version = \\\"$new\\\")" "$copy/site/search-index.json" ||
+  fail "the site's search index does not carry the guide's undra_rules $new"
+grep -qx "undra = \"$new\"" "$copy/examples/bazel/core/Cargo.toml" || fail "the Bazel example's core does not require undra $new"
+stale=$(cd "$copy" && git ls-files -- bazel examples/bazel ':!*.lock' | xargs grep -l "undra.*\"$old\"" || true)
+[ -z "$stale" ] || fail "the Bazel files still naming $old: $stale"
 # Every tracked manifest, so one that names the range but is missing from the script's list fails here.
 stale=$(cd "$copy" && git ls-files -- '*package.json' '*package-lock.json' | grep -v '/tests/fixtures/' |
   xargs grep -l "\"@undra/runtime\": \"^$old\"" || true)

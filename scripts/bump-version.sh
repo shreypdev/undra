@@ -125,6 +125,25 @@ rewrite_migrations() { # an entry `    version: "<old>",` of the notes table: fi
 rewrite_hello_version() { # the version a runtime reports in its Hello: TypeScript's RUNTIME_VERSION, Kotlin's UNDRA_RUNTIME_VERSION
   sed -E 's/^(export const RUNTIME_VERSION = ")[^"]*(";)$/\1'"$version"'\2/; s/^(internal const val UNDRA_RUNTIME_VERSION: String = ")[^"]*(")$/\1'"$version"'\2/' "$1"
 }
+rewrite_bazel_module() { # the version of the Bazel rules module: `    version = "<v>",` inside its module(...)
+  awk -v v="$version" '
+    /^module\(/ { inside = 1 }
+    inside && /^    version = "/ { sub(/"[^"]*"/, "\"" v "\"") }
+    inside && /^\)/ { inside = 0 }
+    { print }
+  ' "$1"
+}
+rewrite_bazel_dep() { # every `bazel_dep(name = "undra_rules", version = "<v>")`: the example's, the guide's on the site, and
+  # the guide's text in the site's search index (JSON, so its quotes are written \")
+  sed -E 's/(bazel_dep\(name = \\?"undra_rules\\?", version = \\?")[^"\\]*/\1'"$version"'/g' "$1"
+}
+rewrite_bazel_runtime() { # the @undra/runtime package the rules build: the version in its package.json and of its target
+  sed -E 's/^(        "  \\"version\\": \\")[^"\\]*(\\",",)$/\1'"$version"'\2/; s/^(    version = ")[^"]*(",)$/\1'"$version"'\2/' "$1"
+}
+rewrite_bazel_requirement() { # the Bazel example core's `undra = "<v>"`. The whole version, not "1.0": a requirement matches a
+  # release candidate only when it names one, and the rules stand this checkout in for the registry.
+  sed -E 's/^(undra = ")[^"]*(")$/\1'"$version"'\2/' "$1"
+}
 
 # The npm packages of a release (crates/undra-cli/src/dist.rs, NPM_PACKAGES).
 packages="runtimes/ts/@undra/runtime runtimes/ts/@undra/testkit runtimes/rn/@undra/react-native"
@@ -157,6 +176,12 @@ files_and_kinds() {
   if [ "$outgoing" != "$version" ] && [ "$outgoing_released" = no ]; then
     printf 'migrations crates/undra-cli/src/migrations.rs\n'
   fi
+  printf 'bazel_module bazel/MODULE.bazel\n'
+  printf 'bazel_runtime bazel/undra/private/runtimes/ts.BUILD\n'
+  printf 'bazel_dep examples/bazel/MODULE.bazel\n'
+  printf 'bazel_dep site/docs/bazel.html\n'
+  printf 'bazel_dep site/search-index.json\n'
+  printf 'bazel_requirement examples/bazel/core/Cargo.toml\n'
   local dir
   for dir in $packages; do
     printf 'package_json %s/package.json\n' "$dir"

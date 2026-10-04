@@ -57,7 +57,7 @@ write_file(
     content = [
         "{",
         "  \"name\": \"@undra/runtime\",",
-        "  \"version\": \"0.1.0\",",
+        "  \"version\": \"1.0.0-rc.1\",",
         "  \"type\": \"module\",",
         "  \"sideEffects\": false,",
         "  \"exports\": {",
@@ -80,5 +80,5 @@ npm_package(
         ":package_json",
     ],
     package = "@undra/runtime",
-    version = "0.1.0",
+    version = "1.0.0-rc.1",
 )
