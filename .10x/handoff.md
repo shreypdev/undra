@@ -59,7 +59,10 @@ findings not taken on are U2 (Xcode 27, needs the reporter's crash log) and U6 (
 **The release is verified (2026-10-04, status checkpoint 38).** After the founder removed the failed build on
 jitpack.io, JitPack built `v1.0.0` and the *Release smoke* workflow passed for 1.0.0 on clean runners: the installer,
 cargo, web, iOS and Android. Nothing about the Android channel is open any more; the paragraph below is how it got
-there. What remains is his: step 2 of `docs/RELEASING.md` and the announcement.
+there. What remains is his: step 2 of `docs/RELEASING.md` and the announcement. Since then (checkpoint 39) the
+`v1.0.0` build on JitPack was redone once more so that its log shows the build that is served, the release notes carry
+the hashes of that build, and the smoke run passed again (37191400784). JitPack keeps a second build named `1.0.0` of
+the same tag by itself; leave it.
 
 **The release (2026-10-04, status checkpoint 37).** `v1.0.0-rc.1` and `v1.0.0` are tagged and published from
 GitHub (the founder asked the integrator to carry out `docs/RELEASING.md` steps 3 to 8; this replaces "nothing is

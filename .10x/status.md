@@ -674,3 +674,21 @@ GitHub API quota runs out (it watches with `gh pr checks --watch`; it stopped tw
 green); the landing page, the README and Getting started never mention `undra adopt` for an app that already exists,
 and `adopt` does not detect a React Native app. Not verified anywhere: pnpm against the release-asset URLs; a physical
 device. The Android emulator CI job is still on hold.
+
+### Checkpoint 39 (2026-10-04) - JitPack's log of v1.0.0 shows the build that is served
+
+Corrects two sentences of checkpoint 38. At the founder's wish for a consistent record on JitPack he removed the
+`v1.0.0` build once more and it was rebuilt in a fixed order (the pom asked for once, only the status API read until
+`ok`, the log opened last): built 09:11 UTC on `a941e3e`, six modules, and `build.log` of `v1.0.0` now shows that
+build (`BUILD SUCCESSFUL`, the six modules published). The four aars kept their bytes; the two jars (`runtime`,
+`testkit`) did not, so their SHA-256 in the release notes of `v1.0.0` were replaced. Release smoke run 37191400784
+(`-f version=1.0.0`) is green on both jobs against the rebuilt artifacts: the installer, `cargo install`, a new app
+built for web, iOS and Android.
+
+The build named `1.0.0` (no `v`) is not from a click: JitPack builds a `v` tag under the name without the `v` by
+itself for the latest stable release. He removed it and it was built again within two minutes of a visit to the
+repository's page on jitpack.io; Lottie, Glide and MPAndroidChart have the same pairs. It stays; the release candidate
+has none. The tags keep their `v`, which is what Undra's peers use (UniFFI, Crux, Tauri, React Native).
+`docs/RELEASING.md` now gives the order for redoing a JitPack build and says to leave the twin alone.
+
+What remains is unchanged: the founder's step 2 and the announcement; the two follow-ups of checkpoint 38.
