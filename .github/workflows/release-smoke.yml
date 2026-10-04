@@ -1,0 +1,177 @@
+name: Release smoke
+
+# A new engineer's first hour, on clean runners, against a PUBLISHED release (docs/RELEASING.md, step 8): install the
+# CLI the way the site says, make an app with `undra init`, and build it for the web, iOS and Android with nothing
+# but what the release published: the tag (cargo and Swift Package Manager), JitPack (the Kotlin modules) and the
+# Release's assets (the JavaScript runtime). No checkout of this repository is used by the app: the checkout below
+# is only for scripts/android-sdk-install.sh.
+#
+# It runs by itself when the Release workflow finishes for a tag, and by hand for any published version:
+#   gh workflow run release-smoke.yml -f version=1.0.0-rc.1 && gh run watch
+# The launch rehearsal (launch-rehearsal.yml) is the same walk BEFORE a release, against stand-ins; this is the
+# walk after it, against the real channels. Not part of the Gate.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The published version to try, without the v (for example 1.0.0-rc.1)"
+        type: string
+        required: true
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  NDK_VERSION: 27.2.12479018
+
+jobs:
+  version:
+    name: Which release
+    # After a Release run: only one that a tag started and that succeeded (a dry run publishes nothing to try).
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        env:
+          INPUT: ${{ inputs.version }}
+          TAG: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          v="${INPUT:-${TAG#v}}"
+          v="${v#v}"
+          case "$v" in
+            '' | *[!0-9A-Za-z.-]*) echo "not a version: '$v'" >&2; exit 1 ;;
+          esac
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Release smoke for v$v" >> "$GITHUB_STEP_SUMMARY"
+
+  mac:
+    name: A Mac (installer; a new app built for web, iOS and Android)
+    needs: version
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      V: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: wasm32-unknown-unknown,aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,x86_64-linux-android
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+      - name: The newest stable Xcode
+        run: |
+          newest="$(ls -d /Applications/Xcode_*.app | grep -v -i -E 'beta|candidate|_rc' | sort -V | tail -n 1)"
+          sudo xcode-select -s "$newest/Contents/Developer"
+          xcodebuild -version
+      - name: The Android NDK and cargo-ndk
+        run: |
+          bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          cargo install cargo-ndk
+      - name: Install undra the way the site says
+        run: |
+          set -euo pipefail
+          export UNDRA_HOME="$RUNNER_TEMP/undra-home"
+          curl -fsSL https://shreypdev.github.io/undra/install.sh | UNDRA_VERSION="$V" sh
+          echo "$UNDRA_HOME/bin" >> "$GITHUB_PATH"
+          "$UNDRA_HOME/bin/undra" --version | tee "$RUNNER_TEMP/version.txt"
+          grep -F "$V" "$RUNNER_TEMP/version.txt"
+      - name: JitPack has built the tag (the first request starts the build)
+        run: |
+          set -u
+          pom="https://jitpack.io/com/github/shreypdev/undra/runtime/v$V/runtime-v$V.pom"
+          for attempt in $(seq 1 60); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 "$pom" || true)"
+            echo "attempt $attempt: $code"
+            if [ "$code" = 200 ]; then exit 0; fi
+            sleep 30
+          done
+          echo "JitPack did not publish runtime v$V in 30 minutes; its log:" >&2
+          curl -sS "https://jitpack.io/com/github/shreypdev/undra/v$V/build.log" | tail -n 60 >&2 || true
+          exit 1
+      - name: A new app, outside this checkout
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/fresh" && cd "$RUNNER_TEMP/fresh"
+          undra init smoke
+          grep -F "tag = \"v$V\"" smoke/core/Cargo.toml
+      - name: Web (npm install, npm run build, one copy of the runtime)
+        working-directory: ${{ runner.temp }}/fresh/smoke/web
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npm run build
+          npm ls @undra/runtime
+      - name: iOS (xcodebuild for the simulator; the Swift package from the tag)
+        working-directory: ${{ runner.temp }}/fresh/smoke/ios
+        run: |
+          set -o pipefail
+          xcodebuild -project Smoke.xcodeproj -scheme Smoke -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
+            CODE_SIGNING_ALLOWED=NO build | tail -n 40
+      - name: Android (assembleDebug; the Kotlin modules from JitPack)
+        working-directory: ${{ runner.temp }}/fresh/smoke/android
+        run: ./gradlew :app:assembleDebug --console=plain
+      - name: The bindings undra init wrote are current
+        working-directory: ${{ runner.temp }}/fresh/smoke
+        run: undra bindgen --check
+      - name: Summary
+        if: always()
+        run: echo "Mac, v$V - installer, web, iOS, Android, bindgen --check - ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+
+  linux:
+    name: Linux (installer and cargo install; a new web app)
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      V: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install undra the way the site says
+        run: |
+          set -euo pipefail
+          export UNDRA_HOME="$RUNNER_TEMP/undra-home"
+          curl -fsSL https://shreypdev.github.io/undra/install.sh | UNDRA_VERSION="$V" sh
+          echo "$UNDRA_HOME/bin" >> "$GITHUB_PATH"
+          "$UNDRA_HOME/bin/undra" --version | tee "$RUNNER_TEMP/version.txt"
+          grep -F "$V" "$RUNNER_TEMP/version.txt"
+      - name: A new web app, built
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/fresh" && cd "$RUNNER_TEMP/fresh"
+          undra init smoke --platforms web
+          grep -F "tag = \"v$V\"" smoke/core/Cargo.toml
+          cd smoke/web
+          npm install --no-audit --no-fund
+          npm run build
+          npm ls @undra/runtime
+      - name: cargo install from the tag
+        run: |
+          set -euo pipefail
+          cargo install --locked --git https://github.com/shreypdev/undra --tag "v$V" --root "$RUNNER_TEMP/cargo-undra" undra-cli
+          "$RUNNER_TEMP/cargo-undra/bin/undra" --version | tee "$RUNNER_TEMP/cargo-version.txt"
+          grep -F "$V" "$RUNNER_TEMP/cargo-version.txt"
+      - name: Summary
+        if: always()
+        run: echo "Linux, v$V - installer, web, cargo install - ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
