@@ -234,6 +234,7 @@ html:not(.js) .live-fallback > span { display: none; }
 .final-card h2 { font-size: clamp(2.1rem, 5vw, 3.6rem); max-width: 16ch; margin-inline: auto; }
 .final-card .install { max-width: 620px; margin: 28px auto 0; }
 .final-card .install .tabs-head { justify-content: center; }
+.final-card .adopt-note { max-width: 620px; margin: 14px auto 0; font-size: .9rem; line-height: 1.5; color: var(--text-2); text-wrap: pretty; }
 .final-card .cta-row { justify-content: center; }
 .final-card .then { max-width: 620px; margin: 14px auto 0; }
 .final-card .then pre { font-size: .84rem; }
