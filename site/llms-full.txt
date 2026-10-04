@@ -55,6 +55,8 @@ cd myapp/web && npm install && npm run dev                     # the web app on 
 
 That is the whole loop on the web. The rest of this page installs what each platform needs, shows [`undra dev`](https://shreypdev.github.io/undra/docs/getting-started.html#4-start-the-live-loop) (one core served to every app, its state kept across a rebuild), and runs the iOS and Android apps. `undra doctor` says what your machine is missing, with the command that fixes each gap.
 
+**Already have an app?** [`undra adopt ../MyApp`](https://shreypdev.github.io/undra/docs/cli.html#undra-adopt) adds a core to an existing iOS, Android or web app. It writes one new `undra/` directory and the exact steps to wire it in, and never edits your project files.
+
 ## What you need
 
 Install only what your target platforms need. `undra doctor` checks all of it and prints the fix for each gap.

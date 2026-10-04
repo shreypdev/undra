@@ -172,6 +172,10 @@ cd myapp/web && npm install && npm run dev    # the web app on its core: http://
 Edit `core/src/lib.rs` and save: the Vite plugin rebuilds the core and reloads the page. `undra dev` (in `myapp`)
 serves one core to every running app and keeps its state across a rebuild.
 
+Already have an app? `undra adopt ../MyApp` adds a core to an existing iOS, Android or web app: one new `undra/`
+directory and the exact steps to wire it in, without editing your project files
+([how it works](https://shreypdev.github.io/undra/docs/cli.html#undra-adopt)).
+
 A new project depends on the release of the `undra` that created it, all from this repository (ADR-063): the crates
 by its git tag, the Swift package at its root (`.package(url: "https://github.com/shreypdev/undra", from: "1.0.0")`),
 the Kotlin runtime from JitPack (`com.github.shreypdev.undra:runtime:v1.0.0`) and `@undra/runtime` as the GitHub
