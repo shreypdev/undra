@@ -155,6 +155,11 @@ artifact then fails its build (ADR-063, section 4).
 
 ### 8. Check each channel from a clean machine
 
+The same walk runs on clean GitHub runners, a Mac and a Linux machine, as the `Release smoke` workflow
+(`.github/workflows/release-smoke.yml`): it starts by itself when the Release workflow finishes for a tag, and by hand
+with `gh workflow run release-smoke.yml -f version=1.0.0 && gh run watch`. Green there is this step done; the
+commands below are the same walk on your own machine.
+
 Use clean locations; the version is the tag's and the commit its first seven characters.
 
 ```sh
