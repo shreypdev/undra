@@ -20,23 +20,40 @@ test("S04 async call", async () => {
     expect(elapsedMs, "add_later(.., 50) within the 5 s wait").toBeLessThan(WAIT_TIMEOUT_MS);
   });
 
+  // The claim: the core honours each call's delay and does not answer in the order the calls were made (the 400 ms call is
+  // issued first). It is a claim about the core only on a trial the machine delivered: all three issued close together, none
+  // answered long after its delay. A runner that stalls the 50 ms call for 150 ms puts the 200 ms call first, and the order
+  // then says nothing, so that trial is repeated; the values and the lower bound on each call's time hold on every trial.
   await step("2. three concurrent calls resolve in delay order", async () => {
-    const order: number[] = [];
-    const values = await Promise.all(
-      (
-        [
-          [1, 400],
-          [2, 50],
-          [3, 200],
-        ] as const
-      ).map(async ([i, delayMs]) => {
-        const sum = await addLater(i, 0, delayMs, core);
-        order.push(i);
-        return sum;
-      }),
+    const calls = [
+      [1, 400],
+      [2, 50],
+      [3, 200],
+    ] as const;
+    const measured: string[] = [];
+    for (let trial = 0; trial < 10; trial++) {
+      const timed = await Promise.all(
+        calls.map(async ([id, delayMs]) => {
+          const issued = performance.now();
+          const value = await addLater(id, 0, delayMs, core);
+          const completed = performance.now();
+          return { id, delayMs, value, issued, completed };
+        }),
+      );
+      for (const call of timed) {
+        expect(call.value, `the value of addLater(${call.id}, 0, ${call.delayMs})`).toBe(call.id);
+        expect(call.completed - call.issued, `addLater(${call.id}, 0, ${call.delayMs}) answered too early`).toBeGreaterThanOrEqual(call.delayMs - 5);
+      }
+      const issueSpreadMs = Math.max(...timed.map((c) => c.issued)) - Math.min(...timed.map((c) => c.issued));
+      const latestMs = Math.max(...timed.map((c) => c.completed - c.issued - c.delayMs));
+      measured.push(`trial ${trial}: issued within ${issueSpreadMs.toFixed(1)} ms, answered up to ${latestMs.toFixed(1)} ms after the delay`);
+      if (issueSpreadMs >= 50 || latestMs >= 100) continue; // the runner held a call up: its place in the order says nothing about the core
+      expect([...timed].sort((a, b) => a.completed - b.completed).map((c) => c.id)).toEqual([2, 3, 1]);
+      return;
+    }
+    expect.fail(
+      `the runner never delivered three concurrent calls within the margins (issued within 50 ms of each other, none answered 100 ms or more after its delay) in 10 trials: ${measured.join("; ")}`,
     );
-    expect(order).toEqual([2, 3, 1]);
-    expect(values).toEqual([1, 2, 3]);
   });
 
   await step("3. Probe.wait(10) resolves to 10", async () => {

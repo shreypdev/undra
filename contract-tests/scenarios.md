@@ -139,8 +139,11 @@ waiting for an event loop.
    that never fires is what it catches; how long after 50 ms the answer comes is the machine's, and step 2's order is
    the claim that the delays are honoured).
 2. Three concurrent calls `add_later(i, 0, d)` with `(i, d) = (1, 400), (2, 50), (3, 200)` resolve
-   in delay order `2, 3, 1` and with the right values (the delays are 150 ms apart on purpose: a stalled
-   runner must not be able to reorder them).
+   in delay order `2, 3, 1` and with the right values (the 400 ms call is issued first on purpose: the core
+   honours each delay, it does not answer in the order of the calls). Every trial asserts the values and that each
+   call took at least its delay minus 5 ms; the order of the recorded completion instants is judged only on a trial the
+   runner delivered (all three issued within 50 ms of each other, none completed 100 ms or more after its delay), a
+   stalled trial is repeated up to 10 times, and ten stalled trials fail the step and say it was the machine's.
 3. `Probe.wait(10)` resolves to `10`.
 4. A call made from inside a change observer or another call's completion (re-entrancy on the
    platform side: the continuation of `add_later` calls `add_later` again) works: the second call

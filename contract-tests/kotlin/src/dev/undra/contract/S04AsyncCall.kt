@@ -26,15 +26,41 @@ fun s04AsyncCall(w: World) {
     // answer comes is the machine's (CI runners stall); step 2's order is the claim that the delays are honoured.
     check(elapsedMs < WAIT_MS) { "add_later(.., 50 ms) took $elapsedMs ms, past the $WAIT_MS ms wait" }
 
-    // 2. Three at once resolve in the order of their delays, each with its own value.
-    val order = CopyOnWriteArrayList<Int>()
-    val values = runBlocking(Dispatchers.Default) {
-        listOf(1 to 400u, 2 to 50u, 3 to 200u)
-            .map { (i, delayMs) -> async { addLater(i, 0, delayMs).also { order.add(i) } } }
-            .awaitAll()
+    // 2. Three at once resolve in the order of their delays, each with its own value. The claim is that the core honours
+    // each call's delay and does not answer in the order the calls were made (the 400 ms call is issued first). It is a
+    // claim about the core only on a trial the machine delivered: all three issued close together, none answered long
+    // after its delay. A runner that stalls the 50 ms call for 150 ms puts the 200 ms call first, and the order then says
+    // nothing, so that trial is repeated; the values and the lower bound on each call's time hold on every trial.
+    val measured = mutableListOf<String>()
+    var delivered = false
+    for (trial in 0 until 10) {
+        val timed = runBlocking(Dispatchers.Default) {
+            listOf(1 to 400u, 2 to 50u, 3 to 200u)
+                .map { (i, delayMs) ->
+                    async {
+                        val issuedNs = System.nanoTime()
+                        val value = addLater(i, 0, delayMs)
+                        TimedCall(i, delayMs.toLong(), value, issuedNs, System.nanoTime())
+                    }
+                }
+                .awaitAll()
+        }
+        for (call in timed) {
+            expectEq("the value of add_later(${call.id}, 0, ${call.delayMs})", call.id, call.value)
+            check(call.tookMs >= call.delayMs - 5) { "add_later(${call.id}, 0, ${call.delayMs}) answered after only ${call.tookMs} ms" }
+        }
+        val issueSpreadMs = (timed.maxOf { it.issuedNs } - timed.minOf { it.issuedNs }) / 1e6
+        val latestMs = timed.maxOf { it.tookMs - it.delayMs }
+        measured += "trial $trial: issued within $issueSpreadMs ms, answered up to $latestMs ms after the delay"
+        if (issueSpreadMs >= 50 || latestMs >= 100) continue // the runner held a call up: its place in the order says nothing about the core
+        expectEq("the order the three calls resolved in", listOf(2, 3, 1), timed.sortedBy { it.completedNs }.map { it.id })
+        delivered = true
+        break
     }
-    expectEq("the values of the three calls", listOf(1, 2, 3), values)
-    expectEq("the order the three calls resolved in", listOf(2, 3, 1), order.toList())
+    check(delivered) {
+        "the runner never delivered three concurrent calls within the margins (issued within 50 ms of each other, none answered " +
+            "100 ms or more after its delay) in 10 trials: ${measured.joinToString("; ")}"
+    }
 
     // 3. A method of an object, asynchronously.
     Probe.create().use { probe -> expectEq("Probe.wait(10)", 10u, runBlocking { probe.wait(10u) }) }
@@ -66,4 +92,10 @@ fun s04AsyncCall(w: World) {
     expectEq("an async call started inside a change observer", 7, secondCall.get(WAIT_MS, TimeUnit.MILLISECONDS))
     reachedTwo.get(WAIT_MS, TimeUnit.MILLISECONDS)
     w.core.release(counter)
+}
+
+/** One of step 2's three concurrent calls: what it returned and the two instants (from `System.nanoTime`) that place it in time. */
+private class TimedCall(val id: Int, val delayMs: Long, val value: Int, val issuedNs: Long, val completedNs: Long) {
+    /** How long the call took, from just before it was made to just after its result was back. */
+    val tookMs: Double get() = (completedNs - issuedNs) / 1e6
 }
