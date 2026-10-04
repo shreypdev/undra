@@ -142,8 +142,9 @@ waiting for an event loop.
    in delay order `2, 3, 1` and with the right values (the 400 ms call is issued first on purpose: the core
    honours each delay, it does not answer in the order of the calls). Every trial asserts the values and that each
    call took at least its delay minus 5 ms; the order of the recorded completion instants is judged only on a trial the
-   runner delivered (all three issued within 50 ms of each other, none completed 100 ms or more after its delay), a
-   stalled trial is repeated up to 10 times, and ten stalled trials fail the step and say it was the machine's.
+   runner delivered (the three issued within 20 ms of each other, the 50 ms call answered under 130 ms late and the
+   200 ms call under 180 ms late: the gap to the next delay less 20 ms, the most a late answer can move a call), a
+   stalled trial is repeated up to 30 times, and thirty stalled trials fail the step and say it was the machine's.
 3. `Probe.wait(10)` resolves to `10`.
 4. A call made from inside a change observer or another call's completion (re-entrancy on the
    platform side: the continuation of `add_later` calls `add_later` again) works: the second call

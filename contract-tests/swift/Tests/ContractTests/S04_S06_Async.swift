@@ -22,44 +22,45 @@ extension ContractScenarios {
 
             // 2. Three concurrent calls resolve in the order of their delays, with the right values. The claim is that the core
             // honours each call's delay and does not answer in the order the calls were made (the 400 ms call is issued first).
-            // It is a claim about the core only on a trial the machine delivered: all three issued close together, none
-            // answered long after its delay. A runner that stalls the 50 ms call for 150 ms puts the 200 ms call first, and
-            // the order then says nothing, so that trial is repeated (as the trickle test does); the values and the lower
-            // bound on each call's time hold on every trial.
-            let calls: [(id: Int32, delayMs: UInt32)] = [(1, 400), (2, 50), (3, 200)]
+            // It is a claim about the core only on a trial the machine delivered: the three issued together, and no call
+            // answered late enough to pass the next one. A call is put behind the next-slower one only by arriving late by the
+            // gap to it, less the 20 ms the issues may be apart: 130 ms for the 50 ms call, 180 ms for the 200 ms call (the
+            // 400 ms call is last: late is still last). A hosted runner has answered the 50 ms call 150 ms late, which puts the
+            // 200 ms call first and says nothing about the core, so that trial is repeated (as the trickle test does); the
+            // values and the lower bound on each call's time hold on every trial.
+            let calls: [(id: Int32, delayMs: UInt32, lateLimit: Duration?)] = [(1, 400, nil), (2, 50, .milliseconds(130)), (3, 200, .milliseconds(180))]
             var measured: [String] = []
             var delivered = false
-            for trial in 0..<10 {
+            for trial in 0..<30 {
                 let timed = try await withThrowingTaskGroup(of: TimedCall.self) { (group: inout ThrowingTaskGroup<TimedCall, any Error>) -> [TimedCall] in
                     for call in calls {
                         group.addTask {
                             let issued = ContinuousClock.now
                             let value = try await addLater(a: call.id, b: 0, delayMs: call.delayMs, ctx: core)
                             let completed = ContinuousClock.now
-                            return TimedCall(id: call.id, delay: .milliseconds(Int(call.delayMs)), value: value, issued: issued, completed: completed)
+                            return TimedCall(id: call.id, delay: .milliseconds(Int(call.delayMs)), lateLimit: call.lateLimit, value: value, issued: issued, completed: completed)
                         }
                     }
                     var all: [TimedCall] = []
                     for try await call in group {
                         all.append(call)
                     }
-                    return all
+                    return all.sorted { $0.id < $1.id }
                 }
                 for call in timed {
                     try checkEqual(call.value, call.id, "the value of add_later(\(call.id), 0, \(call.delay.shown))")
                     try check(call.took >= call.delay - .milliseconds(5), "add_later(\(call.id), 0, \(call.delay.shown)) answered after only \(call.took.shown)")
                 }
                 let issueSpread = (timed.map(\.issued).max() ?? .now) - (timed.map(\.issued).min() ?? .now)
-                let latest = timed.map { $0.took - $0.delay }.max() ?? .zero
-                measured.append("trial \(trial): issued within \(issueSpread.shown), answered up to \(latest.shown) after the delay")
-                if issueSpread >= .milliseconds(50) || latest >= .milliseconds(100) {
+                measured.append("trial \(trial): issued within \(issueSpread.shown), late by " + timed.map { "\($0.id): \($0.late.shown)" }.joined(separator: ", "))
+                if issueSpread >= .milliseconds(20) || timed.contains(where: { call in call.lateLimit.map { call.late >= $0 } ?? false }) {
                     continue // the runner held a call up: its place in the order says nothing about the core
                 }
                 try checkEqual(timed.sorted { $0.completed < $1.completed }.map(\.id), [2, 3, 1], "completion order of delays 400, 50, 200")
                 delivered = true
                 break
             }
-            try check(delivered, "the runner never delivered three concurrent calls within the margins (issued within 50 ms of each other, none answered 100 ms or more after its delay) in 10 trials: \(measured.joined(separator: "; "))")
+            try check(delivered, "the runner never delivered three concurrent calls within the margins (issued within 20 ms of each other, the 50 ms call answered under 130 ms late, the 200 ms call under 180 ms late) in 30 trials: \(measured.joined(separator: "; "))")
 
             // 3. A call on an object.
             let probe = try Probe(ctx: core)
@@ -278,12 +279,17 @@ extension ContractScenarios {
 private struct TimedCall: Sendable {
     let id: Int32
     let delay: Duration
+    /// How late the call may be answered, on a trial that says something about the order; `nil` for the slowest call.
+    let lateLimit: Duration?
     let value: Int32
     let issued: ContinuousClock.Instant
     let completed: ContinuousClock.Instant
 
     /// How long the call took, from just before it was made to just after its result was back.
     var took: Duration { completed - issued }
+
+    /// How long after its delay the result was back.
+    var late: Duration { took - delay }
 }
 
 private extension Duration {
