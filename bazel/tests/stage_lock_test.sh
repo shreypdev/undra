@@ -2,7 +2,8 @@
 # The build directory of an action (`/tmp/undra-bazel-<key>`) is its own lock, and a core built with `keep_debug_objects`
 # leaves it behind with the objects a debugger needs. What stays must be free for the next build of the target to take:
 # its owner file says `kept`, not the pid of the build that made it, since that pid could be another process's by then and
-# the next build would wait for it. Here run.sh runs with a stand-in CLI that writes the files a build would, twice over
+# the next build would wait for it; and what stays is the archives the debug map names and the sources the DWARF names,
+# not the rest of the build. Here run.sh runs with a stand-in CLI that writes the files a build would, twice over
 # the same stage key, then once with an owner left by a build that died, then once without the attribute. The test's timeout
 # is the hang bound: a run that waits for a lock nobody holds does not come back.
 set -u
@@ -26,12 +27,20 @@ cat > fake-undra <<'CLI'
 #!/bin/sh
 set -eu
 for triple in aarch64-apple-ios aarch64-apple-ios-sim; do
-  mkdir -p "$CARGO_TARGET_DIR/$triple/debug/deps"
-  echo "an archive with the core's DWARF" > "$CARGO_TARGET_DIR/$triple/debug/libundra_core_0123.a"
-  echo "an object the debug map does not name" > "$CARGO_TARGET_DIR/$triple/debug/deps/other.o"
+  for profile in debug release-mobile; do
+    mkdir -p "$CARGO_TARGET_DIR/$triple/$profile/deps"
+    echo "an archive with the core's DWARF" > "$CARGO_TARGET_DIR/$triple/$profile/libundra_core_0123.a"
+    echo "the copy Cargo keeps, which the debug map does not name" > "$CARGO_TARGET_DIR/$triple/$profile/deps/libundra_core_0123-4567.a"
+    echo "an object the debug map does not name" > "$CARGO_TARGET_DIR/$triple/$profile/deps/other.o"
+  done
 done
+mkdir -p "$CARGO_TARGET_DIR/debug/build"
+echo "a build script of the host" > "$CARGO_TARGET_DIR/debug/build/script"
 mkdir -p build/ios/Fake.xcframework
 echo slice > build/ios/Fake.xcframework/libfake.a
+mkdir -p "$CARGO_HOME/registry/src/index/serde-1.0.0" "$CARGO_HOME/registry/cache"
+echo "pub fn serde() {}" > "$CARGO_HOME/registry/src/index/serde-1.0.0/lib.rs"
+echo "an archive" > "$CARGO_HOME/registry/cache/serde-1.0.0.crate"
 CLI
 chmod +x fake-undra
 : > rustc
@@ -64,12 +73,19 @@ run() { # <params> <what>
   out="$(sh "$runner" "$1" 2>&1)" || { echo "FAIL: $2: run.sh failed: $out" >&2; exit 1; }
   [ -f out/Fake.xcframework/libfake.a ] || { echo "FAIL: $2: the output was not copied: $out" >&2; exit 1; }
 }
-kept() { # <what>: the directory holds the objects, the owner mark, and nothing else
+kept() { # <what>: the directory holds the archives the debug map names, the sources, the owner mark, and nothing else
   [ "$(cat "$work/.undra-bazel-owner" 2>/dev/null)" = kept ] || { echo "FAIL: $1: the owner file does not say kept: '$(cat "$work/.undra-bazel-owner" 2>/dev/null)'" >&2; exit 1; }
-  [ -f "$work/target/aarch64-apple-ios/debug/libundra_core_0123.a" ] || { echo "FAIL: $1: the core's archive was not kept" >&2; exit 1; }
-  [ ! -e "$work/target/aarch64-apple-ios/debug/deps" ] || { echo "FAIL: $1: the other objects were kept" >&2; exit 1; }
-  rest="$(ls -A "$work" | grep -v -e '^target$' -e '^\.undra-bazel-owner$')"
-  [ -z "$rest" ] || { echo "FAIL: $1: more than the objects stayed: $rest" >&2; exit 1; }
+  for profile in debug release-mobile; do
+    [ -f "$work/target/aarch64-apple-ios/$profile/libundra_core_0123.a" ] || { echo "FAIL: $1: the core's $profile archive was not kept" >&2; exit 1; }
+    [ ! -e "$work/target/aarch64-apple-ios/$profile/deps" ] || { echo "FAIL: $1: the $profile/deps copies were kept" >&2; exit 1; }
+  done
+  [ ! -e "$work/target/debug" ] || { echo "FAIL: $1: the host profile directory was kept" >&2; exit 1; }
+  [ "$(find "$work/target" -type f | wc -l | tr -d ' ')" = 4 ] || { echo "FAIL: $1: not the four archives: $(find "$work/target" -type f)" >&2; exit 1; }
+  [ -f "$work/app/undra.toml" ] || { echo "FAIL: $1: the project's sources were not kept" >&2; exit 1; }
+  [ ! -e "$work/app/build" ] || { echo "FAIL: $1: the project's build output was kept" >&2; exit 1; }
+  [ ! -e "$work/cargo-home" ] || { echo "FAIL: $1: Cargo's home (the vendored crates, 295 MB unpacked for the example) was kept" >&2; exit 1; }
+  rest="$(ls -A "$work" | grep -v -e '^target$' -e '^app$' -e '^\.undra-bazel-owner$')"
+  [ -z "$rest" ] || { echo "FAIL: $1: more than the archives and the sources stayed: $rest" >&2; exit 1; }
 }
 
 run keep.params "the first build"
