@@ -78,6 +78,7 @@ jobs:
           newest="$(ls -d /Applications/Xcode_*.app | grep -v -i -E 'beta|candidate|_rc' | sort -V | tail -n 1)"
           sudo xcode-select -s "$newest/Contents/Developer"
           xcodebuild -version
+      # cargo-ndk stays: this job smokes a published release, and the releases before ADR-065 (1.0.x) build Android through it.
       - name: The Android NDK and cargo-ndk
         run: |
           bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION"

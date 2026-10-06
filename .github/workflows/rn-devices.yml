@@ -78,11 +78,10 @@ jobs:
           sudo xcode-select -s "$newest/Contents/Developer"
           xcodebuild -version
           xcrun simctl list devices available | grep -i iphone | head -n 5
-      - name: The Android NDK and cargo-ndk (the Android half of the core)
+      - name: The Android NDK (the Android half of the core)
         run: |
           bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-          cargo install cargo-ndk
       - name: The undra CLI
         run: cargo build -p undra-cli
       - name: Core, pods, Release app, simulator, the on-device checks
@@ -107,11 +106,10 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: The Android NDK and cargo-ndk
+      - name: The Android NDK
         run: |
           bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-          cargo install cargo-ndk
       - name: The undra CLI
         run: cargo build -p undra-cli
       # The build comes first and the emulator after it, so the emulator's boot does not compete with the two
