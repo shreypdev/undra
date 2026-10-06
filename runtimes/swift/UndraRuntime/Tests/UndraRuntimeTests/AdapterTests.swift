@@ -248,7 +248,7 @@ final class TimerAdapterTests: XCTestCase {
         XCTAssertEqual(try PortCaller.callSync(impl, StandardPorts.Timer.set, setArgs(1, 150)), [])
         XCTAssertEqual(try PortCaller.callSync(impl, StandardPorts.Timer.set, setArgs(2, 20)), [])
         XCTAssertEqual(try PortCaller.callSync(impl, StandardPorts.Timer.set, setArgs(3, 80)), [])
-        let fired = await waitUntil(timeout: 5) {
+        let fired = await waitUntil {
             return transport.sent.count == 3
         }
         XCTAssertTrue(fired)
@@ -1044,7 +1044,7 @@ final class EventAdapterTests: XCTestCase {
         let adapter = ConnectivityAdapter()
         XCTAssertNil(adapter.makePortImpl(core: core))
         adapter.attach(to: core)
-        let arrived = await waitUntil(timeout: 5) {
+        let arrived = await waitUntil {
             return transport.sent.contains { (item: FakeTransport.Sent) -> Bool in
                 if case .event(let port, let method, let payload) = item {
                     return port == StandardPorts.Connectivity.portId

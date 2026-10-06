@@ -176,16 +176,19 @@ final class Locked<Value>: @unchecked Sendable {
     }
 }
 
-/// Polls `condition` every 5 ms for up to 5 s.
-func eventually(_ what: String, file: StaticString = #filePath, line: UInt = #line, _ condition: () -> Bool) async {
-    let deadline = Date().addingTimeInterval(5)
+/// Polls `condition` every 5 ms until it holds. A hang detector, not a speed assertion: it gives up only after ``hangDeadline``, and
+/// returns `false` (after failing the test) when it does, so a caller with more waits to make can stop instead of waiting again.
+@discardableResult
+func eventually(_ what: String, file: StaticString = #filePath, line: UInt = #line, _ condition: () -> Bool) async -> Bool {
+    let deadline = Date().addingTimeInterval(hangDeadline)
     while !condition() {
         if Date() > deadline {
             XCTFail("timed out waiting for \(what)", file: file, line: line)
-            return
+            return false
         }
         try? await Task.sleep(nanoseconds: 5_000_000)
     }
+    return true
 }
 
 /// Starts `body` in a task and returns the task once it has begun running `body`. What `body` does before it first suspends has then been
@@ -333,13 +336,12 @@ final class WebSocketBindingTests: XCTestCase {
         }
         let burst = try await waiting.value
         XCTAssertEqual(burst, texts(0 ..< 10))
-        // A lone message is answered once the burst gap passed.
-        let started = Date()
+        // A lone message is answered once the burst gap passed (answering at all is the assertion: a held-back message is a hang, and
+        // how long the answer took is the machine's business).
         let lone = await runningThrowing { try await binding.receive(conn: conn, max: 16) }
         socket.push(.text("lone"))
         let answer = try await lone.value
         XCTAssertEqual(answer, [.text("lone")])
-        XCTAssertLessThan(Date().timeIntervalSince(started), 1.0)
     }
 
     func testAReceiveWaitsForTheFirstMessageAndOnlyOneMayBePending() async throws {

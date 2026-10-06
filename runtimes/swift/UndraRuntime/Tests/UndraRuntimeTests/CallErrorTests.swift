@@ -877,7 +877,7 @@ final class ReportTests: XCTestCase {
             core.report(UndraTransportError.closed, operation: "there")
             done.fulfill()
         }
-        wait(for: [done], timeout: 5)
+        wait(for: [done], timeout: hangDeadline)
         XCTAssertEqual(seen.withLock { (value: inout [Bool]) -> [Bool] in return value }, [Thread.isMainThread, false])
     }
 
@@ -894,7 +894,7 @@ final class ReportTests: XCTestCase {
                 group.leave()
             }
         }
-        XCTAssertEqual(group.wait(timeout: .now() + 10), .success)
+        XCTAssertEqual(group.wait(timeout: .now() + hangDeadline), .success)
         XCTAssertEqual(log.all.count, 200)
     }
 

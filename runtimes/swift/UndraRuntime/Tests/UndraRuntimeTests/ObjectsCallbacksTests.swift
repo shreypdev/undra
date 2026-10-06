@@ -281,7 +281,7 @@ private func args(_ instance: UInt64, _ write: (inout UndraWriter) -> Void = { _
 }
 
 @MainActor
-private func waitFor(_ what: String, timeout: Double = 5, _ condition: @MainActor () -> Bool) async {
+private func waitFor(_ what: String, timeout: Double = hangDeadline, _ condition: @MainActor () -> Bool) async {
     let deadline = Date().addingTimeInterval(timeout)
     while !condition() {
         if Date() > deadline {
@@ -474,7 +474,7 @@ final class ObjectIdentityTests: XCTestCase {
                 wrapper.close()
             }
         }
-        XCTAssertEqual(closing.wait(timeout: .now() + 20), .success)
+        XCTAssertEqual(closing.wait(timeout: .now() + hangDeadline), .success)
         let last = core.adopt(handle(9)) { CountStore(adopting: $0, core: $1) }
         core.observe(handle(9), signal: Observe.allSignals, on: true)
         XCTAssertEqual(core.mirror.registeredCount, 1, "only the last wrapper is registered")
@@ -547,7 +547,7 @@ final class ObjectIdentityTests: XCTestCase {
                 }
             }
         }
-        XCTAssertEqual(closing.wait(timeout: .now() + 30), .success)
+        XCTAssertEqual(closing.wait(timeout: .now() + hangDeadline), .success)
         kept.removeAll()
         let last = core.adopt(handle(22)) { CountStore(adopting: $0, core: $1) }
         core.observe(handle(22), signal: Observe.allSignals, on: true)
