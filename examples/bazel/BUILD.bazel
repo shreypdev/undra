@@ -3,7 +3,7 @@ load("@undra_rules//undra:ts.bzl", "undra_ts_library")
 
 package(default_visibility = ["//:__subpackages__"])
 
-exports_files(["undra.toml"])
+exports_files(["undra.toml", "core/src/lib.rs"])
 
 undra_core(
     name = "core",
@@ -57,4 +57,36 @@ undra_core(
         "ios",
         "android",
     ],
+)
+
+# The release core of the host and its symbol files (ADR-061, ADR-046; `//symbols:symbolicate_test` is the reference).
+#
+# `core_host` is the debug build the bindings and the other tests load: it keeps its symbols in itself and writes none. A release
+# build strips the library it ships and keeps the symbols next to it, which is what a crash report from production resolves with.
+# `core_release_host` is that build (what `undra build --release` writes to build/host/), and its `symbols` output group is the
+# directory every symbol file of it is in:
+#
+#   bazel build //:core_release_symbols     bazel-bin/core_release_host.symbols/
+#     symbols/manifest.json, symbols/...      what `undra build --release` writes to build/symbols/
+#     host/libhello_core.dylib.dSYM           (libhello_core.so.debug on Linux) the host library's symbols, where the manifest points
+undra_core(
+    name = "core_release",
+    srcs = glob(["core/**"]) + ["Cargo.toml"],
+    config = "undra.toml",
+    namespace = "hello_core",
+    platforms = ["host"],
+    release = True,
+)
+
+filegroup(
+    name = "core_release_symbols",
+    srcs = [":core_release_host"],
+    output_group = "symbols",
+)
+
+# The web core is a release build already: its symbol files (the debug module, the function map, the DWARF module).
+filegroup(
+    name = "core_web_symbols",
+    srcs = [":core_web"],
+    output_group = "symbols",
 )

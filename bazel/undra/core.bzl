@@ -208,8 +208,16 @@ def undra_core(
     * `ios`: the directory `<name>_ios` holding `<Namespace>Core.xcframework` (macOS with Xcode only);
     * `android`: the directory `<name>_android` holding `jniLibs/<abi>/lib<namespace>.so` (needs the NDK and cargo-ndk).
 
-    Each target also has an output group `symbols`: the symbol files `undra build --release` writes (a crash report's
-    addresses resolve to file and line with them; `undra symbolicate` reads them).
+    Each release target (`release = True`, and `web`, which always is) also has an output group `symbols`, a directory
+    `<target>.symbols` laid out as `undra build --release` lays out `build/`, restricted to the symbol files: `symbols/` is
+    `build/symbols/` (`manifest.json`, `android/..`, `web/..`) and, for `host`, `host/` holds the library's symbols
+    (`lib<namespace>.dylib.dSYM`, `.so.debug` on Linux), which the CLI keeps next to the library and the manifest names as
+    `../host/..`. A crash report's addresses resolve to file and line with them: `undra symbolicate --symbols
+    <target>.symbols/symbols report.json`. iOS has none: its symbols are the app's own dSYM (ADR-046).
+
+    ```starlark
+    filegroup(name = "core_symbols", srcs = [":core_host"], output_group = "symbols")  # label of the directory
+    ```
 
     Args:
         name: the filegroup of every platform's build.

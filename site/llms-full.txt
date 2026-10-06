@@ -1709,6 +1709,8 @@ undra symbolicate --dsym App.app.dSYM report.json     # iOS: the app's dSYM
 
 It finds the image by `imageId` in the manifest and prints one line per frame, `address symbol (file:line)`: `atos` with the dSYM on Apple platforms, `llvm-symbolizer` on the Android twin, the function map and the debug module on the web.
 
+Built with Bazel, the same files are the `symbols` output group of a release `undra_core`, and the example has a test that resolves a real crash with them: [symbol files and crash reports under Bazel](https://shreypdev.github.io/undra/docs/bazel.html#symbols).
+
 ## Background runs
 
 The OS gives an app a window to work in while it is not on screen: iOS `BGTaskScheduler`, Android WorkManager, a page about to hide. The core spends it on what is worth finishing: the offline queue replays, stale queries refetch, and what waits to be written is written. The platform calls `runInBackground` with the window it was given; the core runs its background tasks inside it and reports back.
@@ -1875,6 +1877,84 @@ The C linker, and for iOS and Android Xcode, the NDK and `cargo-ndk`, are the ma
 | `android` | the NDK and `cargo-ndk` on the machine, and a C++ toolchain registered for the Android platforms (`rules_android_ndk`), which the rules do not set up | declared, not built anywhere yet: without that toolchain, analysis stops at `Unable to find a CC toolchain`, even with the NDK installed |
 
 `undra_android_library` needs the Android SDK only (`rules_android` reads `ANDROID_HOME`), not the NDK. The example's (`bazel build //android:hello --config=android`) was built by hand on macOS; CI does not build it, because `rules_android` then downloads its own tools, one of them an archive without a checksum.
+
+## Symbol files and crash reports
+
+A release core ships stripped, and a crash report from it holds addresses. The files that turn them into a Rust file and line are the build's **symbol files** ([what they are](https://shreypdev.github.io/undra/docs/production.html#symbols)), and under Bazel they are an output of the same target: the `symbols` output group of a release `undra_core`. The web core is always a release build, so `core_web` has one; the host, iOS and Android cores have it when `release = True`. A debug core keeps its symbols in itself and has none.
+
+BUILD.bazel
+
+```python
+undra_core(
+    name = "core_release",
+    namespace = "hello_core",
+    srcs = glob(["core/**"]) + ["Cargo.toml"],
+    platforms = ["host"],
+    release = True,                  # the build you ship, and the one whose symbols you keep
+)
+
+# The group as a label: a directory you can depend on, build, or copy.
+filegroup(
+    name = "core_release_symbols",
+    srcs = [":core_release_host"],
+    output_group = "symbols",
+)
+```
+
+The directory is laid out as `undra build --release` lays out `build/`, restricted to the symbol files, so the manifest's relative paths hold and the group is exactly what the CLI would have written:
+
+| In `bazel-bin/<target>.symbols/` | What it is |
+| --- | --- |
+| `symbols/manifest.json` | per image: namespace, core version, schema hash and the image id a crash report carries |
+| `symbols/web/` | web: `<ns>.debug.wasm` (the shipped code with its names), `<ns>.wasm.functions.txt` (the function map) and `<ns>.dwarf.wasm` |
+| `symbols/android/` | Android: `<abi>/lib<ns>.so` and `native-debug-symbols.zip` |
+| `host/` | host: `lib<ns>.dylib.dSYM` (macOS) or `lib<ns>.so.debug` (Linux), which the CLI keeps beside the library and the manifest names as `../host/..` |
+
+iOS has no file of its own: the Rust frames are in your app's dSYM, which Xcode already makes. Each target has its own group and its own manifest, so a release of a host and a web core has two directories.
+
+### Keep them per release
+
+A report is read against the symbols of the build that shipped, found by the image id in the manifest, so keep each release's directory next to what you published, in the store that holds the rest of its artifacts. Do not count on rebuilding it or on a remote cache: the toolchain, the sources and the build's path must all be the same again for the same file.
+
+sh
+
+```sh
+bazel build //:core_release_symbols //:core_web_symbols
+tar -C bazel-bin -chf symbols-1.4.0.tar core_release_host.symbols core_web.symbols   # -h: Bazel's outputs are links
+# upload symbols-1.4.0.tar with the release
+```
+
+### Read a report
+
+Give `undra symbolicate` the report your app's `onPanic` received (as JSON, [its fields](https://shreypdev.github.io/undra/docs/production.html#crash-reports)) and the `symbols/` directory of the build that shipped. The CLI is a target of its own, `@undra//:cli`, built by the same toolchain. `bazel run` works from its runfiles, so the paths are absolute:
+
+sh
+
+```sh
+bazel run @undra//:cli -- symbolicate \
+  --symbols "$PWD/bazel-bin/core_release_host.symbols/symbols" "$PWD/report.json"
+```
+
+text
+
+```text
+0x96d03 hello_core::crash_for_symbols_test (/undra/app/core/src/lib.rs:154)
+0x10dd3 hello_core::__undra_dispatch_fn_crash_for_symbols_test (/undra/app/core/src/lib.rs:153)
+0x826f7 <undra_runtime::runtime::Runtime>::run_dispatcher (/undra/src/crates/undra-runtime/src/runtime.rs:1937)
+```
+
+One line per frame, innermost first (the lines above are three of the report's fourteen). A release build names your project `/undra/app`, whatever directory Bazel built it in, so the path is the same on every machine and names none. The tool that reads the symbol file is the machine's: `atos` (Xcode or the command line tools) for a dSYM, `llvm-symbolizer` (`apt install llvm`) for the others. The CLI says which it needs when it is missing, and warns when the report's schema hash or version is not the symbols'.
+
+### The reference: a test that crashes the core
+
+[`bazel test //symbols:symbolicate_test`](https://github.com/shreypdev/undra/tree/main/examples/bazel/symbols) in the example does all of the above with a real crash:
+
+1. it loads `//:core_release_host` (the stripped release library) in a JVM through the generated Kotlin bindings, with an `onPanic` handler, as an app does;
+2. it calls `crash_for_symbols_test`, a function of the example's core that exists to panic and that no consumer calls, and takes the `UndraPanicReport` the handler receives: addresses, the build's image id, and `core/src/lib.rs:154:5` as the location;
+3. it writes the report as JSON and runs `undra symbolicate --symbols` on `//:core_release_symbols`;
+4. it asserts that a frame is `hello_core::crash_for_symbols_test` at the line of the `panic!` in `core/src/lib.rs`, found in the source, which is also the line the core reported.
+
+It waits for no time: the report is a future the handler completes. With the symbols of another build, or without the host library's, it fails with the CLI's error, which is what a stale or missing symbol directory looks like in production.
 
 ## Generated code and your linters
 

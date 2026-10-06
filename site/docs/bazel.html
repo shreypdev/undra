@@ -112,6 +112,42 @@ undra_ts_library(name = "hello_ts", bindings = ":bindings", package = "@acme/hel
 <h2 id="platforms">Platforms<a class="anchor" href="#platforms" aria-label="Link to this section">#</a></h2>
 <div class="table-wrap"><table><thead><tr><th>Platform</th><th>Needs</th><th>Where it is built</th></tr></thead><tbody><tr><td><code>host</code>, <code>web</code></td><td>nothing outside the rules</td><td>Linux and macOS, in CI on every change</td></tr><tr><td><code>ios</code></td><td>Xcode, and <code>apple_support</code> first in your <code>MODULE.bazel</code></td><td>macOS, in CI on every change; the target is <code>manual</code></td></tr><tr><td><code>android</code></td><td>the NDK and <code>cargo-ndk</code> on the machine, and a C++ toolchain registered for the Android platforms (<code>rules_android_ndk</code>), which the rules do not set up</td><td>declared, not built anywhere yet: without that toolchain, analysis stops at <code>Unable to find a CC toolchain</code>, even with the NDK installed</td></tr></tbody></table></div>
 <p><code>undra_android_library</code> needs the Android SDK only (<code>rules_android</code> reads <code>ANDROID_HOME</code>), not the NDK. The example's (<code>bazel build //android:hello --config=android</code>) was built by hand on macOS; CI does not build it, because <code>rules_android</code> then downloads its own tools, one of them an archive without a checksum.</p>
+<h2 id="symbols">Symbol files and crash reports<a class="anchor" href="#symbols" aria-label="Link to this section">#</a></h2>
+<p>A release core ships stripped, and a crash report from it holds addresses. The files that turn them into a Rust file and line are the build's <strong>symbol files</strong> (<a href="production.html#symbols">what they are</a>), and under Bazel they are an output of the same target: the <code>symbols</code> output group of a release <code>undra_core</code>. The web core is always a release build, so <code>core_web</code> has one; the host, iOS and Android cores have it when <code>release = True</code>. A debug core keeps its symbols in itself and has none.</p>
+<div class="code"><div class="code-bar"><span>BUILD.bazel</span></div><pre><code data-lang="python">undra_core(
+    name = "core_release",
+    namespace = "hello_core",
+    srcs = glob(["core/**"]) + ["Cargo.toml"],
+    platforms = ["host"],
+    release = True,                  # the build you ship, and the one whose symbols you keep
+)
+
+# The group as a label: a directory you can depend on, build, or copy.
+filegroup(
+    name = "core_release_symbols",
+    srcs = [":core_release_host"],
+    output_group = "symbols",
+)</code></pre></div>
+<p>The directory is laid out as <code>undra build --release</code> lays out <code>build/</code>, restricted to the symbol files, so the manifest's relative paths hold and the group is exactly what the CLI would have written:</p>
+<div class="table-wrap"><table><thead><tr><th>In <code>bazel-bin/&lt;target&gt;.symbols/</code></th><th>What it is</th></tr></thead><tbody><tr><td><code>symbols/manifest.json</code></td><td>per image: namespace, core version, schema hash and the image id a crash report carries</td></tr><tr><td><code>symbols/web/</code></td><td>web: <code>&lt;ns&gt;.debug.wasm</code> (the shipped code with its names), <code>&lt;ns&gt;.wasm.functions.txt</code> (the function map) and <code>&lt;ns&gt;.dwarf.wasm</code></td></tr><tr><td><code>symbols/android/</code></td><td>Android: <code>&lt;abi&gt;/lib&lt;ns&gt;.so</code> and <code>native-debug-symbols.zip</code></td></tr><tr><td><code>host/</code></td><td>host: <code>lib&lt;ns&gt;.dylib.dSYM</code> (macOS) or <code>lib&lt;ns&gt;.so.debug</code> (Linux), which the CLI keeps beside the library and the manifest names as <code>../host/..</code></td></tr></tbody></table></div>
+<p>iOS has no file of its own: the Rust frames are in your app's dSYM, which Xcode already makes. Each target has its own group and its own manifest, so a release of a host and a web core has two directories.</p>
+<h3>Keep them per release</h3>
+<p>A report is read against the symbols of the build that shipped, found by the image id in the manifest, so keep each release's directory next to what you published, in the store that holds the rest of its artifacts. Do not count on rebuilding it or on a remote cache: the toolchain, the sources and the build's path must all be the same again for the same file.</p>
+<div class="code"><div class="code-bar"><span><span class="lang">sh</span></span></div><pre><code data-lang="sh">bazel build //:core_release_symbols //:core_web_symbols
+tar -C bazel-bin -chf symbols-1.4.0.tar core_release_host.symbols core_web.symbols   # -h: Bazel's outputs are links
+# upload symbols-1.4.0.tar with the release</code></pre></div>
+<h3>Read a report</h3>
+<p>Give <code>undra symbolicate</code> the report your app's <code>onPanic</code> received (as JSON, <a href="production.html#crash-reports">its fields</a>) and the <code>symbols/</code> directory of the build that shipped. The CLI is a target of its own, <code>@undra//:cli</code>, built by the same toolchain. <code>bazel run</code> works from its runfiles, so the paths are absolute:</p>
+<div class="code"><div class="code-bar"><span><span class="lang">sh</span></span></div><pre><code data-lang="sh">bazel run @undra//:cli -- symbolicate \
+  --symbols "$PWD/bazel-bin/core_release_host.symbols/symbols" "$PWD/report.json"</code></pre></div>
+<div class="code"><div class="code-bar"><span><span class="lang">text</span></span></div><pre><code data-lang="text">0x96d03 hello_core::crash_for_symbols_test (/undra/app/core/src/lib.rs:154)
+0x10dd3 hello_core::__undra_dispatch_fn_crash_for_symbols_test (/undra/app/core/src/lib.rs:153)
+0x826f7 &lt;undra_runtime::runtime::Runtime&gt;::run_dispatcher (/undra/src/crates/undra-runtime/src/runtime.rs:1937)</code></pre></div>
+<p>One line per frame, innermost first (the lines above are three of the report's fourteen). A release build names your project <code>/undra/app</code>, whatever directory Bazel built it in, so the path is the same on every machine and names none. The tool that reads the symbol file is the machine's: <code>atos</code> (Xcode or the command line tools) for a dSYM, <code>llvm-symbolizer</code> (<code>apt install llvm</code>) for the others. The CLI says which it needs when it is missing, and warns when the report's schema hash or version is not the symbols'.</p>
+<h3>The reference: a test that crashes the core</h3>
+<p><a href="https://github.com/shreypdev/undra/tree/main/examples/bazel/symbols" rel="noopener"><code>bazel test //symbols:symbolicate_test</code></a> in the example does all of the above with a real crash:</p>
+<ol><li>it loads <code>//:core_release_host</code> (the stripped release library) in a JVM through the generated Kotlin bindings, with an <code>onPanic</code> handler, as an app does;</li><li>it calls <code>crash_for_symbols_test</code>, a function of the example's core that exists to panic and that no consumer calls, and takes the <code>UndraPanicReport</code> the handler receives: addresses, the build's image id, and <code>core/src/lib.rs:154:5</code> as the location;</li><li>it writes the report as JSON and runs <code>undra symbolicate --symbols</code> on <code>//:core_release_symbols</code>;</li><li>it asserts that a frame is <code>hello_core::crash_for_symbols_test</code> at the line of the <code>panic!</code> in <code>core/src/lib.rs</code>, found in the source, which is also the line the core reported.</li></ol>
+<p>It waits for no time: the report is a future the handler completes. With the symbols of another build, or without the host library's, it fails with the CLI's error, which is what a stale or missing symbol directory looks like in production.</p>
 <h2 id="lint">Generated code and your linters<a class="anchor" href="#lint" aria-label="Link to this section">#</a></h2>
 <p>A repository that lints everything reports the bindings, because they are the output of a generator. <code>undra bindgen</code> now writes the exclusions beside each tree and lists them in its manifest, so <code>--check</code> keeps them honest:</p>
 <div class="table-wrap"><table><thead><tr><th>Tree</th><th>File</th><th>Read by</th></tr></thead><tbody><tr><td>Kotlin</td><td><code>.editorconfig</code>, and <code>@file:Suppress("ALL", "ktlint")</code> in every file</td><td>ktlint 1.x; detekt and IntelliJ read the annotation too</td></tr><tr><td>Swift</td><td><code>.swiftlint.yml</code>, an <code>excluded:</code> list to merge into yours</td><td>SwiftLint</td></tr><tr><td>TypeScript</td><td><code>.eslintrc.json</code>, and <code>eslint.config.undra.mjs</code> to spread into a flat config</td><td>ESLint 8 and 9</td></tr></tbody></table></div>
@@ -125,7 +161,7 @@ undra_ts_library(name = "hello_ts", bindings = ":bindings", package = "@acme/hel
     <a class="next" href="cookbook/index.html"><span>Next</span><b>Cookbook, all recipes</b></a>
   </nav>
   </main>
-  <aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li><a href="#what-you-get">What you get</a></li><li><a href="#set-up">Set up</a></li><li><a href="#hermetic">Why it is hermetic</a></li><li><a href="#platforms">Platforms</a></li><li><a href="#lint">Generated code and your linters</a></li><li><a href="#good-to-know">Good to know</a></li></ul></aside>
+  <aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li><a href="#what-you-get">What you get</a></li><li><a href="#set-up">Set up</a></li><li><a href="#hermetic">Why it is hermetic</a></li><li><a href="#platforms">Platforms</a></li><li><a href="#symbols">Symbol files and crash reports</a></li><li><a href="#lint">Generated code and your linters</a></li><li><a href="#good-to-know">Good to know</a></li></ul></aside>
 </div>
 <footer class="site-footer">
   <div class="wrap">
