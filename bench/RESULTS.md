@@ -661,6 +661,12 @@ closed-loop probe sees one such wait per snapshot, about 1 call in 200, so the p
 the recommended design nobody waits more than the publish: the worst call of the best run is 132 us. These are the
 numbers of one host; the structure is the claim, the budgets test holds the ratio.
 
+One limit of the same-job baseline for these rows: `scripts/bench-record-base.sh` gives the base worktree the head's
+`standings.rs` along with the head's harness (the file is compiled into the harness by path, and a base without it would
+have no baseline at all), so both sides of a `leaderboard/*` row run the same `standings.rs`. A change that slows that
+file does not show against the baseline; the absolute budgets and the ratio above are what catch it. The core crates,
+which are what the baseline gate is for, differ between the two sides as everywhere else.
+
 The harness grew two fixture stores and two records for this: 1.8 KB of the 42,689 bytes of canonical schema it
 registers now, so about 2.7 us of `Runtime::new` at finding 8's price of 1.5 us a KB (3% of the two cold-start rows,
 which sit at 1.18x their baseline's); the baseline is not re-recorded.

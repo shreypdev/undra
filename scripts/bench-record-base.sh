@@ -81,6 +81,9 @@ rm -rf "$WORK/tree/bench/baselines" # the base never measures against a committe
 # The harness compiles one file from outside bench/ by path: the leaderboard recipe's structure (plain Rust, not a
 # core crate; bench/common/leaderboard.rs). It is harness, so it comes from this tree too: a base that predates it,
 # or one whose copy has another API, would otherwise fail to build and leave the run with no baseline gate at all.
+# The consequence: both sides of the `leaderboard/*` rows run the head's standings.rs, so a change that slows that
+# file is invisible to the baseline gate; the absolute budgets and the ratio of bench/budgets.toml are what catch it
+# (bench/RESULTS.md, finding 9), as for any harness file.
 for harness_file in examples/cookbook/core/src/standings.rs; do
   mkdir -p "$WORK/tree/$(dirname "$harness_file")"
   cp "$ROOT/$harness_file" "$WORK/tree/$harness_file"
