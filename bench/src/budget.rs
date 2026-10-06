@@ -12,7 +12,13 @@
 //! blueprint_ns = 60                   # the blueprint's section 14 target, when the row exists
 //! blueprint = "<= 60 ns on iOS (A15)" # the target in words
 //! baseline_tolerance = 2              # optional: against a baseline, this row gets at least 2x
+//! p99_ns = 60000                      # optional: the p99 of the iterations above this fails the test
+//! measured_p99_ns = 11000             # the p99 when the gate was set (kept for humans)
 //! ```
+//!
+//! `p99_ns` is for a row whose claim is its tail, such as how long the core lock is held (the
+//! leaderboard rows): with the best p99 of the attempts, like the p50. It is an absolute ceiling and
+//! `UNDRA_BENCH_SCALE` multiplies it.
 //!
 //! Numbers are nanoseconds and may use `_` separators. Anything else is a syntax error, with the
 //! line number, so a typo cannot silently disable a budget.
@@ -115,6 +121,11 @@ pub struct Budget {
     /// Against a baseline (`UNDRA_BENCH_BASELINE`), this row's p50 gets at least this factor:
     /// a row that proves noisy on a machine class gets room here rather than every row getting it.
     pub baseline_tolerance: Option<f64>,
+    /// The p99, in nanoseconds per iteration, above which the budgets test fails (optional: only
+    /// rows whose claim is a tail have one).
+    pub p99_ns: Option<f64>,
+    /// The p99 the reference machine measured when `p99_ns` was set, if recorded.
+    pub measured_p99_ns: Option<f64>,
 }
 
 /// A ratio between two layer A rows measured in the same run (a `[ratio."name"]` table): the
@@ -841,11 +852,15 @@ impl Budgets {
                         ("baseline_tolerance", Value::Number(n)) if n >= 1.0 => {
                             entry.baseline_tolerance = Some(n);
                         }
+                        ("p99_ns", Value::Number(n)) if n > 0.0 => entry.p99_ns = Some(n),
+                        ("measured_p99_ns", Value::Number(n)) if n > 0.0 => {
+                            entry.measured_p99_ns = Some(n);
+                        }
                         _ => {
                             return Err(syntax(
                                 "a bench table takes budget_ns, measured_ns, blueprint_ns \
-                                 (numbers), blueprint (a string) and baseline_tolerance (a number \
-                                 of at least 1)",
+                                 (numbers), blueprint (a string), baseline_tolerance (a number \
+                                 of at least 1), p99_ns and measured_p99_ns (positive numbers)",
                             ));
                         }
                     }
@@ -926,6 +941,8 @@ impl Budgets {
                     blueprint_ns: partial.blueprint_ns,
                     blueprint: partial.blueprint,
                     baseline_tolerance: partial.baseline_tolerance,
+                    p99_ns: partial.p99_ns,
+                    measured_p99_ns: partial.measured_p99_ns,
                 },
             );
         }
@@ -966,6 +983,8 @@ struct PartialBudget {
     blueprint_ns: Option<f64>,
     blueprint: Option<String>,
     baseline_tolerance: Option<f64>,
+    p99_ns: Option<f64>,
+    measured_p99_ns: Option<f64>,
 }
 
 /// Removes a `#` comment, unless the `#` is inside a double-quoted string.
@@ -1187,6 +1206,20 @@ measured = 1.8
             let err = Budgets::parse(text).unwrap_err();
             assert!(matches!(err, BudgetError::Syntax { .. }), "{text}: {err}");
         }
+    }
+
+    #[test]
+    fn a_bench_row_may_gate_its_p99_too() {
+        let b = Budgets::parse(
+            "[bench.\"a\"]\nbudget_ns = 10\np99_ns = 40\nmeasured_p99_ns = 8.5\n\
+             [bench.\"b\"]\nbudget_ns = 10\n",
+        )
+        .unwrap();
+        assert_eq!(b.benches["a"].p99_ns, Some(40.0));
+        assert_eq!(b.benches["a"].measured_p99_ns, Some(8.5));
+        assert_eq!(b.benches["b"].p99_ns, None);
+        // A ceiling of zero could never pass.
+        assert!(Budgets::parse("[bench.\"a\"]\nbudget_ns = 10\np99_ns = 0\n").is_err());
     }
 
     #[test]

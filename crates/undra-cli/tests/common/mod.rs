@@ -252,6 +252,22 @@ pub fn has_rust_target(triple: &str) -> bool {
         .is_dir()
 }
 
+/// Whether an Android NDK is installed where `undra build --platform android` looks for one:
+/// `ANDROID_NDK_HOME`, else a version below `ANDROID_HOME/ndk` (ADR-065: no `cargo-ndk`).
+pub fn has_android_ndk() -> bool {
+    let named = |key: &str| std::env::var_os(key).map(PathBuf::from);
+    if named("ANDROID_NDK_HOME").is_some_and(|dir| dir.is_dir()) {
+        return true;
+    }
+    ["ANDROID_HOME", "ANDROID_SDK_ROOT"]
+        .iter()
+        .filter_map(|key| named(key))
+        .any(|sdk| {
+            std::fs::read_dir(sdk.join("ndk"))
+                .is_ok_and(|mut versions| versions.any(|v| v.is_ok_and(|v| v.path().is_dir())))
+        })
+}
+
 /// Whether `program --version` runs.
 pub fn has_tool(program: &str, version_arg: &str) -> bool {
     Command::new(program)

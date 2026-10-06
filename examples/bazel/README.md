@@ -5,24 +5,34 @@ the Kotlin, TypeScript and (on macOS) Swift code that uses them against the real
 
 ```
 examples/bazel/
-  MODULE.bazel      undra_rules (bazel/, by path), rules_rust 1.99.0 pinned by checksum, rules_kotlin, rules_swift, aspect_rules_ts/js
+  MODULE.bazel      undra_rules (bazel/, by path), rules_rust 1.99.0 pinned by checksum, rules_kotlin, rules_swift, aspect_rules_ts/js, at recent versions
+  scripts/          at-minimums.sh: one Bazel command with every ruleset at the lowest version undra_rules declares
   undra.toml        the project file `undra build` and `undra bindgen` read; [core] namespace = "hello_core"
   Cargo.toml, core/ the core: a store, a typed error and a function
-  BUILD.bazel       undra_core, undra_bindings, undra_ts_library
+  BUILD.bazel       undra_core, undra_bindings, undra_bindings_test, undra_ts_library, the release core and its symbol files
+  committed/        the bindings, committed too: the Swift, Kotlin and TypeScript trees `undra_bindings` produces
   kotlin/           the JVM test (JNI against libhello_core) and the ktlint test of the generated Kotlin
   ts/               the Node test (hello_core.wasm through the compiled bindings)
   swift/            the Swift test (macOS): the core in process
   consumer/         what an app team adds on top: its own Kotlin library over the store, a Node test importing the runtime
-  android/          the bindings as an Android library (manual: --config=android, the Android SDK)
+  symbols/          the crash report of the release core, resolved with its symbol files (SymbolicateTest.kt)
+  android/          the bindings as an Android library (manual: --config=android, the Android SDK), the NDK repositories' BUILD file and the script that uses an installed NDK instead of the archive
+  ios/              a SwiftUI app (rules_apple) over the bindings and the iOS core, its Xcode project (rules_xcodeproj) and the dSYM
+                    check: debugging into Rust from a Bazel-built app (macOS, manual targets)
 ```
 
 ```sh
 cd examples/bazel
-bazel test //...                      # needs Bazelisk; .bazelversion pins Bazel
-bazel build //:core_web               # bazel-bin/core_web/hello_core.wasm: 112.7 KB gzipped (2026-10-02), budget 120 KB
+bazel test //...                      # needs Bazelisk; .bazelversion pins Bazel 8.8.1, the lowest supported
+USE_BAZEL_VERSION=9.2.0 bazel test //... --lockfile_mode=off   # the newest 9.x, which CI tests too
+scripts/at-minimums.sh test //...     # every ruleset at undra_rules's minimum (any Bazel command; USE_BAZEL_VERSION works)
+bazel build //:core_web               # bazel-bin/core_web/hello_core.wasm: 113.6 KB gzipped (2026-10-05, with the test-only crash function), budget 120 KB
 bazel build //:bindings               # the Swift, Kotlin and TypeScript trees, as outputs
 bazel build //:mobile_ios             # macOS: the XCFramework (manual target)
+bazel build //:mobile_android         # jniLibs/<abi>/libhello_core.so, linked with the NDK, a declared input (manual target; downloads it)
+bazel build //:mobile_android $(android/use-installed-ndk.sh)   # the same with the NDK sdkmanager installed (CI does this)
 bazel build //android:hello --config=android   # the bindings as an Android library (ANDROID_HOME)
+bazel run //ios:xcodeproj             # macOS: ios/HelloApp.xcodeproj, the app's Xcode project (manual target)
 ```
 
 | Target | What it proves |
@@ -30,26 +40,93 @@ bazel build //android:hello --config=android   # the bindings as an Android libr
 | `//kotlin:hello_test` | the Kotlin bindings, the Kotlin runtime and `core_host` work together: a call, a store's signals, a typed error, a command, through JNI |
 | `//ts:hello_test` | the same through the TypeScript bindings (type-checked by `tsc` against the compiled runtime) and `core_web` under Node |
 | `//swift:hello_test` | the same in Swift, with the XCFramework's host twin linked (macOS only; skipped on Linux) |
-| `//kotlin:lint_test` | ktlint 1.8 reports nothing on the generated Kotlin, and 90 findings once the exclusions `undra bindgen` writes are taken away |
+| `//kotlin:lint_test` | ktlint 1.8 reports nothing on the generated Kotlin, and 90 findings once the exclusions `undra bindgen` writes are taken away; the root `.editorconfig` section the Bazel guide gives for `lint_exclusions = "none"` is enough on its own |
+| `//:bindings_check` | `committed/` is what the core's schema generates, byte for byte (`undra bindgen --check`'s comparison); when it is not, the failure says `bazel run //:bindings_check.update`, which rewrites it |
+| `//symbols:symbolicate_test` | a crash report of the Bazel-built release core, resolved by `undra symbolicate` with the `symbols` output group of that build: a frame names `core/src/lib.rs` and the line of the `panic!` (below) |
 | `//consumer:summary_test` | a Kotlin library an app writes over the generated store compiles and runs, the core loaded by `-Dundra.native.hello_core.path=$(rootpath //:core_host)` |
 | `//consumer:runtime_test` | a Node test that imports `@undra/runtime` beside the bindings resolves both |
+| `//ios:symbols_test` | macOS, manual: the dSYM of `//ios:app` resolves `hello_core::greeting` to `lib.rs` (`--ios_multi_cpus=sim_arm64 -c dbg --apple_generate_dsym`) |
+
+## Debugging the core from a Bazel-built app
+
+`//ios:app` is a `rules_apple` `ios_application` (SwiftUI) that loads the iOS core and calls `greeting` on launch; `//ios:xcodeproj`
+is its Xcode project from `rules_xcodeproj`. Verified on the iOS simulator (iPhone 17, iOS 26.5, Xcode 26.6) with LLDB from the command
+line: a breakpoint on `hello_core::greeting` stops in the Rust frame at `lib.rs:145`, with the generated dispatcher under it and the
+Swift frames (`greeting(name:ctx:)`, `HelloApp.start()`) above the transport. A physical device was not tried.
+
+```sh
+bazel run //ios:xcodeproj             # writes ios/HelloApp.xcodeproj (git-ignored)
+xcodebuild -project ios/HelloApp.xcodeproj -scheme app -configuration Debug \
+  -destination 'platform=iOS Simulator,id=<udid>' -derivedDataPath /tmp/hello-dd build     # or open it in Xcode and Run
+xcrun simctl install booted "$(find /tmp/hello-dd/Build/Products -name app.app | head -1)"
+xcrun simctl launch --wait-for-debugger booted dev.undra.bazel.hello.app                    # prints the pid
+# from the Bazel execution root (rules_xcodeproj's: $(bazel info output_base)/rules_xcodeproj.noindex/build_output_base/execroot/_main)
+xcrun lldb -b -o "process attach -p <pid>" -o "breakpoint set --name hello_core::greeting" -o continue -o "bt -c 60" -o detach
+```
+
+What makes the Rust frames resolve is `keep_debug_objects` of `//:mobile` (set when the build is `-c dbg`, which the generated project
+uses): a prelinked iOS slice carries a debug map, not DWARF, and the map names objects below `/tmp/undra-bazel-<key>/target`, which the
+action otherwise removes. With it the directory keeps those archives and the sources the DWARF names (`app/` and `undra/`; the vendored crates'
+are not kept), so LLDB and Xcode show the Rust source at a breakpoint (`source list -n hello_core::greeting`); LLDB names the directory
+(`source info -n hello_core::greeting`), and it is the newest `/tmp/undra-bazel-*`. The full steps, output and caveats are in
+`site/docs/bazel.html` ("Debugging the core from a Bazel-built app").
+
+## Symbol files and a crash report
+
+`//:core_release_host` is the release build of the host core (stripped, as it ships) and `//:core_release_symbols` is its `symbols`
+output group: `symbols/manifest.json` and the host library's dSYM (`.so.debug` on Linux) under `host/`, the layout of
+`undra build --release` (guide: `site/docs/bazel.html#symbols`). `//:core_web_symbols` is the web core's. The test
+`//symbols:symbolicate_test` loads the release core in a JVM through the generated Kotlin, makes it panic with
+`crash_for_symbols_test` (a function of this core that exists for that and that no consumer calls), takes the `UndraPanicReport` the
+`onPanic` handler receives and runs `undra symbolicate` on it. The tool that reads the symbols is the machine's: `atos` on macOS,
+`llvm-symbolizer` on Linux (`apt install llvm`).
+
+```sh
+bazel build //:core_release_symbols
+bazel run @undra//:cli -- symbolicate --symbols "$PWD/bazel-bin/core_release_host.symbols/symbols" "$PWD/report.json"
+```
 
 ## What is hermetic, and what is not
 
 The actions run the `undra` CLI of this checkout with the Rust toolchain Bazel resolved, crates.io packages downloaded by the
 checksum `Cargo.lock` records and unpacked into a Cargo directory source, and no network. An action copies exactly the files its
 target declares into a scratch directory named by the target (`/tmp/undra-bazel-<key>`), so a core built twice, or in two
-checkouts, is the same file. The C linker (and Xcode for iOS, the NDK and `cargo-ndk` for Android) are the machine's.
+checkouts, is the same file. The C linker (and Xcode for iOS) are the machine's.
 
-The Android core (`//:mobile_android`) is declared and does not build: the core's Rust toolchain for an Android platform needs a
-C++ toolchain for it (`rules_android_ndk`), which this example does not register, and analysis stops at "Unable to find a CC
-toolchain" even on a machine with the NDK and `cargo-ndk`. `//android:hello`, the bindings as an Android library, needs only the
-SDK and builds (by hand: CI does not run it, since `rules_android` then downloads its own tools, one archive without a checksum).
+**The Android core** (`//:mobile_android`, ADR-065) has no machine inputs. `undra_core(ndk = ..)` takes the NDK as a label, an
+input of the action, and the action sets `ANDROID_NDK_HOME` to it itself: no `--action_env`, no `extra_path`, no `cargo-ndk`. It is
+a Cargo cross-build that `undra build` links with the NDK's clang, so the target does not transition to an Android platform (that
+would need a C++ toolchain for one, `rules_android_ndk`) and runs with the host's Rust toolchain; the standard library of the
+Android targets is `undra.android_std` in `MODULE.bazel`, by checksum. The NDK here is the archive of the host OS
+(`android_ndk_linux`, `android_ndk_macos`: r27c, 27.2.12479018, the version CI and the size gate use), selected by OS in
+`BUILD.bazel`, with `android/ndk.BUILD` as its BUILD file. A build that asks for the core fetches it (664 MB on Linux, 836 MB on
+macOS); `bazel test //...` does not. `android/use-installed-ndk.sh` overrides the two repositories with the NDK that `sdkmanager`
+or Android Studio installed, which is what CI's "Bazel example (Android core and library)" job does.
+
+`//android:hello`, the bindings as an Android library, needs only the SDK (`ANDROID_HOME`). The same CI job builds it; `rules_android`
+then downloads its own tools, one archive without a checksum, which is why it is a `manual` target and CI is where it is built.
 
 ## Notes
 
 * The Undra crates are not on crates.io yet, so the core names the `undra` crate by version (`scripts/bump-version.sh` keeps it at the checkout's) and the rules (and `.cargo/config.toml`, for a plain
   `cargo test` here) stand the checkout in for the registry with `[patch.crates-io]`.
+* `MODULE.bazel` ends with `rules_xcodeproj` (4.1.0), used only by `//ios:xcodeproj`.
 * `.bazelrc` sets `DO_NOT_TRACK=1`: `aspect_rules_js` and `aspect_rules_ts` depend on a telemetry module that reports the rulesets a
   build uses to Aspect.
 * `MODULE.bazel.lock` is committed. `.bazelversion` is a link to `bazel/.bazelversion`: one pin for the rules and the example.
+* The rulesets are at recent versions, the ones most applications run; `undra_rules` (`bazel/MODULE.bazel`) declares the lowest it needs,
+  and Bazel resolves to the highest version anyone asks for, so an app keeps its own. CI runs this workspace at both ends, on Bazel
+  8.8.1 and 9.2.0 (the lowest and the newest 9.x): as written, and through `scripts/at-minimums.sh`, which rewrites each `bazel_dep` of
+  `MODULE.bazel` to the rules' minimum for one command and puts the file back (the original is held in memory and a copy sits
+  beside it, `MODULE.bazel.at-minimums~`, until then; `scripts/at-minimums.test.sh` checks both). It adds three flags:
+  `--check_direct_dependencies=error`, so a minimum something else in the graph raises fails the run; `--lockfile_mode=off`; and
+  `--deleted_packages=ios`, because the debugging example (`//ios`, the one user of `rules_xcodeproj`, whose line it drops) is not
+  part of what the minimums cover. CI runs every other target at the minimums on both Bazels: `bazel test //...` on Linux,
+  `//swift/...` and `//:mobile_ios` on macOS, `//:mobile_android` and `//android:hello` in the Android job. Why each minimum is
+  where it is: the "Ruleset versions" section of the Bazel guide (`site/docs/bazel.html`).
+* The lock files are committed as Bazel 8.8.1 (`.bazelversion`) writes them. Bazel 9.x records other registry files in them, so run 9.x
+  with `--lockfile_mode=off`, as CI does, and the tree stays clean.
+* `committed/` names the Undra release `undra.toml` pins (`[undra] version`): `from: "<v>"` in its Swift package, `runtime:v<v>` in its
+  Gradle module and `^<v>` twice in its package.json. `scripts/bump-version.sh` moves the pin and those four lines together, so
+  `//:bindings_check` stays green on a release's version pull request. Nothing reads `committed/` but that test;
+  `bazel run //:bindings_check.update` regenerates it.

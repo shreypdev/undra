@@ -106,6 +106,9 @@ _undra_bindings = rule(
             doc = "The host build of the core (an `undra_core` target for the `host` platform): the library the schema is read from.",
             allow_single_file = True,
             mandatory = True,
+            # The library is loaded by the bindgen action, which runs on the execution platform: built for it whatever the target
+            # platform is (an iOS application depends on the bindings, and its host library is still a Mac's).
+            cfg = "exec",
         ),
         "config": attr.label(
             doc = "The project's undra.toml: its `[bindings]` names the generated modules, packages and scope.",
@@ -148,12 +151,14 @@ def undra_bindings(name, core, config = "undra.toml", languages = ["swift", "kot
     """Generates the bindings of an Undra core (ADR-061).
 
     Outputs: one tree artifact per language, `<name>_swift`, `<name>_kotlin` and `<name>_ts`, each the directory `undra bindgen`
-    writes for that language (the Swift package, the Gradle module, the npm package, lint exclusions beside them), and, with
+    writes for that language (the Swift package, the Gradle module, the npm package, lint exclusions beside them unless `config`
+    says `lint_exclusions = "none"` in `[bindings]`), and, with
     Kotlin, `<name>_kotlin.srcjar` of its sources. The output groups are `swift`, `kotlin`, `ts` and `kotlin_srcjar`.
 
     Args:
         name: the target.
-        core: the host build of the core: `":core_host"` of an `undra_core` that lists `host` among its platforms.
+        core: the host build of the core: `":core_host"` of an `undra_core` that lists `host` among its platforms. It is built for
+            the execution platform (the bindgen action loads it), so a test that also loads it builds it once more, for the target.
         config: the project's undra.toml.
         languages: any of `swift`, `kotlin`, `ts`.
         docs: keep the core's doc comments in the bindings.

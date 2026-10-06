@@ -1,0 +1,61 @@
+load("@undra_rules//undra:core.bzl", "undra_core", "undra_core_rule")
+load(":machine_path_test.bzl", "machine_path_test_suite")
+
+# The rules' promise that only the iOS build reads the machine (ADR-065), checked on the parameter files the actions are given:
+# `extra_path` is set on cores of every platform here, and only the iOS one may carry it. Analysis only, nothing is built (the
+# Android core's NDK and standard library are stand-ins, `fake_ndk/` and `fake_std/`), so `bazel test //...` runs it everywhere.
+
+undra_core(
+    name = "machine_path",
+    srcs = ["//:core/src/lib.rs"],
+    config = "//:undra.toml",
+    extra_path = ["/machine/bin"],
+    namespace = "hello_core",
+    platforms = [
+        "host",
+        "web",
+    ],
+    tags = ["manual"],
+)
+
+filegroup(
+    name = "fake_ndk",
+    srcs = ["fake_ndk/source.properties"],
+)
+
+filegroup(
+    name = "fake_std",
+    srcs = glob(["fake_std/**"]),
+)
+
+# The rule itself (what the macro instantiates), given the attribute directly: the guard is the rule's, not only the macro's.
+undra_core_rule(
+    name = "machine_path_android",
+    srcs = ["//:core/src/lib.rs"],
+    android_std = ":fake_std",
+    config = "//:undra.toml",
+    extra_path = ["/machine/bin"],
+    namespace = "hello_core",
+    ndk = ":fake_ndk",
+    platform = "android",
+    tags = ["manual"],
+)
+
+undra_core_rule(
+    name = "machine_path_ios",
+    srcs = ["//:core/src/lib.rs"],
+    config = "//:undra.toml",
+    extra_path = ["/machine/bin"],
+    namespace = "hello_core",
+    platform = "ios",
+    tags = [
+        "manual",
+        "requires-darwin",
+    ],
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+)
+
+machine_path_test_suite(name = "machine_path_tests")

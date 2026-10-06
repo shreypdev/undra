@@ -2,7 +2,7 @@
 # The native size gate (ADR-052, amendment "native size gates"; constitution R9: budgets are tests).
 #
 #   scripts/native-size.sh                       measure and gate what this machine can build (Android; iOS on a Mac)
-#   scripts/native-size.sh --platform android    the two Android ABIs (any OS with cargo-ndk and the NDK)
+#   scripts/native-size.sh --platform android    the two Android ABIs (any OS with the NDK)
 #   scripts/native-size.sh --platform ios        the iOS device slice (macOS with Xcode)
 #   scripts/native-size.sh --record              measure, gate against the budgets only, and write the record:
 #                                                bench/results/native-size.jsonl and `measured_bytes` of each
@@ -31,7 +31,7 @@
 #
 # Output: one JSON line per artefact on stdout and in <dir>/native-size.jsonl, the comparison on stderr.
 # Exit status: 0 within the gates, 1 over one (or misaligned, or naming the builder's machine), 2 when it could not
-# measure (no NDK, no cargo-ndk, no Xcode, a failed build).
+# measure (no NDK, no Xcode, a failed build).
 #
 # Environment: UNDRA_SIZE_TARGET_DIR (cargo's target directory for the template; default target/native-size/target,
 # kept between runs so dependencies build once; the template itself is created afresh and rebuilt on every run, so a
@@ -75,7 +75,8 @@ if [ "$WANT_IOS" = 1 ] && [ "$(uname -s)" != Darwin ]; then
   WANT_IOS=0
 fi
 if [ "$WANT_ANDROID" = 1 ]; then
-  command -v cargo-ndk >/dev/null || die "cargo-ndk is not installed (cargo install cargo-ndk); the Android core is built with it"
+  [ -d "${ANDROID_NDK_HOME:-/nonexistent}" ] || [ -d "${ANDROID_HOME:-/nonexistent}/ndk" ] \
+    || die "the Android NDK was not found (set ANDROID_NDK_HOME, or ANDROID_HOME so that ndk/<version> is found): the Android core is linked with it"
 fi
 if [ "$WANT_IOS" = 1 ]; then
   for tool in xcrun size strip; do command -v "$tool" >/dev/null || die "$tool is not on PATH (Xcode's tools; docs/ONBOARDING.md)"; done
@@ -96,7 +97,7 @@ echo "==> undra init hello --platforms $PLATFORMS" >&2
 if [ "$WANT_ANDROID" = 1 ]; then
   echo "==> undra build --platform android --release" >&2
   "$UNDRA" build --platform android --release -C "$PROJECT" >"$WORK/build-android.log" 2>&1 \
-    || { tail -40 "$WORK/build-android.log" >&2; die "undra build --platform android --release failed (log: $WORK/build-android.log); it needs the NDK r27 and cargo-ndk (docs/ONBOARDING.md)"; }
+    || { tail -40 "$WORK/build-android.log" >&2; die "undra build --platform android --release failed (log: $WORK/build-android.log); it needs the NDK r27 (docs/ONBOARDING.md)"; }
 fi
 if [ "$WANT_IOS" = 1 ]; then
   echo "==> undra build --platform ios --release" >&2

@@ -2,12 +2,16 @@
 
 module(name = "undra_example")
 
-bazel_dep(name = "undra_rules", version = "1.0.0")
+bazel_dep(name = "undra_rules", version = "1.1.0")
 local_path_override(
     module_name = "undra_rules",
     path = "../../bazel",
 )
 
+# The ruleset versions are recent ones known to work, what most applications run. undra_rules (bazel/MODULE.bazel) declares the
+# lowest it needs instead, and Bazel resolves to the highest anyone asks for, so these win here. CI runs this workspace at both
+# ends, on Bazel 8.8.1 and the newest 9.x: as written, and through scripts/at-minimums.sh, which pins every bazel_dep below to the
+# rules' minimum for one run. A bazel_dep added here needs a minimum in bazel/MODULE.bazel (the script refuses one without).
 # apple_support first: its C++ toolchain (Xcode's clang) must come before the default one for rules_swift to find Apple targets.
 bazel_dep(name = "apple_support", version = "2.8.4")
 bazel_dep(name = "platforms", version = "1.1.0")
@@ -21,20 +25,20 @@ bazel_dep(name = "rules_apple", version = "5.2.0")
 bazel_dep(name = "aspect_rules_js", version = "3.5.1")
 bazel_dep(name = "aspect_rules_ts", version = "3.10.1")
 bazel_dep(name = "rules_nodejs", version = "6.7.5")
+bazel_dep(name = "bazel_skylib", version = "1.8.2")  # tests/: the rules' own analysis tests use its unittest.bzl
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
     edition = "2024",
-    # The targets undra_core builds for besides the machine: the web, the two iOS slices, the Android ABIs.
+    # The targets undra_core builds for besides the machine: the web and the two iOS slices. The Android ABIs are not here: that core
+    # is a Cargo cross-build in the host configuration, and its standard library is `undra.android_std` below (ADR-065).
     extra_target_triples = [
         "wasm32-unknown-unknown",
         "aarch64-apple-ios",
         "aarch64-apple-ios-sim",
-        "aarch64-linux-android",
-        "x86_64-linux-android",
     ],
     # The compiler CI pins (every rust-toolchain line of .github/workflows), by checksum: the goldens, the size gate and the
-    # budgets are recorded on it. rules_rust 0.74 knows up to 1.98; these are static.rust-lang.org's own .sha256 files.
+    # budgets are recorded on it. rules_rust 0.70 to 0.74 know up to 1.98; these are static.rust-lang.org's own .sha256 files.
     sha256s = {
         "rustc-1.99.0-aarch64-apple-darwin.tar.xz": "334a66714ca316d71bbe5efe44f71762d0b276cea73be2987374693a837f7450",
         "clippy-1.99.0-aarch64-apple-darwin.tar.xz": "c31a0765ed31d98515a09a13b44486048873d90ac75bb1e6690a17fb36a5d4e2",
@@ -59,8 +63,6 @@ rust.toolchain(
         "rust-std-1.99.0-wasm32-unknown-unknown.tar.xz": "b760b0c9b08a6843c05de0098bd6802e23178ff473c4715ae57c1d679125bf22",
         "rust-std-1.99.0-aarch64-apple-ios.tar.xz": "1d566dbc70edab923310f9579aa1ca2563703e154c3217ff049b7021ff080a94",
         "rust-std-1.99.0-aarch64-apple-ios-sim.tar.xz": "3f8d01bdbcdccfc708e7c93faa658895a6e79729a8cf0b2f747477fe23c43e91",
-        "rust-std-1.99.0-aarch64-linux-android.tar.xz": "41201595138e99645ac1db279719958ad3ca9d379f33576497f8cc644d885163",
-        "rust-std-1.99.0-x86_64-linux-android.tar.xz": "eaca047713cdd82b0a21dea767a6a3a018fc4039ae4500ee55211edd7cba251c",
     },
     versions = ["1.99.0"],
 )
@@ -70,8 +72,43 @@ register_toolchains("@rust_toolchains//:all")
 
 undra = use_extension("@undra_rules//:extensions.bzl", "undra")
 undra.source(path = "../..")
-use_repo(undra, "undra", "undra_binaryen", "undra_vendor")
+# The standard library of the Android targets, for `undra_core(platforms = ["android"])`: the release of rust.toolchain above, by checksum.
+undra.android_std(
+    version = "1.99.0",
+    sha256s = {
+        "aarch64-linux-android": "41201595138e99645ac1db279719958ad3ca9d379f33576497f8cc644d885163",
+        "x86_64-linux-android": "eaca047713cdd82b0a21dea767a6a3a018fc4039ae4500ee55211edd7cba251c",
+    },
+)
+use_repo(undra, "undra", "undra_android_std", "undra_binaryen", "undra_vendor")
+
+# The Android NDK, as a label (ADR-065): `undra_core(ndk = ..)` takes the files of an NDK as an input of the build, so nothing of
+# the machine's is read (`ANDROID_NDK_HOME`, `--action_env` and `extra_path` are not involved). The archive is per host OS (`//:mobile_android`
+# selects), and it is fetched only by a build that needs it (`bazel build //:mobile_android`), never by `bazel test //...`.
+# `android/use-installed-ndk.sh` stands the NDK that `sdkmanager` installed in for these two, which is what CI does.
+#
+# NDK r27c (27.2.12479018, the version the CI installs), pinned by the SHA-256 of each archive.
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "android_ndk_linux",
+    build_file = "//android:ndk.BUILD",
+    sha256 = "59c2f6dc96743b5daf5d1626684640b20a6bd2b1d85b13156b90333741bad5cc",
+    strip_prefix = "android-ndk-r27c",
+    urls = ["https://dl.google.com/android/repository/android-ndk-r27c-linux.zip"],
+)
+
+http_archive(
+    name = "android_ndk_macos",
+    build_file = "//android:ndk.BUILD",
+    sha256 = "8c5685457c58a88527367d46d3f14e8c727d962c39f85344cff0c0768a73c3b7",
+    strip_prefix = "android-ndk-r27c",
+    urls = ["https://dl.google.com/android/repository/android-ndk-r27c-darwin.zip"],
+)
 
 # Node, which the TypeScript test runs on (the TypeScript compiler is undra_rules's: typescript.deps(version = "5.9.3")).
 node = use_extension("@rules_nodejs//nodejs:extensions.bzl", "node")
 node.toolchain(node_version = "24.18.0")
+
+# The Xcode project of the iOS app (//ios:xcodeproj), for debugging the core from Xcode and lldb (macOS; the target is `manual`).
+bazel_dep(name = "rules_xcodeproj", version = "4.1.0")

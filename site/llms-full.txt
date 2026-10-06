@@ -65,7 +65,7 @@ Install only what your target platforms need. `undra doctor` checks all of it an
 | --- | --- |
 | Any core (everything in `crates/`) | Rust stable, plus the cross targets Undra ships to |
 | Web | Node 20+, and `binaryen` (for `wasm-opt`, optional: it makes the wasm core smaller) |
-| Android | JDK 17, Kotlin, Gradle, the Android SDK and NDK r27, `cargo-ndk` |
+| Android | JDK 17, Kotlin, Gradle, the Android SDK and NDK r27 (no `cargo-ndk`: Undra links with the NDK's clang itself) |
 | iOS (macOS only) | Full Xcode from the App Store, plus an iOS simulator runtime |
 
 ## 1. Install the toolchain
@@ -92,7 +92,6 @@ brew install node binaryen
 # Android: JDK, Kotlin, Gradle, then the SDK and NDK
 brew install openjdk@17 kotlin gradle
 brew install --cask android-commandlinetools
-cargo install cargo-ndk
 ```
 
 For iOS, install Xcode from the App Store (the Command Line Tools alone have no XCTest and no simulators), then:
@@ -247,6 +246,22 @@ undra build --platform ios,android,web --release
 `undra init` also writes `.github/workflows/undra.yml`: a job for the core (format, clippy, tests, `undra bindgen --check`) and one per app, each installing `undra` at the version pinned once at the top of the file. When a newer Undra is out, `undra upgrade` moves every pin of the project (the core's dependency, the runtimes, the workflow) in step, regenerates the bindings and prints the migration notes of every release it crosses; `undra upgrade --dry-run` shows the lines first.
 
 Sizes are printed at the end next to the design's budgets. On the reference build the hello-world web core is 113.1 KB gzipped (budget 120 KB, gated in CI) and the arm64-v8a Android `.so` is 898.2 KB (budget 1.2 MB per ABI, gated in CI). To trade speed for size, or size for speed, set `opt_level` in `undra.toml`: [Operating in production](https://shreypdev.github.io/undra/docs/production.html#size) has the numbers for each setting.
+
+### A release core under a debug app
+
+While you work on screens, the core rarely changes, and a debug core is much slower than the one you ship. Build the app in Debug and the core in release: the app keeps its breakpoints and its dev bar, the core runs at its real speed.
+
+| Where | How |
+| --- | --- |
+| Android | `./gradlew :app:installDebug -PundraRelease=true` (the `undraBuild` task reads the property; without it a debug variant builds a debug core) |
+| iOS | in the **Build the Undra core** Run Script phase, change `--configuration $CONFIGURATION` to `--configuration Release`; the app's own configuration stays Debug |
+| Web | nothing to do: the web core is always optimized |
+| React Native | `undra build --platform rn --release` |
+| Bazel | `undra_core(release = True)` on the core target the app links |
+
+Rust-level debugging of the core itself wants a debug core again; `undra dev` serves either kind to every running app.
+
+**Building with Bazel?** The rules (`undra_core`, `undra_bindings`, `undra_bindings_test` and the Swift, Kotlin and TypeScript libraries over the bindings) run this same build inside Bazel actions, hermetic and offline: see [the Bazel guide](https://shreypdev.github.io/undra/docs/bazel.html).
 
 ## Prefer to explore first?
 
@@ -1709,6 +1724,8 @@ undra symbolicate --dsym App.app.dSYM report.json     # iOS: the app's dSYM
 
 It finds the image by `imageId` in the manifest and prints one line per frame, `address symbol (file:line)`: `atos` with the dSYM on Apple platforms, `llvm-symbolizer` on the Android twin, the function map and the debug module on the web.
 
+Built with Bazel, the same files are the `symbols` output group of a release `undra_core`, and the example has a test that resolves a real crash with them: [symbol files and crash reports under Bazel](https://shreypdev.github.io/undra/docs/bazel.html#symbols).
+
 ## Background runs
 
 The OS gives an app a window to work in while it is not on screen: iOS `BGTaskScheduler`, Android WorkManager, a page about to hide. The core spends it on what is worth finishing: the offline queue replays, stale queries refetch, and what waits to be written is written. The platform calls `runInBackground` with the window it was given; the core runs its background tasks inside it and reports back.
@@ -1829,6 +1846,39 @@ The [two-core test apps](https://github.com/shreypdev/undra/tree/main/examples/t
 
 ---
 
+Source: https://shreypdev.github.io/undra/docs/hosts.html
+
+# One core, several hosts
+
+The same core runs under a SwiftUI app, a Jetpack Compose app, a React Native app and a web app at the same time. Each host links what it needs; the logic, the state and the data layer exist once.
+
+## What each host links
+
+| Host | The core | The bindings | The runtime |
+| --- | --- | --- | --- |
+| iOS, SwiftUI | the XCFramework (`undra build --platform ios`) | `generated/swift`: `@Observable` classes | the Swift package |
+| Android, Jetpack Compose | `jniLibs/<abi>/` (`undra build --platform android`) | `generated/kotlin`: `StateFlow` | the Kotlin modules |
+| Web, React | the WebAssembly module, on the main thread or in a [Web Worker](https://shreypdev.github.io/undra/docs/web.html) | `generated/ts`: hooks (`useSignal`, `useLazyList`) | `@undra/runtime` |
+| React Native | the native library, reached over JSI (`undra build --platform rn`) | `generated/ts`, the same package as the web | `@undra/react-native` over `@undra/runtime` |
+
+One `undra.toml` lists the platforms; `undra build` makes every artifact and `undra bindgen` the three bindings trees. A change to the core changes all four hosts in one commit, and `undra schema diff` shows what that change means for each of them.
+
+## Web and React Native share the TypeScript
+
+The TypeScript bindings are one package. Under a browser it reaches the WebAssembly core through `@undra/runtime`; under React Native the same package reaches the native core through `@undra/react-native`. A hook written for the web app is the hook the React Native app uses; the store code behind it is the same Rust. What differs is only the transport, chosen by the host at start.
+
+A web team's state management goes with it: the mirror is the store. Where a React app selected from a global store, it reads a signal; where it dispatched, it calls a method on the core. See [how updates reach the screen](https://shreypdev.github.io/undra/docs/updates.html) and [the worker and crash recovery](https://shreypdev.github.io/undra/docs/web.html) for the web side, and [the React Native build](https://shreypdev.github.io/undra/docs/cli.html#undra-build) for the other.
+
+## Moving a React Native app to native
+
+A team that moves screens from React Native to SwiftUI or Compose keeps the core. The native screens bind to the Swift or Kotlin classes of the same stores the React Native screens were using; both read one state during the move, so a screen can switch over on its own, and nothing is written twice on the way. [`undra adopt`](https://shreypdev.github.io/undra/docs/cli.html#undra-adopt) adds the core to an app that already exists without touching its project files.
+
+## One core or several
+
+Several hosts is not the same question as [several cores](https://shreypdev.github.io/undra/docs/several-cores.html). One core carries an app across every host; a second core is for code that ships on its own, a vendor's SDK or another team's module.
+
+---
+
 Source: https://shreypdev.github.io/undra/docs/bazel.html
 
 # Bazel
@@ -1841,6 +1891,7 @@ Undra's build is a command line, and a Bazel repository can call it as one: the 
 | --- | --- | --- |
 | `undra_core` | per platform: `lib<ns>.dylib` or `.so` (host), `<ns>.wasm` (web), the XCFramework (iOS), `jniLibs/<abi>/` (Android), and the symbol files | `undra build`, the profiles of every other build |
 | `undra_bindings` | the Swift package, the Gradle module and the npm package, as outputs, never committed, never stale | `undra bindgen --library`, read from the host build |
+| `undra_bindings_test` | a test that fails when the bindings you committed are not what the schema generates, and `<name>.update`, which rewrites them | `bazel_lib`'s `write_source_file` |
 | `undra_kt_jvm_library` | the Kotlin bindings over the Kotlin runtime | `rules_kotlin` |
 | `undra_ts_library` (`ts.bzl`) | the TypeScript bindings, type-checked and compiled against the runtime, linked into `node_modules` | `aspect_rules_ts`, `aspect_rules_js` |
 | `undra_swift_library` | the Swift bindings and the C module of the core's entry over the Swift runtime | `rules_swift` (macOS) |
@@ -1848,23 +1899,39 @@ Undra's build is a command line, and a Bazel repository can call it as one: the 
 
 ## Set up
 
-Pin Bazel in `.bazelversion` (8.8.1 is what the rules are tested with) and put the rules and the toolchain in `MODULE.bazel`. The core is an ordinary Cargo crate that depends on `undra`; `undra.toml` stays the project file.
+The rules support Bazel 8.8 and 9.x, tested in CI on 8.8.1, the lowest, and 9.2.0, the newest 9.x release, each with the rulesets at their minimums and at recent versions (every target but the debugging example's `//ios` package, which stays at the recent versions; [Ruleset versions](https://shreypdev.github.io/undra/docs/bazel.html#ruleset-versions)). Pin Bazel in `.bazelversion` and put the rules and the toolchain in `MODULE.bazel`. The core is an ordinary Cargo crate that depends on `undra`; `undra.toml` stays the project file.
 
 If you use `undra_ts_library`, add `common --repo_env=DO_NOT_TRACK=1` to your `.bazelrc`. The TypeScript rules it loads (`aspect_rules_js`) report which rulesets and versions your build uses to Aspect unless that variable is set, and only your repository can set it: a module cannot do it for you. The other rules never load them.
 
-`bazel test //...` in [examples/bazel](https://github.com/shreypdev/undra/tree/main/examples/bazel) builds the to-do core for the host and the web, generates the bindings, and runs Kotlin tests against the real core through JNI, TypeScript tests against the wasm module under Node, and, on macOS, a Swift test that loads it in process. CI runs it on Linux for every change, and the Swift test and the iOS core on macOS.
+`bazel test //...` in [examples/bazel](https://github.com/shreypdev/undra/tree/main/examples/bazel) builds the to-do core for the host and the web, generates the bindings, and runs Kotlin tests against the real core through JNI, TypeScript tests against the wasm module under Node, and, on macOS, a Swift test that loads it in process. CI runs it on Linux for every change, and the Swift test and the iOS core on macOS; a third job builds the Android core and the Android library on Linux.
 
 ## Why it is hermetic
 
 The rules call the CLI rather than copy its build: the shim, the release profiles, the `wasm-opt` pipeline, the path remapping and the symbol files stay in one place, so the web size gate and the schema hash are the CLI's. What makes an action that runs Cargo safe to cache:
 
-- **The compiler is Bazel's.** `rustc`, `cargo` and each target's standard library come from your `rules_rust` toolchain, pinned by checksum. No `rustup`.
+- **The compiler is Bazel's.** `rustc`, `cargo` and each target's standard library come from your `rules_rust` toolchain, pinned by checksum (the Android standard library from `undra.android_std`, also by checksum). No `rustup`.
 - **The crates are the lock file's.** `undra_vendor` downloads each crates.io package once, by the checksum `Cargo.lock` records, and an action unpacks them into a Cargo directory source with the network off.
 - **The CLI is built the same way,** from the checkout the core is built against.
 - **The build sees only what the target declares.** The action copies `undra.toml`, `srcs` and `workspace` into a private directory and builds there, with any spawn strategy, sandboxed or not; a file missing from `srcs` is a build error, not a silent read of your tree.
 - **The build directory is named by the target,** because Cargo and `undra build` put the build's path into symbol names: the same target builds in the same place in every checkout, so the same inputs give the same bytes (two clones on one Mac produced byte-identical cores).
 
-The C linker, and for iOS and Android Xcode, the NDK and `cargo-ndk`, are the machine's: no Bazel rule distributes them for Rust.
+The machine's are the C linker (the host's own, as `rules_rust` uses it) and, for iOS, Xcode, which no Bazel rule distributes: `DEVELOPER_DIR` comes in through `--action_env`. The Android NDK is not the machine's: it is a label, an input of the action, so an Android core is cached like the others.
+
+## Ruleset versions
+
+`undra_rules` declares the lowest version of each ruleset it needs, not the newest. Bazel resolves to the highest version anyone in your graph asks for, so a newer `rules_swift` of your own wins and the rules run on it; a lower one is raised to the minimum. CI tests both ends on Bazel 8.8.1 and 9.2.0: the example workspace at recent versions (`rules_rust` 0.74.0, `rules_kotlin` 2.4.20, `rules_swift` 4.1.2, `rules_apple` 5.2.0, `aspect_rules_ts` 3.10.1, `aspect_rules_js` 3.5.1), and the same targets with every ruleset at the minimum below (`bazel test //...`, the Swift consumer and the iOS core, the Android core and library; the debugging example's `//ios` package alone stays at the recent versions, since `rules_xcodeproj` sets floors of its own), a run that fails if anything in the graph raises one. A minimum is the lowest that works on both Bazel versions: `rules_swift` 3.3 still builds on Bazel 8.8, for instance, and the floor is Bazel 9's. The ones that set a floor:
+
+| Ruleset | Minimum | Why not lower |
+| --- | --- | --- |
+| `rules_rust` | 0.70.0 | 0.69 and older find no C++ toolchain for the wasm standard library ("No matching toolchains found") |
+| `rules_kotlin` | 2.3.0 | 2.2 pulls a `rules_android` that Bazel 9 rejects (the `CcInfo` symbol is gone), and 2.1 uses `JavaPluginInfo`, which Bazel 9 removed |
+| `rules_swift` | 3.4.0 | 3.3 and older fail to load on Bazel 9: the Swift worker names a `nlohmann_json` target that module no longer has |
+| `rules_apple` | 4.1.0 | what `rules_swift` 3.4.0 asks for, so a lower declaration is raised to it |
+| `aspect_rules_ts` | 3.10.0 | the first release with the `typescript` module extension the rules use |
+| `aspect_rules_js` | 2.0.0 | what `aspect_rules_ts` 3.10.0 asks for |
+| `rules_nodejs` | 6.7.5 | the first release that knows Node 24.18.0, which the example runs (the rules themselves need only what `aspect_rules_js` asks) |
+
+The rest (`apple_support` 1.24.2, `rules_cc` 0.2.17, `rules_java` 9.3.0, `rules_shell` 0.6.1, `platforms` 1.1.0, `bazel_skylib` 1.8.2, `bazel_lib` 3.1.0) are what Bazel resolves from the rulesets above; asking for less changes nothing. To check your own graph, run `bazel mod graph` and look for a ruleset resolved higher than the version you declared.
 
 ## Platforms
 
@@ -1872,28 +1939,263 @@ The C linker, and for iOS and Android Xcode, the NDK and `cargo-ndk`, are the ma
 | --- | --- | --- |
 | `host`, `web` | nothing outside the rules | Linux and macOS, in CI on every change |
 | `ios` | Xcode, and `apple_support` first in your `MODULE.bazel` | macOS, in CI on every change; the target is `manual` |
-| `android` | the NDK and `cargo-ndk` on the machine, and a C++ toolchain registered for the Android platforms (`rules_android_ndk`), which the rules do not set up | declared, not built anywhere yet: without that toolchain, analysis stops at `Unable to find a CC toolchain`, even with the NDK installed |
+| `android` | the NDK as a labelled input (`undra_core(ndk = ..)`, an `http_archive` of the NDK pinned by checksum, or `rules_android_ndk`'s repository) and `undra.android_std`: no `cargo-ndk`, no `--action_env`, no `extra_path` | Linux, in CI on every change; the target is `manual` |
 
-`undra_android_library` needs the Android SDK only (`rules_android` reads `ANDROID_HOME`), not the NDK. The example's (`bazel build //android:hello --config=android`) was built by hand on macOS; CI does not build it, because `rules_android` then downloads its own tools, one of them an archive without a checksum.
+The Android core is a Cargo cross-build that `undra build` links with the NDK's clang, so it is built in the host configuration, with the host's Rust toolchain: there is no Android platform to resolve a C++ toolchain for. The API level of the linker is `[android] min_sdk` of `undra.toml`. The archive is per host OS (a `select()` on `@platforms//os:*` picks the label) and is fetched only by a build that asks for the Android core, never by `bazel test //...`. CI gives that build the NDK that `sdkmanager` installed instead of downloading it through Bazel: `examples/bazel/android/use-installed-ndk.sh` prints the `--override_repository` flags that do it (each NDK repository by its name and by the canonical name Bazel 8 needs), which is also the way to use an NDK you already have. The pins themselves are fetched through Bazel, with their checksums checked, by a workflow of their own (`.github/workflows/ndk-pins.yml`, monthly and on demand), so a stale archive shows there before it shows on a machine.
 
-## Generated code and your linters
+`undra_android_library` needs the Android SDK only (`rules_android` reads `ANDROID_HOME`), not the NDK. The example's (`bazel build //android:hello --config=android`) is built in the same CI job; `rules_android` then downloads its own tools, one of them an archive without a checksum, which is why it stays a `manual` target and is not part of `bazel test //...`.
 
-A repository that lints everything reports the bindings, because they are the output of a generator. `undra bindgen` now writes the exclusions beside each tree and lists them in its manifest, so `--check` keeps them honest:
+## Committed bindings
 
-| Tree | File | Read by |
+There are two ways to hold the bindings, and both are checked by the build. `undra_bindings` alone makes them outputs: nothing is committed and nothing can be stale. A repository whose policy requires generated code in the tree commits them and adds `undra_bindings_test`, so a pull request cannot change the core's API and leave the committed copy behind.
+
+| Choose | When | What the build guarantees |
 | --- | --- | --- |
-| Kotlin | `.editorconfig`, and `@file:Suppress("ALL", "ktlint")` in every file | ktlint 1.x; detekt and IntelliJ read the annotation too |
-| Swift | `.swiftlint.yml`, an `excluded:` list to merge into yours | SwiftLint |
-| TypeScript | `.eslintrc.json`, and `eslint.config.undra.mjs` to spread into a flat config | ESLint 8 and 9 |
+| Generated outputs: `undra_bindings` | Your repository treats generated code as an artifact: reviewers read the schema, not the bindings, and nothing outside Bazel needs the files | The bindings are a function of the core library, so they cannot be stale |
+| Committed, with the test: `undra_bindings` and `undra_bindings_test` | Your policy puts generated code in the tree: a tool outside Bazel reads it, an IDE or a review wants it on disk, or the app is also built without Bazel | The committed directory equals the build's output, or `bazel test` fails and names the command that fixes it |
 
-ktlint 1.8 reports 90 findings on the example's generated Kotlin without them and none with either one; `bazel test //kotlin:lint_test` in the example runs that comparison. The annotation does not silence the Kotlin compiler: its warnings about the generated code still show. The detekt, IntelliJ, SwiftLint and ESLint readings follow each tool's documentation and are not run in CI.
+Create the files once and refresh them after every change to the core:
+
+shell
+
+```sh
+bazel run //:bindings_check.update    # writes the trees into the source tree; commit the result
+bazel test //:bindings_check          # fails, naming the line above, when they are out of date
+```
+
+The comparison is the one `undra bindgen --check` makes: the same files, byte for byte, nothing normalised (not line endings, not trailing space). `undra bindgen --check --out generated` accepts the directory the update writes, and a file edited by hand fails both. The rule is stricter in one way: it compares the directory as a whole, so a file that you keep beside the generated ones fails the test (the CLI ignores files its manifest does not list), and the update removes it. Keep the directory for the bindings alone, `BUILD.bazel` files included: a target that compiles the committed copy lives in the package around it and globs it (`glob(["generated/ts/**"])`). A directory that does not exist yet fails the test when it runs, with the update command in its message, and the rest of `bazel test //...` still runs; the first run of the update target creates it.
+
+## Symbol files and crash reports
+
+A release core ships stripped, and a crash report from it holds addresses. The files that turn them into a Rust file and line are the build's **symbol files** ([what they are](https://shreypdev.github.io/undra/docs/production.html#symbols)), and under Bazel they are an output of the same target: the `symbols` output group of a release `undra_core`. The web core is always a release build, so `core_web` has one; the host, iOS and Android cores have it when `release = True`. A debug core keeps its symbols in itself and has none: a `filegroup` of its group is empty, without an error, so point it at the release target.
+
+BUILD.bazel
+
+```python
+undra_core(
+    name = "core_release",
+    namespace = "hello_core",
+    srcs = glob(["core/**"]) + ["Cargo.toml"],
+    platforms = ["host"],
+    release = True,                  # the build you ship, and the one whose symbols you keep
+)
+
+# The group as a label: a directory you can depend on, build, or copy.
+filegroup(
+    name = "core_release_symbols",
+    srcs = [":core_release_host"],
+    output_group = "symbols",
+)
+```
+
+The directory is laid out as `undra build --release` lays out `build/`, restricted to the symbol files, so the manifest's relative paths hold and the group is exactly what the CLI would have written:
+
+| In `bazel-bin/<target>.symbols/` | What it is |
+| --- | --- |
+| `symbols/manifest.json` | per image: namespace, core version, schema hash and the image id a crash report carries |
+| `symbols/web/` | web: `<ns>.debug.wasm` (the shipped code with its names), `<ns>.wasm.functions.txt` (the function map) and `<ns>.dwarf.wasm` |
+| `symbols/android/` | Android: `<abi>/lib<ns>.so` and `native-debug-symbols.zip` |
+| `host/` | host: `lib<ns>.dylib.dSYM` (macOS) or `lib<ns>.so.debug` (Linux), which the CLI keeps beside the library and the manifest names as `../host/..` |
+
+iOS has no file of its own: the Rust frames are in your app's dSYM (`--apple_generate_dsym`) when the iOS core of that build keeps its debug objects (`keep_debug_objects = True`, release cores too: [Debugging the core](https://shreypdev.github.io/undra/docs/bazel.html#debugging), below); without it the dSYM has the Swift frames only. Each target has its own group and its own manifest, so a release of a host and a web core has two directories.
+
+### Keep them per release
+
+A report is read against the symbols of the build that shipped, found by the image id in the manifest, so keep each release's directory next to what you published, in the store that holds the rest of its artifacts. Do not count on rebuilding it or on a remote cache: the toolchain, the sources and the build's path must all be the same again for the same file.
+
+sh
+
+```sh
+bazel build //:core_release_symbols //:core_web_symbols
+tar -C bazel-bin -chf symbols-1.4.0.tar core_release_host.symbols core_web.symbols   # -h: Bazel's outputs are links
+# upload symbols-1.4.0.tar with the release
+```
+
+### Read a report
+
+Give `undra symbolicate` the report your app's `onPanic` received (as JSON, [its fields](https://shreypdev.github.io/undra/docs/production.html#crash-reports)) and the `symbols/` directory of the build that shipped. The CLI is a target of its own, `@undra//:cli`, built by the same toolchain. `bazel run` works from its runfiles, so the paths are absolute:
+
+sh
+
+```sh
+bazel run @undra//:cli -- symbolicate \
+  --symbols "$PWD/bazel-bin/core_release_host.symbols/symbols" "$PWD/report.json"
+```
+
+text
+
+```text
+0x96d03 hello_core::crash_for_symbols_test (/undra/app/core/src/lib.rs:154)
+0x10dd3 hello_core::__undra_dispatch_fn_crash_for_symbols_test (/undra/app/core/src/lib.rs:153)
+0x826f7 <undra_runtime::runtime::Runtime>::run_dispatcher (/undra/src/crates/undra-runtime/src/runtime.rs:1937)
+```
+
+One line per frame, innermost first (the lines above are three of the report's fourteen). A release build names your project `/undra/app`, whatever directory Bazel built it in, so the path is the same on every machine and names none. The tool that reads the symbol file is the machine's: `atos` (Xcode or the command line tools) for a dSYM, `llvm-symbolizer` (`apt install llvm`) for the others. The CLI says which it needs when it is missing, and warns when the report's schema hash or version is not the symbols'.
+
+### The reference: a test that crashes the core
+
+[`bazel test //symbols:symbolicate_test`](https://github.com/shreypdev/undra/tree/main/examples/bazel/symbols) in the example does all of the above with a real crash:
+
+1. it loads `//:core_release_host` (the stripped release library) in a JVM through the generated Kotlin bindings, with an `onPanic` handler, as an app does;
+2. it calls `crash_for_symbols_test`, a function of the example's core that exists to panic and that no consumer calls, and takes the `UndraPanicReport` the handler receives: addresses, the build's image id, and `core/src/lib.rs:154:5` as the location;
+3. it writes the report as JSON and runs `undra symbolicate --symbols` on `//:core_release_symbols`;
+4. it asserts that a frame is `hello_core::crash_for_symbols_test` at the line of the `panic!` in `core/src/lib.rs`, found in the source, which is also the line the core reported.
+
+It waits for no time: the report is a future the handler completes. With the symbols of another build it fails, because the report's image id is not the manifest's, and without the host library's symbols it fails with the CLI's error: what a stale or a missing symbol directory looks like in production.
+
+## Debugging the core from a Bazel-built app
+
+A Bazel-built iOS app can be debugged into Rust: a `rules_apple` `ios_application` over the generated Swift bindings and the iOS core, an Xcode project generated by `rules_xcodeproj`, and a breakpoint on a function of the core that stops with the Rust frame (file and line) under the Swift frames that called it. The example has all three in [examples/bazel/ios](https://github.com/shreypdev/undra/tree/main/examples/bazel/ios). It was verified on the iOS simulator (an iPhone 17, iOS 26.5, Xcode 26.6, Bazel 8.8.1, `rules_apple` 5.2.0, `rules_xcodeproj` 4.1.0) with LLDB driven from the command line; a physical device was not tried, and neither was Xcode's own editor and debugger UI (the project it opens is the one `xcodebuild` built here).
+
+| Target | What it is |
+| --- | --- |
+| `//ios:app` | The `ios_application`: a SwiftUI app that loads the core on launch and calls `greeting`. `manual`, macOS only. |
+| `//ios:hello` | `undra_swift_library` over `//:bindings`, compiled for iOS (the macOS-only `//swift:hello` is compiled for the machine). |
+| `//:mobile_ios` | The iOS core. In a `-c dbg` build it keeps the objects that hold the core's DWARF (`keep_debug_objects`, below). |
+| `//ios:xcodeproj` | The `rules_xcodeproj` project of the app: `bazel run //ios:xcodeproj` writes `ios/HelloApp.xcodeproj`. Xcode builds the app through Bazel. |
+
+The core of a slice is one prelinked object, and Apple's linker does not copy DWARF into it: it writes a *debug map* that names the object files the DWARF is in (ADR-044). Those files are in the directory the build action works in, `/tmp/undra-bazel-<key>/target`, which the action removes when it ends, so by default the app's debug information has no Rust in it: LLDB reports the breakpoint as pending and `dsymutil` writes a dSYM of the Swift code only (the example's `//ios:symbols_test` fails on a dSYM made that way). `undra_core(keep_debug_objects = True)` leaves the `libundra_core_*.a` of each target triple (80 MB each in a debug build) in place, with the sources the DWARF names by their path in that directory (`app/`, the project's, and `undra/`, the Undra crates', 15 MB: without them a breakpoint stops at the right file and line but LLDB and Xcode have no source to show; the vendored crates' sources, 295 MB unpacked, are not kept, so a frame inside one of them shows file and line only), and nothing else of the directory, until the next build of the target; the example sets it when the build is `-c dbg`:
+
+Generate the project, build the app with it and start the app waiting for a debugger:
+
+shell
+
+```sh
+cd examples/bazel
+bazel run //ios:xcodeproj                      # Updated project at "ios/HelloApp.xcodeproj"
+xcodebuild -project ios/HelloApp.xcodeproj -scheme app -configuration Debug \
+  -destination 'platform=iOS Simulator,id=<udid of a booted simulator>' -derivedDataPath /tmp/hello-dd build
+APP=$(find /tmp/hello-dd/Build/Products -name app.app | head -1)
+xcrun simctl install booted "$APP"
+xcrun simctl launch --wait-for-debugger booted dev.undra.bazel.hello.app    # prints the process id
+```
+
+In Xcode the same is `open ios/HelloApp.xcodeproj` and Run. Without Xcode, `bazel build //ios:app --ios_multi_cpus=sim_arm64 -c dbg --apple_generate_dsym` builds the same app (`bazel-bin/ios/app.ipa`, and its dSYM next to it): unzip the `.ipa` and install its `Payload/app.app` as above. Then attach LLDB *from the Bazel execution root* of the build, the directory Xcode's own session also uses: the debug map names the Swift objects by paths relative to it, and without it the Swift frames carry no file and line (the Rust frames do not need it). For the project `rules_xcodeproj` generated that is `$(bazel info output_base)/rules_xcodeproj.noindex/build_output_base/execroot/_main`; for a plain `bazel build` it is `bazel info execution_root`.
+
+lldb
+
+```sh
+xcrun lldb -b \
+  -o "process attach -p <pid>" \
+  -o "breakpoint set --name hello_core::greeting" \
+  -o "continue" \
+  -o "frame select 47" -o "bt -c 60" -o "detach"
+```
+
+What it printed (the frames between the dispatcher and the Swift transport left out; `47` is the frame of `HelloApp.start()` in this app):
+
+output
+
+```text
+(lldb) breakpoint set --name hello_core::greeting
+Breakpoint 1: where = app`hello_core::greeting + 20 at lib.rs:145:5, address = 0x0000000102a6ee14
+(lldb) continue
+* thread #10, name = 'View.task @ HelloApp/HelloApp.swift:15 (Task 1)', queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+(lldb) frame select 47
+frame #47: app`HelloApp.start() at HelloApp.swift:23:24
+-> 23  	            return try greeting(name: "Xcode")
+(lldb) bt -c 60
+  frame #0: app`hello_core::greeting(name=String @ 0x000000016d556b10) at lib.rs:145:5
+  frame #1: app`hello_core::__undra_dispatch_fn_greeting(__rt=&dyn core::any::Any @ ..., __call=DispatchCall @ ...) at lib.rs:144:8
+  frame #2: app`<undra_runtime::runtime::Runtime>::run_dispatcher::{closure#0} at runtime.rs:1937:33
+  ...
+  frame #29: app`undra_ffi::native::undra_call_sync(ptr="", len=26) at native.rs:321:5
+  frame #30: app`closure #1 in InprocTransport.callSync(bytes=26 values (...)) at InprocTransport.swift:193:26
+  ...
+  frame #46: app`greeting(name="Xcode", ctx=0x00000001028a36c0) at Objects.swift:11:28
+  frame #47: app`HelloApp.start() at HelloApp.swift:23:24
+```
+
+Expect the Rust frame with its file and line, the generated dispatcher under it, the core's entry points (`undra_call_sync`) and then Swift: the runtime's `InprocTransport`, the generated `greeting(name:ctx:)` and your code. A few things LLDB does that are worth knowing:
+
+- **Select the Swift frame before the first `bt`.** LLDB loads the Swift objects' debug information when a Swift frame is selected; after a `bt` alone the same frames print without a file and line (`HelloApp.start() + 228`).
+- **Run it from the execution root.** The Swift objects are named in the debug map by paths relative to it. The Rust frames do not need that.
+- **The Rust formatters.** Sourcing the `.lldbinit` that `undra init` writes (`command source <undra checkout>/crates/undra-cli/templates/project/lldbinit`) makes `frame variable name` print `"Xcode"`, and a full `bt` works with it sourced for a core built from 1.1. (With a 1.0 core, LLDB crashed on a backtrace of six frames or more once the file was sourced; 1.1 fixed that at its causes: a private variant of a runtime enum is renamed so LLDB's type layout no longer recurses, and the formatter template no longer walks pointer fields or Swift and Objective-C objects. For a 1.0 core, take the full backtrace in a session that did not source it.)
+- LLDB warns that it has "no plugin for the language rust"; the frames work without it, and a Rust variable prints as its fields.
+- **The source is in the kept directory.** `source list -n hello_core::greeting` prints the Rust lines, and `source info -n hello_core::greeting` names the file, `/private/tmp/undra-bazel-<key>/app/core/src/lib.rs`: that directory is the build's, the newest `/tmp/undra-bazel-*` whose owner file says `kept`. Were the sources ever elsewhere (a copy of the directory), `settings set target.source-map /private/tmp/undra-bazel-<key>/app <the project>` points LLDB at them.
+- A breakpoint by `-f lib.rs -l 145` works too and also sets a location in every dependency that has a `lib.rs` (24 here), so a function name is the better choice.
+
+Three things to know about the kept objects. They are not a build output, so a core that Bazel restores from its cache after the directory is gone has no Rust frames: build it again, with any new value of a variable the action reads (`--action_env=UNDRA_REBUILD=2` rebuilds the iOS core, verified). macOS removes what is in `/tmp` at a restart and, once a day, files unused for three days, so a debugging session days after the build may need that rebuild too. And the directory belongs to the target and to `keep_debug_objects`, so a build of the same core without it (the default configuration) does not remove them, but the bytes of the debug core differ from that one's, because the directory's name is in them.
+
+## Linters over the whole tree
+
+A repository whose CI lints everything meets the generated bindings in every linter it runs. `undra bindgen` writes these four files, beside the tree each one belongs to, and lists them in `.undra-generated` with the rest (so `undra bindgen --check` fails when one is missing or edited, and the next run removes one the schema no longer needs). Paths are relative to the directory the bindings are written to (`generated/` in a project made by `undra init`); none of the files names that directory, so a tree that moves is still excluded.
+
+| File | Linter | Content |
+| --- | --- | --- |
+| `kotlin/.editorconfig` | ktlint, the IDE formatter | one section, `[*.{kt,kts}]`, with `ktlint_standard = disabled`, `ktlint_experimental = disabled` and `ij_formatter_enabled = false`; no `root = true`, so your own `.editorconfig` still applies to everything else |
+| `swift/.swiftlint.yml` | SwiftLint | `excluded:` with the package's two source directories, `**/Sources/<Module>/Generated` and `**/Sources/<Module>CoreFFI`. SwiftLint ignores the `excluded:` of a nested configuration, so this is a fragment for your root configuration (`swiftlint --config .swiftlint.yml --config generated/swift/.swiftlint.yml`), not a switch by itself |
+| `ts/.eslintrc.json` | ESLint 8 and earlier (eslintrc) | `{ "root": false, "ignorePatterns": ["**/*"] }` |
+| `ts/eslint.config.undra.mjs` | ESLint 9 (flat config) | `export default [{ ignores: ["<its own directory>/**"] }]`, the directory worked out from `import.meta.url` relative to where ESLint runs. A flat config is read only from that directory, so you spread it into your `eslint.config.js`: `export default [...undraGenerated, /* yours */]` |
+
+A tree is written only for a platform the project builds, so a project without `web` has no `ts/` files. Every generated Kotlin file also starts, after its header line, with `@file:Suppress("ALL", "ktlint")`. That line is not one of the four files: it is part of the Kotlin file itself, it travels with the file when it is copied or packed into a source jar, ktlint 1.x, detekt and IntelliJ read it with no configuration, and it stays whatever you set below. The generated `.gitattributes` and `.gitignore` are not lint files either.
+
+ktlint 1.8 reports 90 findings on the example's generated Kotlin without them and none with either the file or the annotation; `bazel test //kotlin:lint_test` in the example runs that comparison. The annotation does not silence the Kotlin compiler: its warnings about the generated code still show.
+
+### A repository that configures its linters in one place
+
+If your root configuration already covers the bindings, or you would rather not have four more files in the tree, say so in `undra.toml`:
+
+undra.toml
+
+```toml
+[bindings]
+lint_exclusions = "none"       # "beside" (the default) writes the four files above; "none" writes none of them
+```
+
+With `none` the four files are not generated and not in the manifest. Switching an existing project to it makes `undra bindgen --check` name the old files as stale until you run `undra bindgen` once, which removes them. Anything that names one of them goes with it: an `import` of `eslint.config.undra.mjs` in your `eslint.config.js`, or a `--config generated/swift/.swiftlint.yml` in a SwiftLint command, would then fail, so replace it with the root lines below in the same change. Under Bazel the setting flows through the `undra.toml` you give `undra_bindings(config = ..)`: the rule has no list of these files, so nothing else changes. Any other value is `error[undra::C0002]`, naming the line. Then put the same exclusions in the root configurations. The examples use `generated/`, the default of `[paths] generated`; use your path.
+
+**SwiftLint**, in the root `.swiftlint.yml`:
+
+.swiftlint.yml
+
+```yaml
+excluded:
+  - generated
+```
+
+**ktlint**, in the root `.editorconfig`. A section with a slash is anchored to the directory of its `.editorconfig`, so write the bindings' path from there: `[**/generated/**]` misses a `generated/` right beside the file.
+
+.editorconfig
+
+```ini
+[generated/**]
+ktlint_standard = disabled
+ktlint_experimental = disabled
+```
+
+With the Gradle ktlint plugin, `ktlint { filter { exclude { it.file.path.contains("/generated/") } } }` does the same. **ESLint 9**, in `eslint.config.js` (an object with only `ignores` is a global ignore); for ESLint 8, `"ignorePatterns": ["generated/"]` in the root `.eslintrc.json` or a line in `.eslintignore`:
+
+eslint.config.js
+
+```js
+export default [
+  { ignores: ["generated/**"] },
+  // your configuration
+];
+```
+
+**Vale** lints the prose in the comments of source files when a section of `.vale.ini` matches them (for example `[*.{swift,kt,ts}]`), and the comments of generated code are a generator's, not yours. `undra bindgen` writes no Vale file at any setting. Give the generated tree an empty style list in a section placed after the ones that match its files:
+
+.vale.ini
+
+```ini
+[*.{swift,kt,ts}]
+BasedOnStyles = Vale
+
+[generated/**]
+BasedOnStyles =
+```
+
+As with the rest of this section, the SwiftLint, ESLint and Vale lines follow each tool's documentation and are not run in Undra's CI; ktlint is (the example's `bazel test //kotlin:lint_test`).
 
 ## Good to know
 
 - **Bazel caches a core as a whole.** A change to the core rebuilds its dependencies inside the action (seconds for a small core); a remote cache makes that cost the author's alone.
+- **The host core is built for the machine that runs the bindings.** `undra_bindings` builds its `core` in the execution configuration, because the bindgen action loads it; a test that also loads `:core_host` (the JVM one, above) builds it once more, in the target configuration.
 - **Swift needs its files listed.** `rules_swift` compiles files, not a directory, so `undra_bindings(swift_files = [..])` names them; a wrong list fails the build and prints the right one.
 - **Telemetry.** Only `ts.bzl` loads `aspect_rules_js`, whose telemetry is on unless your `.bazelrc` sets `--repo_env=DO_NOT_TRACK=1` (Set up, above); the example sets it.
-- **The scratch directory.** Each core builds in `/tmp/undra-bazel-<key>`, removed when the action ends. On Linux the sandbox's `/tmp` is private; on macOS two builds of the same target take turns, and another user's build of it goes to a directory of its own.
+- **The scratch directory.** Each core builds in `/tmp/undra-bazel-<key>`, removed when the action ends (all but the core's objects with `keep_debug_objects`, Debugging, above). On Linux the sandbox's `/tmp` is private; on macOS two builds of the same target take turns, and another user's build of it goes to a directory of its own.
 - The decision, its alternatives and what was measured are in [ADR-061](https://github.com/shreypdev/undra/blob/main/.10x/adrs/ADR-061-bazel-support.md).
 
 ---
@@ -1913,6 +2215,7 @@ Recipes for what every app does. Each is a module of one Rust crate that is comp
 ## Where to start
 
 - **An app with a login?** [Auth](https://shreypdev.github.io/undra/docs/cookbook/auth.html), then [offline-first](https://shreypdev.github.io/undra/docs/cookbook/offline.html).
+- **A big list that changes fast?** [Live leaderboard](https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html): 100,000 players, a snapshot and a delta stream, with the core lock held for under a microsecond.
 - **An existing codebase?** [From Kotlin Multiplatform](https://shreypdev.github.io/undra/docs/cookbook/from-kmp.html) or [from UniFFI](https://shreypdev.github.io/undra/docs/cookbook/from-uniffi.html): three steps, the first one small.
 - **Want it all in one place?** [Fieldbook](https://shreypdev.github.io/undra/docs/sample.html), field notes with photos, uses the recipes together on the web, iOS and Android.
 
@@ -2084,6 +2387,89 @@ The UI observes `link` (idle, open, reconnecting, fallback, stopped) and the key
 - A browser cannot send headers on a WebSocket, so a credential goes in the URL or a subprotocol.
 
 Source: [`examples/cookbook/core/src/realtime.rs`](https://github.com/shreypdev/undra/blob/main/examples/cookbook/core/src/realtime.rs).
+
+---
+
+Source: https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html
+
+# Live leaderboard
+
+A ranking of 100,000 players, a 1.4 MB snapshot and a stream of score changes. The big structure stays off the core lock and out of every signal: it is ingested on the blocking pool, and the screen gets a window of 60 rows and four numbers in one small transaction.
+
+## The problem
+
+A game, a contest or a fitness app shows a ranked list of 100,000 players. A snapshot (JSON, `[[id, score], ..]`, 1,377,798 bytes) arrives when the app opens and now and then after that, and score changes stream in between. The screen shows three things: the top 50, a few rows around the current player, and four numbers (how many players, the player's rank, the top score, the median). It never shows 100,000 rows, so the core should never ask a platform to hold them.
+
+The core has one lock. Whoever holds it is the core: a call, the poll of a task, the commit of a change-set all wait for it ([SPEC 5.1](https://github.com/shreypdev/undra/blob/main/docs/SPEC.md)). So the question is not whether the snapshot gets parsed, but where, and for how long the lock is held while it is.
+
+## Two designs that look right
+
+- **Apply the snapshot inside a core call.** An async store method fetches the bytes, then parses, sorts and stores them. It reads naturally, and the whole parse runs with the core lock held: every other call, timer and change-set waits for it. Measured here, 2.56 ms at the median and 2.94 ms at the 99th percentile, on a laptop core that is substantially faster than a phone's.
+- **Publish every player.** A `Signal<Vec<Player>>` of 100,000 rows puts the whole ranking on the platform, so the first change after a snapshot is a 1.2 MB change-set that each platform decodes and applies (at the core's price of 12 bytes a row), and the screen needs a window of it anyway. It also breaks the rule that a read does not cross the boundary: the list is in the core to be read there.
+
+| Design | Core lock held per snapshot, p50 | p99 | What reaches the platform |
+| --- | --- | --- | --- |
+| **This recipe**: pool, then publish a window | **375 ns** | **458 ns** | 780 bytes |
+| Parse inside a core call | 2.56 ms | 2.94 ms | 780 bytes |
+| Parse inside a call, a signal of every player | 2.94 ms | 3.26 ms | 1,200,033 bytes |
+
+## The recipe
+
+- **Ingest on `spawn_blocking`.** The snapshot (or a batch of deltas) goes to the blocking pool. The closure parses and sorts it into a `Standings` the app owns, behind its own `Mutex`, with no core lock held. A snapshot is a finished value built before the lock is taken: the lock is held for the swap, not for the parse.
+- **Publish a window, once.** The closure returns a small `View`: the top 50, the player and three neighbours on each side, and four numbers. The awaiting task is back on the core and writes three signals in one `txn`, skipping the ones that did not change (a write is a change-set whether or not the value moved). That is the only part of an update that holds the core lock. Each window carries the version it was read at under the app's lock, and an older one is not written: two updates can come back from the pool in either order.
+- **The big structure never crosses.** `follow` (the player who is highlighted) takes the same two steps. No generated getter, no signal and no call holds the 100,000 players, and a closure on the pool cannot write a signal at all (E0065), which is how the design stays honest.
+- **The feed is deterministic.** `start_demo` seeds a synthetic feed from the `Rng` port and drives it on the `Timer` port, so a test with the fake clock sees the same players and the same changes on every run.
+
+## The structure
+
+`Standings` (`standings.rs`) is plain Rust that knows nothing about Undra. It keeps every player twice: sorted by id, to find one, and in rank order, to answer for the top, for a neighbourhood and for the middle. A delta batch changes the scores in place, takes the players it touched out of the ranking and merges them back in one pass (`O(players + touched &times; log touched)`, never a sort of everyone). `view` is `O(top + around + log n)`. Ranks are competition ranks: players with the same score share a rank and the next one skips them (1, 2, 2, 4). Because it is plain Rust, the benchmark harness compiles the very same file, so the numbers on this page are the numbers of this code.
+
+## On the platform
+
+The screen observes three small signals: the best fifty, a few rows around the player and the summary. The platform neither knows nor cares how many players there are.
+
+## The numbers
+
+The benchmark rows time one core call on the host. A call holds the core lock for as long as it runs, so its time is how long one snapshot of 100,000 players holds the lock. The host copies every change-set under the lock, as each platform's callback does. Best of several runs on an Apple M5 Pro while other builds ran (load average 13), rustc 1.99.0, 2026-10-05:
+
+| Row (`leaderboard/..`) | What the call does under the core lock | p50 | p99 |
+| --- | --- | --- | --- |
+| `lock_hold/recommended` | publishes the window the pool prepared: three signals, one transaction | **375 ns** | **458 ns** |
+| `lock_hold/in_core_call` | parses, sorts and swaps the snapshot inside the call, then publishes the same window | 2.56 ms | 2.94 ms |
+| `lock_hold/signal_of_rows` | parses and sorts inside the call and sets a signal of every player | 2.94 ms | 3.26 ms |
+| `ingest/off_core` | (no core lock) what the pool does for this recipe: parse, sort, swap, window | 2.56 ms | 2.98 ms |
+
+The lock is held about 6,800 times shorter at the median and 6,400 times at the 99th percentile. The cost of the snapshot did not go away: it moved to a thread that does not hold the lock, and the snapshot reaches the screen about as soon either way. The second wrong design is only 15% worse under the lock on a host, because encoding and copying 1.2 MB is cheap next to parsing 1.4 MB; its price is paid on each platform, which has to decode and apply those 1.2 MB, and that no host-side row shows.
+
+What a caller sees: a second thread made a call that does nothing but need the core lock, in a loop, while a snapshot was applied about every 9 ms for 8 seconds per design (best of four runs; a busy machine deschedules the probe itself, so the maximum is the noisiest figure):
+
+| Design | Wait p50 | p99 | p99.9 | Max |
+| --- | --- | --- | --- | --- |
+| This recipe | 125 ns | 2.0 us | 7.8 us | 132 us |
+| Snapshot applied inside a call | 125 ns | 2.9 us | 3.47 ms | 7.04 ms |
+
+A call that arrives during an in-call apply waits out the parse. That is about one call in 200 here, so it is the p99.9 and the maximum that show it, and not the median or the p99. Both tables come from the same code: `cargo test -p undra-bench --test budgets --release -- --nocapture leaderboard` prints the rows and `cargo test -p undra-bench --test leaderboard --release -- --ignored --nocapture stall_report` the caller's wait. CI holds the first one to a budget (the recommended row's p50 and p99, in `bench/budgets.toml`) and to a ratio that does not depend on the machine: the publish must stay under 5% of the in-call apply, and it is 0.015%. A publish that grew with the players, the ranking read or sorted on the core or every row in a signal, would put that ratio near 1. These are host numbers; [finding 9 of the benchmark results](https://github.com/shreypdev/undra/blob/main/bench/RESULTS.md) has the method and the limits.
+
+## What the tests prove
+
+- A snapshot of 100,000 players publishes a top of 50 sorted by score, rank 1 first, the four numbers, and no window until a player is followed.
+- Following a player shows it with three neighbours on each side and its rank; a delta that makes it the leader moves the window with it, and a delta for a player the snapshot did not hold is ignored.
+- A snapshot that cannot be read (a repeated id, a score out of range, not JSON) is a typed error and leaves the ranking as it was; a failed fetch is a typed network error.
+- An update that changes nothing in the window writes nothing: no change-set.
+- What a platform receives for a snapshot of 100,000 players, with a player followed, is one change-set of 780 bytes: three signals, the 50 rows of the top and the 7 around the player, decoded from the wire.
+- Eight updates awaited together, whatever order the core resumes them in, leave the newest window on screen.
+- Merging delta batches gives the ranking a plain sort of the same scores gives, after each of forty batches; the demo feed runs on the fake clock, stops when stopped, and is the same on every run.
+
+## What to watch
+
+- **Never take the app's lock on the core.** Anything that reads the structure goes through the pool, as `follow` does. A core call that waits for the mutex while a snapshot is being swapped in would hold the core lock while it waits: the in-call parse again, by the back door. Keep the time under the app's lock to the swap and the window.
+- **The pool cannot write signals.** The closure returns the window and the awaiting task writes it; a write from the pool is refused with E0065.
+- **On the web, `spawn_blocking` runs inline.** The wasm core has no pool, so the parse runs synchronously inside the call and blocks the core's thread whichever design you pick. What the design still gives you there is the 780-byte change-set instead of 1.2 MB for the main thread to decode. Run the web core in a worker ([Workers & crash recovery](https://shreypdev.github.io/undra/docs/web.html)) so a long step does not stall a frame.
+- **A feed faster than the screen.** Each batch of deltas is one hand to the pool and one publish. A feed that sends thousands a second should be batched before it reaches `apply_deltas`, as the demo feed does with one batch every 100 ms; the platform's frame merge ([High-frequency data](https://github.com/shreypdev/undra/blob/main/docs/HIGH_FREQUENCY.md)) takes care of the rest.
+- **Memory.** The structure holds each player twice (about 1.6 MB for 100,000) and a swap briefly holds the old ranking and the new one. A snapshot is not part of the core's own snapshot: a restored store has no players, so it clears its window and the app loads the standings again.
+- **A window is not a lazy list.** `Lazy<T>` ([Paging and lazy lists](https://shreypdev.github.io/undra/docs/paging.html)) lets a platform scroll through a collection in the core; this recipe is for a screen that only ever shows a derived summary of it.
+
+Source: [`examples/cookbook/core/src/leaderboard.rs`](https://github.com/shreypdev/undra/blob/main/examples/cookbook/core/src/leaderboard.rs) and [`standings.rs`](https://github.com/shreypdev/undra/blob/main/examples/cookbook/core/src/standings.rs).
 
 ---
 
@@ -2381,7 +2767,7 @@ undra bindgen --check                  # exit 1 if the generated files are stale
 undra bindgen --docs                   # include the core's doc comments
 ```
 
-Reads the core's schema and writes the bindings the app shells import: a Swift package (`<out>/swift/`), a Gradle module (`<out>/kotlin/`) and an npm package (`<out>/ts/`). By default the schema comes from the core itself: the core is built as a host library, loaded, and asked for its schema. With `--schema` it is read from a file instead and nothing is built. Files an earlier run wrote and this one does not are removed; files you added next to them are never touched. Every generated file says it is generated (the generator, the schema hash, "Do not edit"), and each tree gets a `.gitattributes` that marks it `linguist-generated`, so GitHub collapses it in a pull request: [review the schema, not the bindings](https://shreypdev.github.io/undra/docs/reviewing-generated-code.html).
+Reads the core's schema and writes the bindings the app shells import: a Swift package (`<out>/swift/`), a Gradle module (`<out>/kotlin/`) and an npm package (`<out>/ts/`). By default the schema comes from the core itself: the core is built as a host library, loaded, and asked for its schema. With `--schema` it is read from a file instead and nothing is built. Files an earlier run wrote and this one does not are removed; files you added next to them are never touched. Beside the trees it writes the lint exclusion files, unless `[bindings] lint_exclusions = "none"` ([below](https://shreypdev.github.io/undra/docs/cli.html#undra-toml)). Every generated file says it is generated (the generator, the schema hash, "Do not edit"), and each tree gets a `.gitattributes` that marks it `linguist-generated`, so GitHub collapses it in a pull request: [review the schema, not the bindings](https://shreypdev.github.io/undra/docs/reviewing-generated-code.html).
 
 | Flag | Meaning |
 | --- | --- |
@@ -2451,6 +2837,8 @@ Builds the core for each platform and puts the result where the app shells look 
 
 **Not a manual step.** In a project made by `undra init` the app builds run `undra build` for you, each only when the core changed: Gradle's `undraBuild` task (`preBuild` depends on it; a release variant builds a release core), Xcode's *Build the Undra core* Run Script phase (before Compile Sources, with input and output file lists) and the `undra()` Vite plugin from `@undra/runtime/vite` (on start, and under `vite dev` on every change of `core/src`, followed by a reload). They find `undra` on `PATH`, or in `~/.undra/bin` and the other usual places, and say how to install it when it is missing (`error[undra::C0003]`).
 
+Under Bazel, `undra_core` runs this build inside an action, one target per platform, with the same profiles: [the Bazel guide](https://shreypdev.github.io/undra/docs/bazel.html).
+
 `--release` turns on LTO and one codegen unit. The web build is always optimized. On iOS and Android the release build is also tuned for size (the `release-mobile` profile of the generated crate: `opt-level = "s"`, and a panic still unwinds so the core can contain it), and the host build keeps `opt-level = 3`. `opt_level` in `[ios]` or `[android]` of `undra.toml` chooses the smallest library (`"z"`, calls about 1.5x slower) or the fastest (`"3"`) instead; the [production page](https://shreypdev.github.io/undra/docs/production.html#size) has the numbers. Sizes are printed at the end next to the design's budgets. A debug Android core is tens of megabytes per ABI, so package with `--release`. The library is your core plus the Undra C ABI, built from a small crate generated under `target/undra/`; you never write that crate.
 
 **No `-force_load`.** Each iOS slice is one prelinked object whose only global symbol is the core's entry, `hello_core_undra_api`, which the generated bindings call. It links like any other static library, in debug and release, and [another core](https://shreypdev.github.io/undra/docs/several-cores.html) can sit next to it.
@@ -2504,7 +2892,7 @@ undra doctor --fix       # the commands that close every gap, as one block to pa
 undra doctor --json      # the report for tools
 ```
 
-Checks every prerequisite that `undra init`, `build`, `dev` and the device benchmarks use, and prints one line per finding. Each finding says what was found (`ok`, `missing`, or the wrong version), the value it observed, the exact fix command and the heading of `docs/ONBOARDING.md` that explains it. It covers rustup, stable Rust at the minimum version and the Rust targets of the platforms (`wasm32`, the iOS device and simulator targets, the Android ABIs of `undra.toml`); full Xcode against the command line tools and a simulator runtime; the Android SDK, `platform-tools`, NDK r27, `ANDROID_HOME` and `ANDROID_NDK_HOME`, `cargo-ndk`, JDK 17, `adb` and whether a device or emulator is attached, and the Gradle wrapper; Node 20+ and npm; `wasm-opt` (optional: it makes the wasm core 10-20% smaller); free disk space (a warning under 10 GB); and whether `undra` is on `PATH`, since the build integrations run it by name. Checks that matter only to people working on Undra (the Kotlin compiler, the `undra` emulator) are marked *for contributors*.
+Checks every prerequisite that `undra init`, `build`, `dev` and the device benchmarks use, and prints one line per finding. Each finding says what was found (`ok`, `missing`, or the wrong version), the value it observed, the exact fix command and the heading of `docs/ONBOARDING.md` that explains it. It covers rustup, stable Rust at the minimum version and the Rust targets of the platforms (`wasm32`, the iOS device and simulator targets, the Android ABIs of `undra.toml`); full Xcode against the command line tools and a simulator runtime; the Android SDK, `platform-tools`, NDK r27, `ANDROID_HOME` and `ANDROID_NDK_HOME`, JDK 17, `adb` and whether a device or emulator is attached, and the Gradle wrapper; Node 20+ and npm; `wasm-opt` (optional: it makes the wasm core 10-20% smaller); free disk space (a warning under 10 GB); and whether `undra` is on `PATH`, since the build integrations run it by name. Checks that matter only to people working on Undra (the Kotlin compiler, the `undra` emulator) are marked *for contributors*.
 
 Inside a project only the platforms named in `undra.toml` are checked; elsewhere it checks all of them. It exits with status 1 when something the project needs is missing. `--fix` prints the fix commands as one block with a comment per finding and runs nothing; `--json` prints each finding with its id, state, severity, observed value, fix commands and documentation link.
 
@@ -2565,6 +2953,7 @@ version = "1.0.0"              # the release every dependency names; path = "…
 # ts_js_number = false         # i64/u64 as `number` instead of `bigint`
 # swift_typed_throws = true    # port requirements: `throws(E)`; false emits plain `throws`
 # swift_observation = "observable-object"   # Swift stores: "observation" (@Observable, iOS 17+) or "observable-object" (iOS 15+)
+# lint_exclusions = "none"     # "beside" (the default) writes the linters' exclusion files beside the trees; "none" writes none
 
 [ios]
 deployment_target = "17.0"     # 15.0 or later; below 17.0 the Swift stores are ObservableObjects
@@ -2577,6 +2966,8 @@ min_sdk = 26
 ```
 
 Commit `generated/` or regenerate it in CI, and gate on `undra bindgen --check` so a stale binding cannot ship.
+
+`lint_exclusions` in `[bindings]` decides whether `undra bindgen` writes the files that keep a repository's linters out of the generated trees (`kotlin/.editorconfig`, `swift/.swiftlint.yml`, `ts/.eslintrc.json` and `ts/eslint.config.undra.mjs`): `"beside"`, the default, writes them; `"none"` writes none, for a repository that configures its linters at the root. The `@file:Suppress` line at the top of every generated Kotlin file is not one of these files and stays either way. [Linters over the whole tree](https://shreypdev.github.io/undra/docs/bazel.html#lint-everything) lists the files and the lines to add to a root configuration.
 
 ## Errors
 
@@ -4648,15 +5039,25 @@ Roadmap
 
 # What is shipped, and what comes next.
 
-Shipped is what is on `main`. Next, Later and Exploring come only from what the repository records as planned or open: plans, not promises. This page follows the project's working record, [.10x/status.md](https://github.com/shreypdev/undra/blob/main/.10x/status.md), and changes with it. Last updated 3 Oct 2026.
+Shipped is what is on `main`. Next, Later and Exploring come only from what the repository records as planned or open: plans, not promises. This page follows the project's working record, [.10x/status.md](https://github.com/shreypdev/undra/blob/main/.10x/status.md), and changes with it. Last updated 6 Oct 2026.
 
 Shipped
 
-## In 1.0
+## In 1.0 and 1.1
 
 on main
 
 What you can build on today, grouped. Each line has its page in the docs and its decision record in the repository.
+
+### Bazel-first (1.1)
+
+- **Bazel 8.8 and 9.x, tested**Both in CI, with the rulesets at their lowest and their newest versions.
+- **Committed bindings, guarded (ADR-064)**undra_bindings_test fails on drift and names the one command that updates.
+- **The NDK as a declared input (ADR-065)**No cargo-ndk anywhere; Android built in CI; the action is cacheable.
+- **Lint exclusions by choice**Beside the trees, or none, for a repository that lints everything.
+- **Symbol files and the debugger**undra symbolicate on a Bazel build; a breakpoint in a Rust frame from a rules_apple app.
+- **A leaderboard of 100,000 rows**The high-frequency recipe: ingest off the lock, publish a window, measured.
+- **React Native 0.86**Verified on the simulator and the emulator, the module unchanged.
 
 ### Core and bindings
 

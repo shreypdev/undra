@@ -12,3 +12,4 @@ via DEVELOPER_DIR. Missing until the playground step: Android commandlinetools +
   what is verified locally and what only the first dry run can show. Runbook:
   `docs/RELEASING.md`.
 - `pr-gate.md` - the merge gate as GitHub enforces it: the "All green" roll-up per workflow, the four required checks, Site on every pull request, `wt.sh merge` through a pull request (2026-10-02).
+- `bazel-first.md` - 1.1 CI additions (Bazel range, ruleset minimums, Android in CI, the symbolicate and bindings tests), their cost, and that the release process is unchanged (2026-10-05).

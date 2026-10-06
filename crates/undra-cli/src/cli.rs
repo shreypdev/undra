@@ -89,6 +89,12 @@ NEXT
 Every file says it is generated (the generator, the schema hash, \"Do not edit\"), and each tree gets a .gitattributes \
 that marks it linguist-generated, so GitHub collapses it in a pull request (the diff is one click away). Review the \
 schema, not the bindings (`undra schema diff`); `--check` proves the bindings match it.\n\n\
+Beside the trees it also writes the files that keep a repository's linters out of them: kotlin/.editorconfig (ktlint), \
+swift/.swiftlint.yml (SwiftLint, an `excluded:` list to merge into yours), ts/.eslintrc.json (ESLint 8) and \
+ts/eslint.config.undra.mjs (ESLint 9, to spread into eslint.config.js). They are part of the manifest like the rest. \
+`lint_exclusions = \"none\"` in [bindings] of undra.toml writes none of them, for a repository that configures its \
+linters at the root (the Bazel guide lists the lines to add); `\"beside\"` is the default. The `@file:Suppress` line at the \
+top of every Kotlin file is not one of these files: it is part of the file and stays.\n\n\
 By default the schema comes from the core itself: the core is built as a host library with `undra-ffi` \
 linked in, loaded, and asked for `undra_schema_json` (docs/SPEC.md 13). With --schema it is read from a file \
 instead and nothing is built. Files an earlier run wrote and this one does not are removed; files you added \
@@ -236,7 +242,7 @@ one line per finding. Each one says what was found (ok, missing, or the wrong ve
 command that fixes it and the heading of docs/ONBOARDING.md that explains it. It covers: rustup, stable Rust at the \
 MSRV or newer and the Rust targets of the platforms (wasm32; the iOS device and simulator targets; the Android ABIs \
 of undra.toml); full Xcode against the command line tools and a simulator runtime; the Android SDK, platform-tools, \
-NDK r27, ANDROID_HOME and ANDROID_NDK_HOME, cargo-ndk, JDK 17, adb and whether a device or emulator is attached, and \
+NDK r27, ANDROID_HOME and ANDROID_NDK_HOME, JDK 17, adb and whether a device or emulator is attached, and \
 the Gradle wrapper; Node 20+ and npm; wasm-opt (optional: it makes the wasm core 10-20% smaller); free disk space \
 (a warning under 10 GB); and whether `undra` is on PATH, since the Gradle task, the Xcode build phase and the Vite \
 plugin of a project run it by name. Checks for people who work on Undra (the Kotlin compiler, the `undra` emulator) are \

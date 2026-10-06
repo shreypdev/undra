@@ -361,3 +361,29 @@ Follow-ups, none blocking: `undra build` location-independent (name the shim by 
 workspace; until then two checkouts of an app get different bytes outside Bazel); the Android core under Bazel (a C++ toolchain for
 the Android platforms; a stub one would do, since `cargo ndk` links); `node` for the web action (without it the CLI builds a debug
 host library to read the schema hash for the symbol manifest, about 5 s per web build); a Bazel disk or remote cache in CI.
+
+## Amendment (1.1, Bazel-first integration, 2026-10-05)
+
+The 1.1 design (`.10x/specs/2026-10-05-bazel-first-design.md`) extends this ADR without changing its decision: the rules keep
+calling the CLI. Five things change in how they fit a repository:
+
+1. **A Bazel range, tested.** The rules support Bazel 8.8 and 9.x; CI runs the example on both (`.bazelversion` stays at the
+   lowest supported, a second run sets `USE_BAZEL_VERSION`). The guide states the range.
+2. **Minimums, not latest.** `bazel/MODULE.bazel` declares the lowest version of each ruleset the rules need, tested at that
+   version, so a repository on older `rules_apple`, `rules_swift`, `rules_kotlin` or `aspect_rules_js` is not forced to bump
+   them by depending on Undra. MVS still picks the repository's higher version when it has one.
+3. **Android in CI.** With the NDK a declared input (ADR-065), the example's Android core and `undra_android_library` build in
+   a Linux job; item 5 of the implementation note (declared, not built) is closed.
+4. **Lint exclusions by choice.** The four exclusion files `undra bindgen` writes beside the trees (section 5; the
+   `@file:Suppress` line of every Kotlin file is part of the file and stays) become a
+   project setting: written beside the trees (the default) or not written at all, for a repository that configures its
+   linters centrally. The guide lists the files and the root-config lines such a repository adds.
+
+5. **A debuggable iOS core.** A prelinked iOS slice carries a debug map, not DWARF (ADR-044), and the map names objects
+   under the action's scratch directory, which the action removes. `undra_core(keep_debug_objects = True)` keeps the
+   per-triple archives in a directory of their own so a `-c dbg` build's dSYM resolves Rust frames; the iOS core target
+   is compatible with an iOS target platform (an `ios_application` can depend on it), and `undra_bindings` builds its
+   host core in the exec configuration. The guide's debugging section records the verified path through `rules_xcodeproj`.
+
+Committed bindings and their drift test are ADR-064; the NDK as an input is ADR-065. Native mode (no Cargo or Xcode
+subprocess) remains a later ADR.

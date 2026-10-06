@@ -455,7 +455,7 @@ impl Profile {
         }
     }
 
-    /// The arguments that select the profile on a `cargo rustc` / `cargo ndk` command line.
+    /// The arguments that select the profile on a `cargo rustc` command line.
     #[must_use]
     pub fn args(self) -> Vec<&'static str> {
         match self {

@@ -117,20 +117,14 @@ into `$HOME/Android/Sdk/cmdline-tools/latest` and use the same `sdkmanager` line
 
 #### Android NDK
 
-NDK r27 or newer (16 KB page alignment, which Google Play requires), and `ANDROID_NDK_HOME` (cargo-ndk and
-Gradle read it; `undra` finds `$ANDROID_HOME/ndk/<version>` without it).
+NDK r27 or newer (16 KB page alignment, which Google Play requires), and `ANDROID_NDK_HOME` (Gradle reads it;
+`undra` finds `$ANDROID_HOME/ndk/<version>` without it). `undra build --platform android` runs plain `cargo build
+--target <triple>` with the NDK's clang as the linker (the API level is `[android] min_sdk` of `undra.toml`, 26 by
+default): there is no `cargo-ndk` to install.
 
 ```bash
 $SDKM "ndk;27.2.12479018"
 export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018
-```
-
-#### cargo-ndk
-
-`undra build --platform android` runs `cargo ndk`. 3.5 or newer, which aligns libraries to 16 KB pages.
-
-```bash
-cargo install cargo-ndk
 ```
 
 #### JDK 17
@@ -261,7 +255,7 @@ Every suite is local; nothing needs the network after install (the Bazel suite f
 | Two cores in one process (ADR-044): the playground core as `playground_a` and `playground_b` | `examples/two-cores/{ios,android,jvm,node}/run.sh` (iOS: the booted simulator, `CONFIGURATION=Release` for the fat-LTO cores; Android: the attached emulator; Node: `npm ci` for `fake-indexeddb`, the default `Kv` of the web) | `two-cores <platform>: passed`, after the lines that write one default `Kv` key through each core and read two values back (ADR-044 amendment A) |
 | Build systems of a generated project: Gradle, `xcodebuild` and `npm run build` each build the core with no earlier `undra build` (a clean project, then up-to-date, then a change, then the other variant and back; the app links the new core) | `UNDRA_TEST_BUILD_SYSTEMS=1 cargo test -p undra-cli --test build_systems -- --nocapture` (`UNDRA_REQUIRE_TOOLCHAINS=1` makes a missing toolchain a failure; needs `java` on PATH, which `scripts/env.sh` puts there) | 6 pass; skips, saying why, where a toolchain is missing |
 | `undra upgrade` end to end (regenerates the bindings against a local clone standing in for GitHub) | `UNDRA_TEST_UPGRADE_E2E=1 cargo test -p undra-cli --test upgrade` | 15 pass |
-| Symbol files and `undra symbolicate` (R9, ADR-046): the playground core built in release for each platform, made to panic (in a call, and in a task) in a booted iOS simulator, on the emulator, under node and natively, and its frames resolved to the `lab.rs` line; `--no-symbols` and the sizes of the shipped artefacts | `UNDRA_REQUIRE_TOOLCHAINS=1 cargo test -p undra-cli --test symbols -- --test-threads=1` (needs Xcode with a booted simulator, the Android NDK, `cargo-ndk` and the emulator, node and `wasm-opt`; minutes) | 5 pass; skips, saying why, where a toolchain is missing |
+| Symbol files and `undra symbolicate` (R9, ADR-046): the playground core built in release for each platform, made to panic (in a call, and in a task) in a booted iOS simulator, on the emulator, under node and natively, and its frames resolved to the `lab.rs` line; `--no-symbols` and the sizes of the shipped artefacts | `UNDRA_REQUIRE_TOOLCHAINS=1 cargo test -p undra-cli --test symbols -- --test-threads=1` (needs Xcode with a booted simulator, the Android NDK and the emulator, node and `wasm-opt`; minutes) | 5 pass; skips, saying why, where a toolchain is missing |
 | The debugger path into Rust (ADR-046): LLDB in batch mode stops at `breakpoint set -f lab.rs -l <line>` in a debug core, on the host and in a simulator process | `UNDRA_REQUIRE_TOOLCHAINS=1 cargo test -p undra-cli --test debugging -- --test-threads=1` (run it from a login session: LLDB needs Developer Tools access) | 3 pass |
 | Distribution: the release's npm assets (`@undra/runtime`, `@undra/testkit`, `@undra/react-native` packed, installed by URL from a local server with no registry, every peer satisfied) | `bash packaging/pack-npm.sh --out /tmp/assets && bash packaging/test-npm-assets.sh --release-dir /tmp/assets` | all checks pass |
 | Distribution: the version script on a copy with a throwaway version | `bash scripts/bump-version.test.sh` | all checks pass |
@@ -269,7 +263,7 @@ Every suite is local; nothing needs the network after install (the Bazel suite f
 | Distribution: the curl installer against a served release (checksums, tampering, platforms) | `bash packaging/test-install.sh` | all checks pass |
 | Bazel rules and example (ADR-061): the core for the host and the web, the bindings from the host library, the Kotlin (JNI) and TypeScript (Node, wasm) consumers against the real core, ktlint over the generated Kotlin with and without the exclusions `undra bindgen` writes, and on macOS the Swift consumer; `bazel build //:mobile_ios` builds the XCFramework | `cd examples/bazel && bazel test //...` (first run downloads the toolchains: minutes; `--jobs=4` is in its `.bazelrc`); the rules' own unit tests: `cd bazel && bazel test //tests/...` | the example: 4 pass on macOS (Kotlin, ktlint, TypeScript, Swift), 3 on Linux; the rules' tests: 2 pass |
 | Benchmark budget gate | `cargo test -p undra-bench --test budgets --release` | pass |
-| Native size gate (ADR-052, R9): the hello-world core for Android (both ABIs, the stripped `.so` Gradle packages, 16 KB alignment checked) and iOS (the device slice, linked with `-dead_strip` and stripped) against the `[size."android/..."]` and `[size."ios/..."]` tables of `bench/budgets.toml`; `--record` re-records both in one commit | `scripts/native-size.sh` (`--platform android` or `ios`; needs cargo-ndk and NDK r27 for Android, Xcode for iOS; a minute or two) | each row `ok` against its gate; `bench/results/native-size.jsonl` is the record |
+| Native size gate (ADR-052, R9): the hello-world core for Android (both ABIs, the stripped `.so` Gradle packages, 16 KB alignment checked) and iOS (the device slice, linked with `-dead_strip` and stripped) against the `[size."android/..."]` and `[size."ios/..."]` tables of `bench/budgets.toml`; `--record` re-records both in one commit | `scripts/native-size.sh` (`--platform android` or `ios`; needs NDK r27 for Android, Xcode for iOS; a minute or two) | each row `ok` against its gate; `bench/results/native-size.jsonl` is the record |
 | Benchmarks (numbers for humans) | `cargo bench -p undra-bench` | see `bench/RESULTS.md` |
 | Device bench: the blueprint rows through the generated binding and the mirror, on a simulator, emulator, browser or phone | `scripts/bench-device.sh --device ios`, `--device android` (boots the `undra` AVD if nothing is attached; `--target <serial>` for a phone), `--device web`; add `--quick` to check the plumbing in seconds | writes `bench/results/device/<date>-<target>.json` and the device tables of `bench/RESULTS.md`; needs the iOS simulator + Xcode, the Android SDK + NDK, or Playwright's Chromium (`cd examples/playground/web && npx playwright install chromium`) |
 | React Native runtime: C++ host under ASan + UBSan (both shims) and the JSI layer against React Native's headers | `runtimes/rn/@undra/react-native/cpp/test/run.sh` (needs `npm ci` in `examples/playground/rn` for the headers, and `undra build --platform host` of the playground and of `examples/two-cores/a`, which it runs when missing; `UNDRA_RN_REQUIRE_JSI=1` makes a missing one a failure) | 15 store checks, then 29 + 29 host checks (the linked shim on macOS only); `UndraJsi.cpp`, `UndraTurboModule.cpp` and (macOS) `UndraPlatformApple.mm` compile |

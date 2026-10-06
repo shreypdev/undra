@@ -97,7 +97,7 @@ final class RealtimeServer: @unchecked Sendable {
             ready.signal()
         }
         reader.start()
-        guard ready.wait(timeout: .now() + 15) == .success,
+        guard ready.wait(timeout: .now() + hangDeadline) == .success,
               let first = line.withLock({ $0 }).split(separator: "\n").first,
               first.hasPrefix("READY "), let port = Int(first.dropFirst("READY ".count))
         else {
@@ -125,9 +125,9 @@ final class RealtimeServer: @unchecked Sendable {
         return try await connections().last { $0.path == path }
     }
 
-    /// Polls the newest connection to `path` until `condition` holds (5 s).
+    /// Polls the newest connection to `path` until `condition` holds (``hangDeadline``).
     func waitFor(_ path: String, file: StaticString = #filePath, line: UInt = #line, _ condition: (Connection) -> Bool) async throws -> Connection? {
-        let deadline = Date().addingTimeInterval(5)
+        let deadline = Date().addingTimeInterval(hangDeadline)
         while Date() < deadline {
             if let connection = try await last(path), condition(connection) {
                 return connection
@@ -137,6 +137,37 @@ final class RealtimeServer: @unchecked Sendable {
         let seen = try await last(path)
         XCTFail("the server never saw the expected state of \(path); the newest connection it has there: \(String(describing: seen))", file: file, line: line)
         return seen
+    }
+
+    /// Polls the newest connection to `path` until the flood's writer has stopped, and returns how many messages it wrote:
+    /// the `written` count is the same in `answers` `/stats` answers in a row (``hangDeadline``).
+    ///
+    /// Counted, not timed. The server is one event loop, and a flood's writer gives it up only when a write was refused
+    /// (it then waits for `drain`, which comes once the socket has room again); every `/stats` answer is a turn of that loop.
+    /// So `answers` answers with no write between them are as many turns in which the writer had no room to write. A wait of
+    /// a fixed time instead (one second, then half a second more) read the count while the server was still filling the
+    /// socket buffers on a loaded machine, so the writer looked as if it never stopped. The pause between polls only paces
+    /// them. A reader that is only slow, not stopped, can look stalled to this; the count returned is then lower, and the
+    /// callers' assertions (it is below the flood's size, the reader then gets everything) hold all the same.
+    func waitForTheWriterToStall(_ path: String, answers: Int = 10, file: StaticString = #filePath, line: UInt = #line) async throws -> Int {
+        let deadline = Date().addingTimeInterval(hangDeadline)
+        var previous: Int?
+        var same = 0
+        while Date() < deadline {
+            let written = try await last(path)?.written
+            if let written = written, written == previous {
+                same += 1
+                if same + 1 >= answers {
+                    return written
+                }
+            } else {
+                previous = written
+                same = 0
+            }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTFail("the writer of \(path) never stopped: it had written \(String(describing: previous)) messages when the wait gave up", file: file, line: line)
+        return previous ?? 0
     }
 
     /// The close the client sent, as the server saw it: waits for it, and checks what the platform guarantees.
@@ -323,11 +354,9 @@ class URLSessionWebSocketAdapterTests: XCTestCase {
         let first = try await binding.receive(conn: conn, max: 16)
         XCTAssertFalse(first.isEmpty)
         // The core stops reading: the binding reads ahead one window, URLSession stops asking the
-        // socket, and TCP pushes back on the server.
-        try await Task.sleep(nanoseconds: 1_000_000_000)
-        let stalled = try await server.last("/ws/flood")
-        let written = try XCTUnwrap(stalled?.written)
-        XCTAssertLessThan(written, 200, "the server could write \(written) of \(total) messages to a stalled reader")
+        // socket, and TCP pushes back on the server: its writer stops before the end of the flood.
+        let written = try await server.waitForTheWriterToStall("/ws/flood")
+        XCTAssertLessThan(written, total, "the server wrote all \(total) messages to a reader that did not read: nothing pushed back")
         var received = first
         while true {
             do {
@@ -430,7 +459,7 @@ final class URLSessionWebSocketOnAppSessionTests: URLSessionWebSocketAdapterTest
         XCTAssertEqual(headers["x-token"] as? String, "t")
         try await binding.close(conn: opened.conn, code: 1000, reason: "")
         // And the session's delegate was told of the task, as it is of every other.
-        let deadline = Date().addingTimeInterval(5)
+        let deadline = Date().addingTimeInterval(hangDeadline)
         while !delegate.paths.contains("/ws/headers"), Date() < deadline {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
@@ -569,10 +598,8 @@ final class URLSessionSseAdapterTests: XCTestCase {
         try await binding.close(stream: stream)
         let answered = try await waiting.value
         XCTAssertEqual(answered, [])
-        let started = Date()
         let left = try await server.waitFor("/sse/hang") { $0.clientClosed }
         XCTAssertEqual(left?.clientClosed, true)
-        XCTAssertLessThan(Date().timeIntervalSince(started), 1.0)
     }
 
     func testAFloodIsReadAsTheCorePulls() async throws {

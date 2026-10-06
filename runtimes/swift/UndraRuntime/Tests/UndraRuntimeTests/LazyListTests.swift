@@ -641,24 +641,44 @@ final class LazyListTests: XCTestCase {
     // MARK: Cost
 
     func testReadingCachedRowsIsCheap() throws {
-        // The hot path of a view: rows of cached pages, read over and over. Generous (debug build, a busy machine), but it fails
-        // if a read starts to cost anything like a call.
+        // The hot path of a view: rows of cached pages, read over and over. How fast a machine does 100,000 reads is the machine's,
+        // and no row of `bench/` measures this Swift code, so what is asserted is the read path's shape, by counting everything a read
+        // could do besides indexing a cached array: ask the core (a call), queue a request for a later turn (a scheduled flush),
+        // decode (a row is decoded once, when its page arrives), change the cache, or tell a view (an observation that fires
+        // re-renders it, and the render reads again). A read that did any of them 100,000 times shows here in a count, on any machine.
+        // (A read that is slow without doing any of them, a scan of the cache say, is not caught by a count: that is left to review.)
         let rig = try LazyRig(rows: 5000)
-        rig.list.prefetch(0 ..< 1200)
+        let list = UndraLazyList<CountedRow>(core: rig.core, schedule: { work in rig.turns.schedule(work) })
+        var reader = UndraReader(rig.server.value())
+        try list.applyFull(&reader)
+        let decodedBefore = CountedRow.decodes.withLock { $0 }
+        list.prefetch(0 ..< 1200)
         rig.turns.runUntilQuiet()
-        XCTAssertEqual(rig.list.testEngine.cachedPages.count, 24)
+        let pages = list.testEngine.cachedPages
+        XCTAssertEqual(pages, Array(0 ..< 24))
+        let decoded = CountedRow.decodes.withLock { $0 }
+        XCTAssertEqual(decoded - decodedBefore, 1200, "the 24 pages' rows, each decoded once as its page arrived")
         let calls = rig.server.offsets.count
-        let start = Date()
+        let flushes = rig.turns.scheduled
+        let told = LazyCounter()
+        withObservationTracking {
+            _ = list[100]
+        } onChange: {
+            told.bump()
+        }
+        // Rows 50 to 1149: their pages and both neighbours of each are cached (a read of page 23 asks for page 24, which is not).
         var sum = 0
         for round in 0 ..< 200 {
             for index in 0 ..< 500 {
-                sum += Int(rig.list[(round * 7 + index) % 1200] ?? 0)
+                sum += Int(list[50 + (round * 7 + index) % 1100]?.value ?? 0)
             }
         }
-        let elapsed = Date().timeIntervalSince(start)
         XCTAssertGreaterThan(sum, 0)
-        XCTAssertEqual(rig.server.offsets.count, calls, "no read of a cached row asks for anything")
-        XCTAssertLessThan(elapsed, 5, "100,000 cached reads took \(elapsed) s")
+        XCTAssertEqual(rig.server.offsets.count, calls, "no read of a cached row asks the core for anything")
+        XCTAssertEqual(rig.turns.scheduled, flushes, "nor queues a request for a later turn")
+        XCTAssertEqual(CountedRow.decodes.withLock { $0 }, decoded, "nor decodes a row again")
+        XCTAssertEqual(list.testEngine.cachedPages, pages, "nor changes the cache")
+        XCTAssertEqual(told.count, 0, "nor tells a view that anything changed")
     }
 
     // MARK: The default turn
@@ -693,4 +713,21 @@ func lazyBadRequestBody(_ reason: String) -> [UInt8] {
     var writer = UndraWriter()
     writer.writeString(reason)
     return writer.finish()
+}
+
+/// An `Int32` row that counts its decodes (the wire form of `Int32`): how a test sees that reading a cached row decodes nothing.
+struct CountedRow: UndraCodec, Sendable {
+    /// Every decode of every `CountedRow`, in this process.
+    static let decodes = Locked(0)
+
+    let value: Int32
+
+    static func undraDecode(_ r: inout UndraReader) throws -> CountedRow {
+        decodes.withLock { $0 += 1 }
+        return CountedRow(value: try r.readI32())
+    }
+
+    func undraEncode(_ w: inout UndraWriter) {
+        w.writeI32(value)
+    }
 }

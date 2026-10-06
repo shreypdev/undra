@@ -2,23 +2,27 @@
 
 module(
     name = "undra_rules",
-    version = "1.0.0",
+    version = "1.1.0",
 )
 
-bazel_dep(name = "bazel_skylib", version = "1.9.2")
+# Each version below is the LOWEST the rules are tested with, on Bazel 8.8.1 and the newest 9.x (CI: the Bazel example jobs, through
+# examples/bazel/scripts/at-minimums.sh, which runs the example at these versions; the example itself pins recent ones): Bazel's
+# module resolution picks the highest version anyone in the graph asks for, so an application that wants a newer ruleset keeps it.
+# Why each is where it is (what a lower one does) is in the "Ruleset versions" section of site/docs/bazel.html.
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
 bazel_dep(name = "platforms", version = "1.1.0")
-bazel_dep(name = "apple_support", version = "2.8.4")
-bazel_dep(name = "rules_rust", version = "0.74.0")
-bazel_dep(name = "rules_cc", version = "0.2.20")
+bazel_dep(name = "apple_support", version = "1.24.2")
+bazel_dep(name = "rules_rust", version = "0.70.0")
+bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "rules_java", version = "9.3.0")
-bazel_dep(name = "rules_kotlin", version = "2.4.20")
+bazel_dep(name = "rules_kotlin", version = "2.3.0")
 bazel_dep(name = "rules_shell", version = "0.6.1")
-bazel_dep(name = "rules_swift", version = "4.1.2")
-bazel_dep(name = "rules_apple", version = "5.2.0")
-bazel_dep(name = "aspect_rules_js", version = "3.5.1")
-bazel_dep(name = "aspect_rules_ts", version = "3.10.1")
+bazel_dep(name = "rules_swift", version = "3.4.0")
+bazel_dep(name = "rules_apple", version = "4.1.0")
+bazel_dep(name = "aspect_rules_js", version = "2.0.0")
+bazel_dep(name = "aspect_rules_ts", version = "3.10.0")
 bazel_dep(name = "rules_nodejs", version = "6.7.5")
-bazel_dep(name = "bazel_lib", version = "3.7.0")
+bazel_dep(name = "bazel_lib", version = "3.1.0")
 
 # The one dependency of the Kotlin runtime, pinned by checksum: the version the runtime's own CI uses.
 http_jar = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_jar")
@@ -30,7 +34,7 @@ http_jar(
 )
 
 undra = use_extension("//:extensions.bzl", "undra")
-use_repo(undra, "undra", "undra_binaryen", "undra_vendor")
+use_repo(undra, "undra", "undra_android_std", "undra_binaryen", "undra_vendor")
 
 # The TypeScript compiler the runtime and the generated bindings are compiled with. A root module that wants another version
 # declares its own `typescript.deps(version = ..)`: the root's tag wins.

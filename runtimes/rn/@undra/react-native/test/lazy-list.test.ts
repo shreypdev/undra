@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   CallTarget,
   ChangeOp,
@@ -17,6 +17,9 @@ import {
 import { RecordKind } from "../src/native.js";
 import { NativeTransport } from "../src/transport.js";
 import { FakeNative } from "./support/fake-native.js";
+import { arrived, testTimeout } from "./support/wait.js";
+
+vi.setConfig({ testTimeout });
 
 /*
  * What a `Lazy<T>` list needs of React Native (ADR-043 decision 3.5): nothing of its own. The page call is an
@@ -91,6 +94,10 @@ async function attach(): Promise<{ core: UndraCore; native: FakeNative; server: 
 }
 
 const tick = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+// `arrived` (support/wait.ts) waits until what a change-set from a core thread causes has happened, then the check holds.
+// That delivery is a chain of timers (the fake's drain, then the mirror's `schedule`), each a timeout the event loop may run
+// late under load, and a fixed wait of 5 ms ran out before the chain did (an empty `server.calls`). The check says what
+// arrives, not when; the deadline only catches a delivery that never comes.
 
 describe("a LazyList over the native transport", () => {
   test("takes its length from the observed value and reads rows through module.callSync, in one batch", async () => {
@@ -115,8 +122,9 @@ describe("a LazyList over the native transport", () => {
     list.get(75);
     await tick();
     server.calls.length = 0;
+    const before = list.revision.peek(); // armed beside the edit: the revision changes when the re-paged window arrives
     server.edit(75, -1);
-    await tick(5);
+    await arrived(() => expect(list.revision.peek()).toBeGreaterThan(before));
     expect(server.calls).toEqual([{ handle: HANDLE, offset: 50, limit: 50 }]);
     expect(list.get(75)).toBe(-1);
     expect(list.get(76)).toBe(760);

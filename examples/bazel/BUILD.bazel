@@ -1,9 +1,9 @@
-load("@undra_rules//undra:defs.bzl", "undra_bindings", "undra_core")
+load("@undra_rules//undra:defs.bzl", "undra_bindings", "undra_bindings_test", "undra_core")
 load("@undra_rules//undra:ts.bzl", "undra_ts_library")
 
 package(default_visibility = ["//:__subpackages__"])
 
-exports_files(["undra.toml"])
+exports_files(["undra.toml", "core/src/lib.rs"])
 
 undra_core(
     name = "core",
@@ -35,6 +35,18 @@ undra_bindings(
     ],
 )
 
+# The bindings, committed as well (ADR-064): for a repository whose policy keeps generated code in the tree. `bazel test
+# //:bindings_check` fails when committed/ is not what the core's schema generates, and says what to run:
+#
+#   bazel run //:bindings_check.update      writes committed/{swift,kotlin,ts} from the build
+#
+# Nothing below reads committed/: the consumers use the build's own outputs, so a stale tree can never break them.
+undra_bindings_test(
+    name = "bindings_check",
+    bindings = ":bindings",
+    committed = "committed",
+)
+
 # The TypeScript bindings, compiled against the runtime and linked into node_modules for the tests under ts/.
 undra_ts_library(
     name = "hello_ts",
@@ -43,18 +55,68 @@ undra_ts_library(
     visibility = ["//:__subpackages__"],
 )
 
-# The cores of the mobile apps. They build when asked for by name, because their toolchains are the machine's, not Bazel's:
+# The cores of the mobile apps. They build when asked for by name: the iOS core takes Xcode from the machine, and the Android core
+# downloads the NDK (see MODULE.bazel).
 #
 #   bazel build //:mobile_ios       an XCFramework (macOS with Xcode; CI builds it)
-#   //:mobile_android               declared, does not build here: rules_rust needs a C++ toolchain for the Android platforms
-#                                   (rules_android_ndk), which this example does not set up (ADR-061)
+#   bazel build //:mobile_android   jniLibs/<abi>/libhello_core.so for arm64-v8a and x86_64, linked with the NDK of `ndk` (CI builds it)
+#
+# The NDK is a declared input (ADR-065): the archive of the host OS, pinned in MODULE.bazel. No ANDROID_NDK_HOME, no cargo-ndk.
 undra_core(
     name = "mobile",
     srcs = glob(["core/**"]) + ["Cargo.toml"],
     config = "undra.toml",
     namespace = "hello_core",
+    ndk = select({
+        "@platforms//os:linux": "@android_ndk_linux//:ndk",
+        "@platforms//os:macos": "@android_ndk_macos//:ndk",
+    }),
     platforms = [
         "ios",
         "android",
     ],
+    # `-c dbg` is a build to debug (//ios, "Debugging the core from a Bazel-built app"): the objects with the core's DWARF stay.
+    keep_debug_objects = select({
+        ":dbg": True,
+        "//conditions:default": False,
+    }),
+)
+
+# `-c dbg`: the build a debugger steps through. It is here, not in //ios, so that the cores never need that package (and the
+# rules_xcodeproj it loads) to be analysed.
+config_setting(
+    name = "dbg",
+    values = {"compilation_mode": "dbg"},
+)
+
+# The release core of the host and its symbol files (ADR-061, ADR-046; `//symbols:symbolicate_test` is the reference).
+#
+# `core_host` is the debug build the bindings and the other tests load: it keeps its symbols in itself and writes none. A release
+# build strips the library it ships and keeps the symbols next to it, which is what a crash report from production resolves with.
+# `core_release_host` is that build (what `undra build --release` writes to build/host/), and its `symbols` output group is the
+# directory every symbol file of it is in:
+#
+#   bazel build //:core_release_symbols     bazel-bin/core_release_host.symbols/
+#     symbols/manifest.json, symbols/...      what `undra build --release` writes to build/symbols/
+#     host/libhello_core.dylib.dSYM           (libhello_core.so.debug on Linux) the host library's symbols, where the manifest points
+undra_core(
+    name = "core_release",
+    srcs = glob(["core/**"]) + ["Cargo.toml"],
+    config = "undra.toml",
+    namespace = "hello_core",
+    platforms = ["host"],
+    release = True,
+)
+
+filegroup(
+    name = "core_release_symbols",
+    srcs = [":core_release_host"],
+    output_group = "symbols",
+)
+
+# The web core is a release build already: its symbol files (the debug module, the function map, the DWARF module).
+filegroup(
+    name = "core_web_symbols",
+    srcs = [":core_web"],
+    output_group = "symbols",
 )

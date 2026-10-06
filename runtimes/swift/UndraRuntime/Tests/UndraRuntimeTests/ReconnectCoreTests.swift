@@ -137,7 +137,7 @@ final class ReconnectCoreTests: XCTestCase {
 
         transport.drop(UndraTransportError.connectionLost(reason: "socket reset"))
         let suspendedError = await suspended.value
-        await fulfillment(of: [blockedDone], timeout: 5)
+        await fulfillment(of: [blockedDone], timeout: hangDeadline)
         for error in [suspendedError, blocked.withLock { (value: inout (any Error)?) -> (any Error)? in return value }] {
             guard case UndraTransportError.connectionLost(let reason)? = error as? UndraTransportError else {
                 return XCTFail("expected the typed outcome, got \(String(describing: error))")
@@ -387,7 +387,7 @@ final class ReconnectCoreTests: XCTestCase {
         }
         transport.drop()
         transport.reconnect()
-        XCTAssertEqual(replaying.wait(timeout: .now() + 5), .success)
+        XCTAssertEqual(replaying.wait(timeout: .now() + hangDeadline), .success)
         try await Task.sleep(nanoseconds: 300_000_000)
         XCTAssertEqual(core.connectionState, .reconnecting(attempt: 1), "still reconnecting")
         transport.onObserve = nil
@@ -417,7 +417,7 @@ final class ReconnectCoreTests: XCTestCase {
         let back = await waitUntil { core.connectionState == .connected }
         XCTAssertTrue(back)
         core.shutdown()
-        await fulfillment(of: [finished], timeout: 5)
+        await fulfillment(of: [finished], timeout: hangDeadline)
         reader.cancel()
         let states = seen.withLock { (list: inout [UndraConnectionState]) -> [UndraConnectionState] in return list }
         XCTAssertEqual(states, [.connected, .reconnecting(attempt: 1), .connected, .closed(.requested)])

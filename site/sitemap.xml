@@ -16,6 +16,7 @@
   <url><loc>https://shreypdev.github.io/undra/docs/cookbook/from-uniffi.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/cookbook/</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/cookbook/ios-15-16.html</loc><lastmod>2026-10-01</lastmod></url>
+  <url><loc>https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html</loc><lastmod>2026-10-05</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/cookbook/network-stack.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/cookbook/offline.html</loc><lastmod>2026-10-01</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/cookbook/pagination.html</loc><lastmod>2026-10-01</lastmod></url>
@@ -25,6 +26,7 @@
   <url><loc>https://shreypdev.github.io/undra/docs/errors.html</loc><lastmod>2026-10-03</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/generics.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/getting-started.html</loc><lastmod>2026-10-03</lastmod></url>
+  <url><loc>https://shreypdev.github.io/undra/docs/hosts.html</loc><lastmod>2026-10-01</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/objects.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/paging.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/polling.html</loc><lastmod>2026-10-02</lastmod></url>
@@ -51,5 +53,5 @@
   <url><loc>https://shreypdev.github.io/undra/reference/kotlin.html</loc><lastmod>2026-10-01</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/reference/swift.html</loc><lastmod>2026-10-01</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/reference/typescript.html</loc><lastmod>2026-10-01</lastmod></url>
-  <url><loc>https://shreypdev.github.io/undra/roadmap/</loc><lastmod>2026-10-03</lastmod></url>
+  <url><loc>https://shreypdev.github.io/undra/roadmap/</loc><lastmod>2026-10-06</lastmod></url>
 </urlset>

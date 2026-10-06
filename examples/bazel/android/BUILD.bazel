@@ -1,5 +1,11 @@
 load("@undra_rules//undra:android.bzl", "undra_android_library")
 
+# The BUILD file of the NDK repositories (MODULE.bazel), and the script that stands the NDK `sdkmanager` installed in for them.
+exports_files([
+    "ndk.BUILD",
+    "use-installed-ndk.sh",
+])
+
 # The generated Kotlin bindings as an Android library (kt_android_library). It needs the Android SDK (rules_android reads
 # ANDROID_HOME), not the NDK, so it is `manual`: `bazel build //android:hello --config=android`.
 undra_android_library(

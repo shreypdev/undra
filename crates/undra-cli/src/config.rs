@@ -90,6 +90,55 @@ impl Platform {
     }
 }
 
+/// Whether `undra bindgen` writes the lint exclusion files beside the generated trees: `[bindings] lint_exclusions` of
+/// `undra.toml` (ADR-061).
+///
+/// A repository that lints everything needs the generated bindings left out of its linters. The default writes the files each
+/// linter reads beside the trees (`crate::lint` lists them); a repository that configures its linters in one place says
+/// `none` and adds the same exclusions to that configuration (the "Linters over the whole tree" section of the Bazel guide
+/// lists the lines). The `@file:Suppress` line at the top of every generated Kotlin file is not one of these files: it is part
+/// of the file and stays whatever this says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum LintExclusions {
+    /// `"beside"`, the default: the exclusion files are written beside the trees and are part of their manifest, so `--check`
+    /// compares them and a later run removes them with the rest.
+    #[default]
+    Beside,
+    /// `"none"`: no exclusion file is written. A file an earlier run wrote is removed with the rest of the manifest's
+    /// leftovers, so switching the setting leaves nothing stale.
+    None,
+}
+
+impl LintExclusions {
+    /// The value as `undra.toml` spells it.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LintExclusions::Beside => "beside",
+            LintExclusions::None => "none",
+        }
+    }
+}
+
+impl std::str::FromStr for LintExclusions {
+    type Err = String;
+
+    /// Reads `beside` or `none`.
+    ///
+    /// # Errors
+    ///
+    /// Names the text and the two values.
+    fn from_str(text: &str) -> std::result::Result<LintExclusions, String> {
+        match text {
+            "beside" => Ok(LintExclusions::Beside),
+            "none" => Ok(LintExclusions::None),
+            other => Err(format!(
+                "`{other}` is not a lint exclusions setting (`beside` or `none`)"
+            )),
+        }
+    }
+}
+
 /// Names of the generated bindings, overriding what `undra-bindgen` derives from the crate name.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct BindingsConfig {
@@ -110,6 +159,9 @@ pub struct BindingsConfig {
     /// `observable-object` (`ObservableObject` with `@Published`, iOS 15 and later). Absent: chosen by
     /// `[ios] deployment_target`, `observable-object` below 17.0.
     pub swift_observation: Option<SwiftObservation>,
+    /// Whether the lint exclusion files are written beside the generated trees ([`LintExclusions`]); `beside` unless
+    /// `lint_exclusions = "none"`.
+    pub lint_exclusions: LintExclusions,
 }
 
 /// iOS build settings.
@@ -139,7 +191,7 @@ impl Default for IosConfig {
 pub struct AndroidConfig {
     /// The ABIs to build: `arm64-v8a`, `x86_64`, `armeabi-v7a`, `x86`.
     pub abis: Vec<String>,
-    /// The minimum API level (`cargo ndk --platform`).
+    /// The minimum API level: the one the NDK's clang the core is linked with targets (`26` when undra.toml says nothing, as `undra init` writes it).
     pub min_sdk: u32,
     /// What a release build optimises for (`opt_level`, [`NativeOptLevel`]).
     pub opt_level: NativeOptLevel,
@@ -261,6 +313,9 @@ pub struct ProjectConfig {
     pub runtimes: RuntimesConfig,
 }
 
+/// The guide to the lint exclusion files and to the root-configuration lines that replace them (`lint_exclusions = "none"`).
+pub const LINT_DOCS: &str = "https://shreypdev.github.io/undra/docs/bazel.html#lint-everything";
+
 /// The Undra release this CLI belongs to, in full (`1.0.0`): what `undra init` pins every dependency of a project to and
 /// writes as `[undra] version` (ADR-063: the crates' tag, the Swift package, the Kotlin artifacts and the npm tarballs all
 /// name this one release). It is the workspace version, so a release never leaves a scaffold asking for the previous one.
@@ -381,6 +436,7 @@ impl ProjectConfig {
                 "ts_js_number",
                 "swift_typed_throws",
                 "swift_observation",
+                "lint_exclusions",
             ],
         )?;
         cfg.bindings = BindingsConfig {
@@ -407,6 +463,27 @@ impl ProjectConfig {
                             file,
                             format!("line {}: swift_observation must be a string", entry.line),
                             "write it in quotes: swift_observation = \"observable-object\"",
+                        ));
+                    }
+                },
+            },
+            lint_exclusions: match reader.get("bindings", "lint_exclusions") {
+                None => LintExclusions::default(),
+                Some(entry) => match &entry.value {
+                    Value::Str(text) => text.parse::<LintExclusions>().map_err(|e| {
+                        CliError::new(
+                            Code::BadConfig,
+                            format!("{}: line {}: {e}", file.display(), entry.line),
+                            "`undra bindgen` writes the files each linter reads to exclude the generated bindings (.editorconfig, .swiftlint.yml, .eslintrc.json, eslint.config.undra.mjs) beside the trees, or none of them when your linters are configured at the repository root; any other value would make it guess which",
+                            format!("write lint_exclusions = \"beside\" (the default) or lint_exclusions = \"none\" in [bindings]; with \"none\", add the exclusions to your root linter configuration: {LINT_DOCS}"),
+                        )
+                    })?,
+                    _ => {
+                        return Err(CliError::new(
+                            Code::BadConfig,
+                            format!("{}: line {}: lint_exclusions must be a string", file.display(), entry.line),
+                            "the setting decides whether the files that keep your linters out of the generated bindings are written, `beside` or `none`, and a number or a boolean names neither",
+                            format!("write it in quotes: lint_exclusions = \"none\" ({LINT_DOCS})"),
                         ));
                     }
                 },
@@ -644,7 +721,8 @@ impl ProjectConfig {
              # ts_scope = \"app\"\n\
              # ts_js_number = false        # i64/u64 as `number` instead of `bigint`\n\
              # swift_typed_throws = true   # port requirements: `throws(E)`; false emits plain `throws`\n\
-             # swift_observation = \"observable-object\"   # Swift stores: \"observation\" (@Observable, iOS 17+) or \"observable-object\" (iOS 15+); default follows [ios] deployment_target"
+             # swift_observation = \"observable-object\"   # Swift stores: \"observation\" (@Observable, iOS 17+) or \"observable-object\" (iOS 15+); default follows [ios] deployment_target\n\
+             # lint_exclusions = \"none\"   # \"beside\" (the default) writes .editorconfig, .swiftlint.yml and the ESLint files beside the trees; \"none\" writes none: add the lines to your root linter config ({LINT_DOCS})"
         );
         if let Some(v) = &self.bindings.swift_module {
             let _ = writeln!(out, "swift_module = {}", quote(v));
@@ -666,6 +744,13 @@ impl ProjectConfig {
         }
         if let Some(v) = self.bindings.swift_observation {
             let _ = writeln!(out, "swift_observation = {}", quote(v.as_str()));
+        }
+        if self.bindings.lint_exclusions != LintExclusions::default() {
+            let _ = writeln!(
+                out,
+                "lint_exclusions = {}",
+                quote(self.bindings.lint_exclusions.as_str())
+            );
         }
         let archs = self
             .ios
@@ -1162,6 +1247,87 @@ mod tests {
         for ok in ["15", "15.0.1", "17.0"] {
             assert!(check_ios_target(ok).is_ok(), "{ok}");
         }
+    }
+
+    #[test]
+    fn the_lint_exclusions_are_written_beside_the_trees_unless_the_file_says_none() {
+        let setting = |toml: &str| with_ios(toml).unwrap().bindings.lint_exclusions;
+        assert_eq!(setting(""), LintExclusions::Beside);
+        assert_eq!(
+            setting("[bindings]\nswift_module = \"X\"\n"),
+            LintExclusions::Beside
+        );
+        assert_eq!(
+            setting("[bindings]\nlint_exclusions = \"beside\"\n"),
+            LintExclusions::Beside
+        );
+        assert_eq!(
+            setting("[bindings]\nlint_exclusions = \"none\"\n"),
+            LintExclusions::None
+        );
+        assert_eq!(LintExclusions::Beside.as_str(), "beside");
+        assert_eq!(LintExclusions::None.as_str(), "none");
+    }
+
+    #[test]
+    fn the_default_is_a_comment_in_the_file_undra_init_writes_and_none_is_a_setting() {
+        let default = with_ios("").unwrap();
+        let text = default.render();
+        assert!(
+            text.contains("\n# lint_exclusions = \"none\"")
+                && text.contains("\"beside\" (the default)"),
+            "{text}"
+        );
+        assert!(!text.contains("\nlint_exclusions ="), "{text}");
+        assert_eq!(ProjectConfig::parse(&text, file()).unwrap(), default);
+
+        let none = with_ios("[bindings]\nlint_exclusions = \"none\"\n").unwrap();
+        let text = none.render();
+        assert!(text.contains("\nlint_exclusions = \"none\"\n"), "{text}");
+        assert_eq!(ProjectConfig::parse(&text, file()).unwrap(), none);
+    }
+
+    #[test]
+    fn a_wrong_lint_exclusions_value_teaches_what_why_fix_and_where_to_read_more() {
+        for (toml, what) in [
+            (
+                "[bindings]\nlint_exclusions = \"all\"\n",
+                "`all` is not a lint exclusions setting",
+            ),
+            (
+                "[bindings]\nlint_exclusions = \"None\"\n",
+                "`None` is not a lint exclusions setting",
+            ),
+            (
+                "[bindings]\nlint_exclusions = \"\"\n",
+                "`` is not a lint exclusions setting",
+            ),
+            ("[bindings]\nlint_exclusions = false\n", "must be a string"),
+        ] {
+            let e = with_ios(toml).unwrap_err();
+            assert_eq!(e.code, Code::BadConfig, "{toml}");
+            assert!(
+                e.what.contains("undra.toml") && e.what.contains("line ") && e.what.contains(what),
+                "{toml}: {e}"
+            );
+            assert!(e.why.contains("linter"), "{toml}: the why is `{}`", e.why);
+            assert!(
+                e.fix.contains("lint_exclusions = \"none\"")
+                    && e.fix.contains("bazel.html#lint-everything"),
+                "{toml}: the fix is `{}`",
+                e.fix
+            );
+            let text = e.to_string();
+            assert!(
+                text.starts_with("error[undra::C0002]")
+                    && text.contains("= note: ")
+                    && text.contains("= help: ")
+                    && text.contains("errors.html#C0002"),
+                "{text}"
+            );
+        }
+        // The key belongs to [bindings]: elsewhere it is an unknown key, as every typo is.
+        assert!(with_ios("[paths]\nlint_exclusions = \"none\"\n").is_err());
     }
 
     #[test]

@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live leaderboard · Undra cookbook</title>
+<meta name="description" content="Rank 100,000 players from a 1.4 MB snapshot and a delta stream: ingest on the blocking pool, publish a 780-byte window, hold the core lock for 375 ns.">
+<link rel="canonical" href="https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Undra">
+<meta property="og:title" content="Live leaderboard · Undra cookbook">
+<meta property="og:description" content="Rank 100,000 players from a 1.4 MB snapshot and a delta stream: ingest on the blocking pool, publish a 780-byte window, hold the core lock for 375 ns.">
+<meta property="og:url" content="https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html">
+<meta property="og:image" content="https://shreypdev.github.io/undra/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Undra: the Rust core for native apps">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Live leaderboard · Undra cookbook">
+<meta name="twitter:description" content="Rank 100,000 players from a 1.4 MB snapshot and a delta stream: ingest on the blocking pool, publish a 780-byte window, hold the core lock for 375 ns.">
+<meta name="twitter:image" content="https://shreypdev.github.io/undra/assets/og.png">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html#article","headline":"Live leaderboard · Undra cookbook","description":"Rank 100,000 players from a 1.4 MB snapshot and a delta stream: ingest on the blocking pool, publish a 780-byte window, hold the core lock for 375 ns.","url":"https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html","inLanguage":"en","dateModified":"2026-10-05","datePublished":"2026-10-05","author":{"@type":"Organization","name":"Undra team"},"publisher":{"@id":"https://shreypdev.github.io/undra/#org"},"isPartOf":{"@id":"https://shreypdev.github.io/undra/#website"},"about":{"@type":"SoftwareApplication","name":"Undra"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Undra","item":"https://shreypdev.github.io/undra/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://shreypdev.github.io/undra/docs/"},{"@type":"ListItem","position":3,"name":"Live leaderboard","item":"https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html"}]}]}
+</script>
+<!-- chrome:head -->
+<meta name="theme-color" content="#0a0a0a">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="application/rss+xml" title="Undra blog" href="../../feed.xml">
+<script>(function(d){var t,m=/[?&]theme=(light|dark)/.exec(location.search);try{t=m?m[1]:localStorage.getItem('undra-theme')}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'}d.dataset.theme=t;d.classList.add('js')})(document.documentElement)</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..600&amp;family=Geist+Mono:wght@400..500&amp;display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..600&amp;family=Geist+Mono:wght@400..500&amp;display=swap"></noscript>
+<!-- /chrome:head -->
+<link rel="stylesheet" href="../../assets/base.css">
+<link rel="stylesheet" href="../../assets/docs.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="../../" aria-label="Undra, home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M10.5 7v11a5.5 5.5 0 0 0 11 0V7" fill="none" stroke="var(--accent-ink)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Undra</span></a>
+    <nav class="nav" id="site-nav" aria-label="Primary">
+      <a href="../../docs/" aria-current="page">Docs</a>
+      <a href="../../blog/">Blog</a>
+      <a href="../../roadmap/">Roadmap</a>
+      <a href="../../playground/">Playground</a>
+      <span class="sp"></span>
+      <a class="nav-gh" href="https://github.com/shreypdev/undra" rel="noopener">GitHub <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11 11 5M6 5h5v5"/></svg></a>
+    </nav>
+    <button class="search-btn" type="button" data-search-open aria-label="Search the docs" aria-keyshortcuts="Control+K Meta+K"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><span>Search</span><kbd>⌘K</kbd></button>
+    <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch to light theme"><svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg><svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg></button>
+    <button class="icon-btn menu-btn" type="button" data-menu aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  </div>
+</header>
+<div class="wrap docs">
+  <details class="mnav"><summary>Docs menu</summary><nav aria-label="Docs"><div class="side-group"><p class="side-title">Start</p><ul><li><a href="../getting-started.html">Getting started</a></li></ul></div><div class="side-group"><p class="side-title">Core</p><ul><li><a href="../concepts.html">Core concepts</a></li><li><a href="../queries.html">Queries &amp; mutations</a></li><li><a href="../ports.html">Ports &amp; adapters</a></li><li><a href="../objects.html">Objects and identity</a></li><li><a href="../callbacks.html">Host callbacks</a></li><li><a href="../types.html">Newtypes, generics and decimals</a></li><li><a href="../generics.html">Generic functions, objects and stores</a></li></ul></div><div class="side-group"><p class="side-title">Data and live data</p><ul><li><a href="../paging.html">Paging and lazy lists</a></li><li><a href="../polling.html">Polling</a></li><li><a href="../realtime.html">WebSocket &amp; server-sent events</a></li><li><a href="../db.html">Local database</a></li></ul></div><div class="side-group"><p class="side-title">Test, ship, operate</p><ul><li><a href="../testing.html">Testing your app</a></li><li><a href="../updates.html">Shipping an update</a></li><li><a href="../reviewing-generated-code.html">Reviewing generated code</a></li><li><a href="../web.html">Workers &amp; crash recovery</a></li><li><a href="../production.html">Operating in production</a></li><li><a href="../several-cores.html">One core or several</a></li><li><a href="../hosts.html">One core, several hosts</a></li><li><a href="../bazel.html">Bazel</a></li></ul></div><div class="side-group"><p class="side-title">Cookbook</p><ul><li><a href="index.html">All recipes</a></li><li><a href="auth.html">Auth</a></li><li><a href="pagination.html">Pagination</a></li><li><a href="forms.html">Forms</a></li><li><a href="upload.html">File upload</a></li><li><a href="realtime.html">Real-time</a></li><li><a href="leaderboard.html" aria-current="page">Live leaderboard</a></li><li><a href="offline.html">Offline-first</a></li><li><a href="network-stack.html">Your network stack</a></li></ul></div><div class="side-group"><p class="side-title">Adopting Undra</p><ul><li><a href="from-kmp.html">From Kotlin Multiplatform</a></li><li><a href="from-uniffi.html">From UniFFI</a></li><li><a href="ios-15-16.html">iOS 15 and 16</a></li><li><a href="../sample.html">Sample app</a></li></ul></div><div class="side-group"><p class="side-title">Reference</p><ul><li><a href="../cli.html">The CLI</a></li><li><a href="../architecture.html">Architecture</a></li><li><a href="../errors.html">Error codes</a></li><li><a href="../../reference/rust/undra/index.html">Rust API</a></li></ul></div><div class="side-group"><p class="side-title">API overview</p><ul><li><a href="../api-swift.html">Swift</a></li><li><a href="../api-kotlin.html">Kotlin</a></li><li><a href="../api-typescript.html">TypeScript</a></li></ul></div></nav></details>
+  <aside class="sidebar"><nav aria-label="Docs"><div class="side-group"><p class="side-title">Start</p><ul><li><a href="../getting-started.html">Getting started</a></li></ul></div><div class="side-group"><p class="side-title">Core</p><ul><li><a href="../concepts.html">Core concepts</a></li><li><a href="../queries.html">Queries &amp; mutations</a></li><li><a href="../ports.html">Ports &amp; adapters</a></li><li><a href="../objects.html">Objects and identity</a></li><li><a href="../callbacks.html">Host callbacks</a></li><li><a href="../types.html">Newtypes, generics and decimals</a></li><li><a href="../generics.html">Generic functions, objects and stores</a></li></ul></div><div class="side-group"><p class="side-title">Data and live data</p><ul><li><a href="../paging.html">Paging and lazy lists</a></li><li><a href="../polling.html">Polling</a></li><li><a href="../realtime.html">WebSocket &amp; server-sent events</a></li><li><a href="../db.html">Local database</a></li></ul></div><div class="side-group"><p class="side-title">Test, ship, operate</p><ul><li><a href="../testing.html">Testing your app</a></li><li><a href="../updates.html">Shipping an update</a></li><li><a href="../reviewing-generated-code.html">Reviewing generated code</a></li><li><a href="../web.html">Workers &amp; crash recovery</a></li><li><a href="../production.html">Operating in production</a></li><li><a href="../several-cores.html">One core or several</a></li><li><a href="../hosts.html">One core, several hosts</a></li><li><a href="../bazel.html">Bazel</a></li></ul></div><div class="side-group"><p class="side-title">Cookbook</p><ul><li><a href="index.html">All recipes</a></li><li><a href="auth.html">Auth</a></li><li><a href="pagination.html">Pagination</a></li><li><a href="forms.html">Forms</a></li><li><a href="upload.html">File upload</a></li><li><a href="realtime.html">Real-time</a></li><li><a href="leaderboard.html" aria-current="page">Live leaderboard</a></li><li><a href="offline.html">Offline-first</a></li><li><a href="network-stack.html">Your network stack</a></li></ul></div><div class="side-group"><p class="side-title">Adopting Undra</p><ul><li><a href="from-kmp.html">From Kotlin Multiplatform</a></li><li><a href="from-uniffi.html">From UniFFI</a></li><li><a href="ios-15-16.html">iOS 15 and 16</a></li><li><a href="../sample.html">Sample app</a></li></ul></div><div class="side-group"><p class="side-title">Reference</p><ul><li><a href="../cli.html">The CLI</a></li><li><a href="../architecture.html">Architecture</a></li><li><a href="../errors.html">Error codes</a></li><li><a href="../../reference/rust/undra/index.html">Rust API</a></li></ul></div><div class="side-group"><p class="side-title">API overview</p><ul><li><a href="../api-swift.html">Swift</a></li><li><a href="../api-kotlin.html">Kotlin</a></li><li><a href="../api-typescript.html">TypeScript</a></li></ul></div></nav></aside>
+  <main id="main" class="prose">
+    <p class="crumb">Cookbook</p>
+    <h1>Live leaderboard</h1>
+    <p class="lede">A ranking of 100,000 players, a 1.4 MB snapshot and a stream of score changes. The big structure stays off the core lock and out of every signal: it is ingested on the blocking pool, and the screen gets a window of 60 rows and four numbers in one small transaction.</p>
+<h2 id="the-problem">The problem<a class="anchor" href="#the-problem" aria-label="Link to this section">#</a></h2>
+<p>A game, a contest or a fitness app shows a ranked list of 100,000 players. A snapshot (JSON, <code>[[id, score], ..]</code>, 1,377,798 bytes) arrives when the app opens and now and then after that, and score changes stream in between. The screen shows three things: the top 50, a few rows around the current player, and four numbers (how many players, the player's rank, the top score, the median). It never shows 100,000 rows, so the core should never ask a platform to hold them.</p>
+<p>The core has one lock. Whoever holds it is the core: a call, the poll of a task, the commit of a change-set all wait for it (<a href="https://github.com/shreypdev/undra/blob/main/docs/SPEC.md" rel="noopener">SPEC 5.1</a>). So the question is not whether the snapshot gets parsed, but where, and for how long the lock is held while it is.</p>
+<h2 id="the-wrong-designs">Two designs that look right<a class="anchor" href="#the-wrong-designs" aria-label="Link to this section">#</a></h2>
+<ul><li><strong>Apply the snapshot inside a core call.</strong> An async store method fetches the bytes, then parses, sorts and stores them. It reads naturally, and the whole parse runs with the core lock held: every other call, timer and change-set waits for it. Measured here, 2.56 ms at the median and 2.94 ms at the 99th percentile, on a laptop core that is substantially faster than a phone's.</li><li><strong>Publish every player.</strong> A <code>Signal&lt;Vec&lt;Player&gt;&gt;</code> of 100,000 rows puts the whole ranking on the platform, so the first change after a snapshot is a 1.2 MB change-set that each platform decodes and applies (at the core's price of 12 bytes a row), and the screen needs a window of it anyway. It also breaks the rule that a read does not cross the boundary: the list is in the core to be read there.</li></ul>
+<div class="table-wrap"><table><thead><tr><th>Design</th><th>Core lock held per snapshot, p50</th><th>p99</th><th>What reaches the platform</th></tr></thead><tbody><tr><td><strong>This recipe</strong>: pool, then publish a window</td><td><strong>375 ns</strong></td><td><strong>458 ns</strong></td><td>780 bytes</td></tr><tr><td>Parse inside a core call</td><td>2.56 ms</td><td>2.94 ms</td><td>780 bytes</td></tr><tr><td>Parse inside a call, a signal of every player</td><td>2.94 ms</td><td>3.26 ms</td><td>1,200,033 bytes</td></tr></tbody></table></div>
+<h2 id="the-recipe">The recipe<a class="anchor" href="#the-recipe" aria-label="Link to this section">#</a></h2>
+<ul><li><strong>Ingest on <code>spawn_blocking</code>.</strong> The snapshot (or a batch of deltas) goes to the blocking pool. The closure parses and sorts it into a <code>Standings</code> the app owns, behind its own <code>Mutex</code>, with no core lock held. A snapshot is a finished value built before the lock is taken: the lock is held for the swap, not for the parse.</li><li><strong>Publish a window, once.</strong> The closure returns a small <code>View</code>: the top 50, the player and three neighbours on each side, and four numbers. The awaiting task is back on the core and writes three signals in one <code>txn</code>, skipping the ones that did not change (a write is a change-set whether or not the value moved). That is the only part of an update that holds the core lock. Each window carries the version it was read at under the app's lock, and an older one is not written: two updates can come back from the pool in either order.</li><li><strong>The big structure never crosses.</strong> <code>follow</code> (the player who is highlighted) takes the same two steps. No generated getter, no signal and no call holds the 100,000 players, and a closure on the pool cannot write a signal at all (E0065), which is how the design stays honest.</li><li><strong>The feed is deterministic.</strong> <code>start_demo</code> seeds a synthetic feed from the <code>Rng</code> port and drives it on the <code>Timer</code> port, so a test with the fake clock sees the same players and the same changes on every run.</li></ul>
+<details class="reveal-code"><summary>Show the Rust</summary>
+<!-- snippet:examples/cookbook/core/src/leaderboard.rs#leaderboard-store rust -->
+<div class="code"><div class="code-bar"><span>core/src/leaderboard.rs</span></div><pre><code data-lang="rust">/// The big structure and who is followed, behind the app's own lock. Only blocking-pool threads
+/// take it; the core never does.
+#[derive(Default)]
+struct Inner {
+    standings: Standings,
+    me: Option&lt;u32&gt;,
+    version: u64, // bumped by every change, under this lock
+}
+
+impl Inner {
+    /// The window, and the version it shows: read under the lock, right after a change.
+    fn window(&amp;mut self) -&gt; (u64, View) {
+        self.version += 1;
+        (self.version, self.standings.view(self.me, TOP, AROUND))
+    }
+}
+
+/// The leaderboard's store: three small signals, and a handle on the structure that is not one.
+#[undra::store(restore = &quot;Self::assemble&quot;)]
+pub struct Leaderboard {
+    ctx: WeakCtx,
+    shared: Arc&lt;Shared&gt;, // holds the Mutex&lt;Inner&gt;: the 100,000 players
+    top: Signal&lt;Vec&lt;Row&gt;&gt;,
+    around: Signal&lt;Vec&lt;Row&gt;&gt;,
+    summary: Signal&lt;Summary&gt;,
+}</code></pre></div>
+<!-- /snippet -->
+<!-- snippet:examples/cookbook/core/src/leaderboard.rs#leaderboard-ingest rust -->
+<div class="code"><div class="code-bar"><span>core/src/leaderboard.rs</span></div><pre><code data-lang="rust">/// Parses a snapshot on the blocking pool, swaps it in and publishes the window.
+async fn load(&amp;self, bytes: Vec&lt;u8&gt;) -&gt; Result&lt;u32, LeaderboardError&gt; {
+    let ctx = self.ctx.upgrade().map_err(|_| LeaderboardError::Closed)?;
+    let shared = self.shared.clone();
+    let work = ctx.spawn_blocking(move || -&gt; Result&lt;(u64, View), SnapshotError&gt; {
+        // Milliseconds of parsing and sorting, with no lock held at all.
+        let fresh = Standings::from_snapshot(&amp;bytes)?;
+        // The lock is held for the swap and the window, not for the parse.
+        let mut inner = lock(&amp;shared.inner);
+        inner.standings = fresh;
+        Ok(inner.window())
+    });
+    drop(ctx);
+    let (version, view) = work.await?; // back on the core, with 50 rows and four numbers
+    self.publish(version, &amp;view);
+    Ok(view.players)
+}</code></pre></div>
+<!-- /snippet -->
+<!-- snippet:examples/cookbook/core/src/leaderboard.rs#leaderboard-publish rust -->
+<div class="code"><div class="code-bar"><span>core/src/leaderboard.rs</span></div><pre><code data-lang="rust">/// Writes the window: three signals, one transaction, and nothing that grows with the players.
+/// This is the only part of an update that runs on the core.
+fn publish(&amp;self, version: u64, view: &amp;View) {
+    // Two updates can come back from the pool in either order: never write an older window.
+    if self.shared.published.fetch_max(version, Ordering::SeqCst) &gt;= version {
+        return;
+    }
+    let top: Vec&lt;Row&gt; = view.top.iter().map(Row::from).collect();
+    let around: Vec&lt;Row&gt; = view.around.iter().map(Row::from).collect();
+    let summary = Summary {
+        players: view.players,
+        top_score: view.top_score,
+        median_score: view.median_score,
+        me: view.me.as_ref().map(Row::from),
+    };
+    txn(|| {
+        // A write is a change-set whether or not the value changed: skip what did not.
+        if self.top.with(|have| *have != top) {
+            self.top.set(top);
+        }
+        if self.around.with(|have| *have != around) {
+            self.around.set(around);
+        }
+        if self.summary.with(|have| *have != summary) {
+            self.summary.set(summary);
+        }
+    });
+}</code></pre></div>
+<!-- /snippet -->
+</details>
+<h2 id="the-structure">The structure<a class="anchor" href="#the-structure" aria-label="Link to this section">#</a></h2>
+<p><code>Standings</code> (<code>standings.rs</code>) is plain Rust that knows nothing about Undra. It keeps every player twice: sorted by id, to find one, and in rank order, to answer for the top, for a neighbourhood and for the middle. A delta batch changes the scores in place, takes the players it touched out of the ranking and merges them back in one pass (<code>O(players + touched &times; log touched)</code>, never a sort of everyone). <code>view</code> is <code>O(top + around + log n)</code>. Ranks are competition ranks: players with the same score share a rank and the next one skips them (1, 2, 2, 4). Because it is plain Rust, the benchmark harness compiles the very same file, so the numbers on this page are the numbers of this code.</p>
+<h2 id="on-the-platform">On the platform<a class="anchor" href="#on-the-platform" aria-label="Link to this section">#</a></h2>
+<p>The screen observes three small signals: the best fifty, a few rows around the player and the summary. The platform neither knows nor cares how many players there are.</p>
+<details class="reveal-code"><summary>Show the Swift, Kotlin and TypeScript</summary>
+<div data-tabs data-label="Platform">
+<div class="tab-panel" data-label="Swift">
+<!-- snippet:examples/cookbook/snippets/swiftui/Sources/Snippets/Snippets.swift#leaderboard-swift swift -->
+<div class="code"><div class="code-bar"><span><span class="lang">swift</span></span></div><pre><code data-lang="swift">struct LeaderboardView: View {
+    let board: Leaderboard
+    let myId: UInt32
+
+    var body: some View {
+        List {
+            // Four numbers about 100,000 players, and the best fifty of them.
+            Section(&quot;\(board.summary.players) players, median score \(board.summary.medianScore)&quot;) {
+                ForEach(board.top, id: \.id) { row in PlayerRow(row: row, mine: row.id == myId) }
+            }
+            // Where I stand: a few rows around me, which the core moves when I ask or when scores change.
+            if let me = board.summary.me {
+                Section(&quot;You are #\(me.rank)&quot;) {
+                    ForEach(board.around, id: \.id) { row in PlayerRow(row: row, mine: row.id == myId) }
+                }
+            } else {
+                Button(&quot;Find me&quot;) { Task { try? await board.follow(id: myId) } }
+            }
+        }
+        .task { _ = try? await board.loadSnapshot(path: &quot;/standings&quot;) }
+        .refreshable { _ = try? await board.loadSnapshot(path: &quot;/standings&quot;) }
+    }
+}
+
+struct PlayerRow: View {
+    let row: Row
+    let mine: Bool
+
+    var body: some View {
+        HStack {
+            Text(&quot;#\(row.rank)&quot;).monospacedDigit()
+            Text(&quot;Player \(row.id)&quot;).fontWeight(mine ? .bold : .regular)
+            Spacer()
+            Text(&quot;\(row.score)&quot;).monospacedDigit()
+        }
+    }
+}</code></pre></div>
+<!-- /snippet -->
+</div>
+<div class="tab-panel" data-label="Kotlin">
+<!-- snippet:examples/cookbook/snippets/kotlin/Snippets.kt#leaderboard-kotlin kotlin -->
+<div class="code"><div class="code-bar"><span><span class="lang">kotlin</span></span></div><pre><code data-lang="kotlin">class LeaderboardScreen(private val board: Leaderboard, private val myId: UInt) {
+    // Fifty rows, up to seven rows around me and four numbers: the 100,000 players stay in the core.
+    val top: StateFlow&lt;List&lt;Row&gt;&gt; = board.top
+    val around: StateFlow&lt;List&lt;Row&gt;&gt; = board.around
+    val summary: StateFlow&lt;Summary&gt; = board.summary
+
+    suspend fun refresh() { board.loadSnapshot(&quot;/standings&quot;) }
+
+    suspend fun findMe() = board.follow(myId)
+
+    fun isMine(row: Row): Boolean = row.id == myId
+}</code></pre></div>
+<!-- /snippet -->
+</div>
+<div class="tab-panel" data-label="TypeScript">
+<!-- snippet:examples/cookbook/snippets/ts/snippets.tsx#leaderboard-ts tsx -->
+<div class="code"><div class="code-bar"><span><span class="lang">tsx</span></span></div><pre><code data-lang="tsx">function PlayerRow({ row, mine }: { row: Row; mine: boolean }) {
+  return (
+    &lt;li style={{ fontWeight: mine ? 700 : 400 }}&gt;
+      #{row.rank} Player {row.id}: {row.score}
+    &lt;/li&gt;
+  );
+}
+
+export function LeaderboardView({ board, myId }: { board: Leaderboard; myId: number }) {
+  const top = useSignal(board.top);         // the best fifty
+  const around = useSignal(board.around);   // a few rows around the player being followed
+  const summary = useSignal(board.summary); // players, top score, median score, my rank
+  useEffect(() =&gt; void board.loadSnapshot(&quot;/standings&quot;), [board]);
+  return (
+    &lt;&gt;
+      &lt;h2&gt;{summary.players} players, median score {summary.medianScore}&lt;/h2&gt;
+      &lt;ol&gt;{top.map((row) =&gt; &lt;PlayerRow key={row.id} row={row} mine={row.id === myId} /&gt;)}&lt;/ol&gt;
+      {summary.me ? (
+        &lt;&gt;
+          &lt;h3&gt;You are #{summary.me.rank}&lt;/h3&gt;
+          &lt;ol&gt;{around.map((row) =&gt; &lt;PlayerRow key={row.id} row={row} mine={row.id === myId} /&gt;)}&lt;/ol&gt;
+        &lt;/&gt;
+      ) : (
+        &lt;button onClick={() =&gt; void board.follow(myId)}&gt;Find me&lt;/button&gt;
+      )}
+    &lt;/&gt;
+  );
+}</code></pre></div>
+<!-- /snippet -->
+</div>
+</div>
+</details>
+<h2 id="the-numbers">The numbers<a class="anchor" href="#the-numbers" aria-label="Link to this section">#</a></h2>
+<p>The benchmark rows time one core call on the host. A call holds the core lock for as long as it runs, so its time is how long one snapshot of 100,000 players holds the lock. The host copies every change-set under the lock, as each platform's callback does. Best of several runs on an Apple M5 Pro while other builds ran (load average 13), rustc 1.99.0, 2026-10-05:</p>
+<div class="table-wrap"><table><thead><tr><th>Row (<code>leaderboard/..</code>)</th><th>What the call does under the core lock</th><th>p50</th><th>p99</th></tr></thead><tbody><tr><td><code>lock_hold/recommended</code></td><td>publishes the window the pool prepared: three signals, one transaction</td><td><strong>375 ns</strong></td><td><strong>458 ns</strong></td></tr><tr><td><code>lock_hold/in_core_call</code></td><td>parses, sorts and swaps the snapshot inside the call, then publishes the same window</td><td>2.56 ms</td><td>2.94 ms</td></tr><tr><td><code>lock_hold/signal_of_rows</code></td><td>parses and sorts inside the call and sets a signal of every player</td><td>2.94 ms</td><td>3.26 ms</td></tr><tr><td><code>ingest/off_core</code></td><td>(no core lock) what the pool does for this recipe: parse, sort, swap, window</td><td>2.56 ms</td><td>2.98 ms</td></tr></tbody></table></div>
+<p>The lock is held about 6,800 times shorter at the median and 6,400 times at the 99th percentile. The cost of the snapshot did not go away: it moved to a thread that does not hold the lock, and the snapshot reaches the screen about as soon either way. The second wrong design is only 15% worse under the lock on a host, because encoding and copying 1.2 MB is cheap next to parsing 1.4 MB; its price is paid on each platform, which has to decode and apply those 1.2 MB, and that no host-side row shows.</p>
+<p>What a caller sees: a second thread made a call that does nothing but need the core lock, in a loop, while a snapshot was applied about every 9 ms for 8 seconds per design (best of four runs; a busy machine deschedules the probe itself, so the maximum is the noisiest figure):</p>
+<div class="table-wrap"><table><thead><tr><th>Design</th><th>Wait p50</th><th>p99</th><th>p99.9</th><th>Max</th></tr></thead><tbody><tr><td>This recipe</td><td>125 ns</td><td>2.0 us</td><td>7.8 us</td><td>132 us</td></tr><tr><td>Snapshot applied inside a call</td><td>125 ns</td><td>2.9 us</td><td>3.47 ms</td><td>7.04 ms</td></tr></tbody></table></div>
+<p>A call that arrives during an in-call apply waits out the parse. That is about one call in 200 here, so it is the p99.9 and the maximum that show it, and not the median or the p99. Both tables come from the same code: <code>cargo test -p undra-bench --test budgets --release -- --nocapture leaderboard</code> prints the rows and <code>cargo test -p undra-bench --test leaderboard --release -- --ignored --nocapture stall_report</code> the caller's wait. CI holds the first one to a budget (the recommended row's p50 and p99, in <code>bench/budgets.toml</code>) and to a ratio that does not depend on the machine: the publish must stay under 5% of the in-call apply, and it is 0.015%. A publish that grew with the players, the ranking read or sorted on the core or every row in a signal, would put that ratio near 1. These are host numbers; <a href="https://github.com/shreypdev/undra/blob/main/bench/RESULTS.md" rel="noopener">finding 9 of the benchmark results</a> has the method and the limits.</p>
+<h2 id="what-the-tests-prove">What the tests prove<a class="anchor" href="#what-the-tests-prove" aria-label="Link to this section">#</a></h2>
+<ul><li>A snapshot of 100,000 players publishes a top of 50 sorted by score, rank 1 first, the four numbers, and no window until a player is followed.</li><li>Following a player shows it with three neighbours on each side and its rank; a delta that makes it the leader moves the window with it, and a delta for a player the snapshot did not hold is ignored.</li><li>A snapshot that cannot be read (a repeated id, a score out of range, not JSON) is a typed error and leaves the ranking as it was; a failed fetch is a typed network error.</li><li>An update that changes nothing in the window writes nothing: no change-set.</li><li>What a platform receives for a snapshot of 100,000 players, with a player followed, is one change-set of 780 bytes: three signals, the 50 rows of the top and the 7 around the player, decoded from the wire.</li><li>Eight updates awaited together, whatever order the core resumes them in, leave the newest window on screen.</li><li>Merging delta batches gives the ranking a plain sort of the same scores gives, after each of forty batches; the demo feed runs on the fake clock, stops when stopped, and is the same on every run.</li></ul>
+<h2 id="what-to-watch">What to watch<a class="anchor" href="#what-to-watch" aria-label="Link to this section">#</a></h2>
+<ul><li><strong>Never take the app's lock on the core.</strong> Anything that reads the structure goes through the pool, as <code>follow</code> does. A core call that waits for the mutex while a snapshot is being swapped in would hold the core lock while it waits: the in-call parse again, by the back door. Keep the time under the app's lock to the swap and the window.</li><li><strong>The pool cannot write signals.</strong> The closure returns the window and the awaiting task writes it; a write from the pool is refused with E0065.</li><li><strong>On the web, <code>spawn_blocking</code> runs inline.</strong> The wasm core has no pool, so the parse runs synchronously inside the call and blocks the core's thread whichever design you pick. What the design still gives you there is the 780-byte change-set instead of 1.2 MB for the main thread to decode. Run the web core in a worker (<a href="../web.html">Workers &amp; crash recovery</a>) so a long step does not stall a frame.</li><li><strong>A feed faster than the screen.</strong> Each batch of deltas is one hand to the pool and one publish. A feed that sends thousands a second should be batched before it reaches <code>apply_deltas</code>, as the demo feed does with one batch every 100 ms; the platform's frame merge (<a href="https://github.com/shreypdev/undra/blob/main/docs/HIGH_FREQUENCY.md" rel="noopener">High-frequency data</a>) takes care of the rest.</li><li><strong>Memory.</strong> The structure holds each player twice (about 1.6 MB for 100,000) and a swap briefly holds the old ranking and the new one. A snapshot is not part of the core's own snapshot: a restored store has no players, so it clears its window and the app loads the standings again.</li><li><strong>A window is not a lazy list.</strong> <code>Lazy&lt;T&gt;</code> (<a href="../paging.html">Paging and lazy lists</a>) lets a platform scroll through a collection in the core; this recipe is for a screen that only ever shows a derived summary of it.</li></ul>
+<p>Source: <a href="https://github.com/shreypdev/undra/blob/main/examples/cookbook/core/src/leaderboard.rs" rel="noopener"><code class="cw">examples/cookbook/core/src/leaderboard.rs</code></a> and <a href="https://github.com/shreypdev/undra/blob/main/examples/cookbook/core/src/standings.rs" rel="noopener"><code class="cw">standings.rs</code></a>.</p>
+  
+<p class="edit"><a href="https://github.com/shreypdev/undra/edit/main/site/docs/cookbook/realtime.html" rel="noopener"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 13.5h3l7-7a2.1 2.1 0 0 0-3-3l-7 7zM8.5 4.5l3 3"/></svg> Edit this page on GitHub</a></p>
+<nav class="pager" aria-label="Previous and next">
+    <a class="prev" href="realtime.html"><span>Previous</span><b>Real-time</b></a>
+    <a class="next" href="offline.html"><span>Next</span><b>Offline-first</b></a>
+  </nav>
+  </main>
+<aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li><a href="#the-problem">The problem</a></li><li><a href="#the-wrong-designs">Two designs that look right</a></li><li><a href="#the-recipe">The recipe</a></li><li><a href="#the-structure">The structure</a></li><li><a href="#on-the-platform">On the platform</a></li><li><a href="#the-numbers">The numbers</a></li><li><a href="#what-the-tests-prove">What the tests prove</a></li><li><a href="#what-to-watch">What to watch</a></li></ul></aside>
+</div>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="../../" aria-label="Undra, home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M10.5 7v11a5.5 5.5 0 0 0 11 0V7" fill="none" stroke="var(--accent-ink)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Undra</span></a>
+        <p class="footer-note">The Rust core for native apps. Undra owns everything under the pixels; the UI stays SwiftUI, Compose, React and React Native.</p>
+      </div>
+      <div>
+        <h3>Docs</h3>
+        <ul>
+          <li><a href="../../docs/getting-started.html">Getting started</a></li>
+          <li><a href="../../docs/concepts.html">Core concepts</a></li>
+          <li><a href="../../docs/queries.html">Queries &amp; mutations</a></li>
+          <li><a href="../../docs/ports.html">Ports &amp; adapters</a></li>
+          <li><a href="../../docs/cli.html">The CLI</a></li>
+          <li><a href="../../docs/architecture.html">Architecture</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Undra</h3>
+        <ul>
+          <li><a href="../../blog/">Blog</a></li>
+          <li><a href="../../roadmap/">Roadmap</a></li>
+          <li><a href="../../playground/">Playground</a></li>
+          <li><a href="../../feed.xml">RSS feed</a></li>
+          <li><a href="../../llms.txt">llms.txt</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Project</h3>
+        <ul>
+          <li><a href="https://github.com/shreypdev/undra" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/shreypdev/undra/blob/main/docs/SPEC.md" rel="noopener">The specification</a></li>
+          <li><a href="https://github.com/shreypdev/undra/tree/main/.10x/adrs" rel="noopener">Decision records</a></li>
+          <li><a href="https://github.com/shreypdev/undra/blob/main/bench/RESULTS.md" rel="noopener">Benchmark results</a></li>
+          <li><a href="https://github.com/shreypdev/undra/blob/main/CLAUDE.md" rel="noopener">The constitution</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-base">
+      <span>Dual-licensed under <a href="https://github.com/shreypdev/undra/blob/main/LICENSE-MIT" rel="noopener">MIT</a> or <a href="https://github.com/shreypdev/undra/blob/main/LICENSE-APACHE" rel="noopener">Apache-2.0</a>, at your option.</span>
+      <span>Timings are host-measured and guarded by CI budgets; device numbers are tracked separately.</span>
+    </div>
+  </div>
+</footer>
+<script src="../../assets/site.js" defer></script>
+</body>
+</html>

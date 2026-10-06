@@ -342,12 +342,19 @@ jobs:
         with:
           targets: aarch64-linux-android, x86_64-linux-android
       - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk
+      # `undra build --platform android` links with the NDK's clang itself (ADR-065): this is the same environment, for the JNI
+      # library of undra-ffi, which no project builds (the variables are the ones crates/undra-cli/src/builds/ndk.rs computes).
       - name: Build the JNI library for both ABIs
-        run: cargo ndk -t arm64-v8a -t x86_64 build -p undra-ffi --features jni
+        run: |
+          bash scripts/android-sdk-install.sh "ndk;27.2.12479018"
+          bin="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$bin/aarch64-linux-android26-clang"
+          export CC_aarch64_linux_android="$bin/aarch64-linux-android26-clang" AR_aarch64_linux_android="$bin/llvm-ar"
+          export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$bin/x86_64-linux-android26-clang"
+          export CC_x86_64_linux_android="$bin/x86_64-linux-android26-clang" AR_x86_64_linux_android="$bin/llvm-ar"
+          cargo build --target aarch64-linux-android --target x86_64-linux-android -p undra-ffi --features jni
       # Gradle's undraBuild task over undra init's Android app (debug, release, debug again). It needs a
-      # JDK 17, platform 35 and NDK r27 besides cargo-ndk; UNDRA_TEST_BUILD_SYSTEMS (not REQUIRE) runs it
+      # JDK 17, platform 35 and NDK r27; UNDRA_TEST_BUILD_SYSTEMS (not REQUIRE) runs it
       # when the runner image has them and prints why it skipped when it does not.
       - uses: actions/setup-java@v4
         with:
@@ -483,11 +490,19 @@ jobs:
   # host and the web with the pinned Rust 1.99.0 that Bazel fetches (rules_rust, by checksum), generates the bindings from the host
   # library, compiles the Kotlin and TypeScript consumers and runs them against the real core (JNI, Node), and runs ktlint over the
   # generated Kotlin with and without the exclusions `undra bindgen` writes. Bazel is pinned by .bazelversion (Bazelisk; the example's
-  # is a link to bazel/'s), the rulesets by MODULE.bazel, whose lock file is committed. The lock is not run with
-  # --lockfile_mode=error here: it records what the machine that wrote it resolved, per OS, and a Linux runner would fail on every
-  # entry a macOS developer made.
+  # is a link to bazel/'s): 8.8.1, the lowest the rules support, and every step runs again on the newest 9.x through
+  # USE_BAZEL_VERSION (Bazelisk's own override), so both ends of "Bazel 8.8 and 9.x" are tested. The rulesets are tested at both
+  # ends too: the example's MODULE.bazel pins recent versions (what most applications run), and examples/bazel/scripts/at-minimums.sh
+  # runs the same targets with every ruleset at the lowest version undra_rules declares (bazel/MODULE.bazel), failing if anything
+  # in the graph raises one. The lock files are committed as Bazel 8.8.1 writes them. They are not run with
+  # --lockfile_mode=error here: a lock records what the machine that wrote it resolved, per OS, and a Linux runner would fail on
+  # every entry a macOS developer made. The 9.x steps and the minimums run with --lockfile_mode=off: 9.x records other registry
+  # files than 8.8.1, and the minimums are another graph, so neither reads or rewrites the committed lock. Bump the 9.x pin
+  # (USE_BAZEL_VERSION, in the 9.x steps of this job, of the macOS one and of the Android one, and in examples/bazel/README.md) when a newer 9.x
+  # release is out and passes.
   bazel-example:
     name: Bazel example
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
       BAZELISK_VERSION: v1.29.0
@@ -509,19 +524,50 @@ jobs:
           path: ~/.cache/bazel-repository
           key: bazel-repository-${{ runner.os }}-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
           restore-keys: bazel-repository-${{ runner.os }}-
+      # //symbols:symbolicate_test resolves a crash of the release core with the machine's llvm-symbolizer (the `.so.debug`,
+      # ADR-046). The test also looks below /usr/lib/llvm-*, where the image's clang may have put one; when there is none, the
+      # distribution's LLVM is installed.
+      - name: llvm-symbolizer for the symbols test
+        run: |
+          if command -v llvm-symbolizer >/dev/null || ls /usr/lib/llvm-*/bin/llvm-symbolizer >/dev/null 2>&1; then exit 0; fi
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends llvm
       - name: The rules' own tests (the Cargo.lock reader)
         working-directory: bazel
         run: bazel test //tests/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
       - name: bazel test //... (host and web cores, bindings, Kotlin and TypeScript consumers, ktlint)
         working-directory: examples/bazel
         run: bazel test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+      - name: at-minimums.sh puts MODULE.bazel back whatever the command does
+        working-directory: examples/bazel
+        run: bash scripts/at-minimums.test.sh
+      - name: bazel test //... at the ruleset minimums
+        working-directory: examples/bazel
+        run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+      - name: The rules' own tests on Bazel 9.x
+        working-directory: bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: bazel test //tests/... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+      - name: bazel test //... on Bazel 9.x
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: bazel test //... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+      - name: bazel test //... on Bazel 9.x at the ruleset minimums
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
 
-  # What only macOS can run, where rules_swift and the iOS core have Xcode: the Swift consumer runs the core in process, and the
-  # XCFramework (device and simulator slices) builds in a Bazel action. The Kotlin and TypeScript targets are the Linux job's.
+  # What only macOS can run, where rules_swift and the iOS core have Xcode: the Swift consumer runs the core in process, the
+  # XCFramework (device and simulator slices) builds in a Bazel action, and the example's iOS app, built to debug (`-c dbg`), has a
+  # dSYM that resolves the Rust core (`keep_debug_objects`). The Kotlin and TypeScript targets are the Linux job's.
   # Every change runs it, like the other macOS jobs: what moves its result is the Undra crates, the Swift runtime, the CLI and
   # the rules, which is nearly every change, and a job that can be skipped cannot be part of the roll-up.
   bazel-example-macos:
     name: "Bazel example (macOS, Swift and iOS)"
+    timeout-minutes: 60
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -532,11 +578,106 @@ jobs:
           path: ~/.cache/bazel-repository
           key: bazel-repository-${{ runner.os }}-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
           restore-keys: bazel-repository-${{ runner.os }}-
-      - name: The Swift consumer and the iOS core
+      - name: The Swift consumer, the iOS core and the iOS app's dSYM
         working-directory: examples/bazel
         run: |
           bazel test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
           bazel build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
+          bazel test //ios:symbols_test --ios_multi_cpus=sim_arm64 -c dbg --apple_generate_dsym \
+            --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+      # rules_swift and rules_apple are only exercised here, so their minimums are too: the same targets with every ruleset at the
+      # version undra_rules declares, then all of it on the newest 9.x (rules_swift is the ruleset a new Bazel breaks first).
+      - name: The Swift consumer and the iOS core at the ruleset minimums
+        working-directory: examples/bazel
+        run: |
+          scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+          scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
+      - name: The Swift consumer and the iOS core on Bazel 9.x
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: |
+          bazel test //swift/... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+          bazel build //:mobile_ios --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
+      - name: The Swift consumer and the iOS core on Bazel 9.x at the ruleset minimums
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: |
+          scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+          scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
+
+  # The Android core and the Kotlin bindings as an Android library, built by Bazel on Linux (ADR-065). The core's NDK is a declared
+  # input of its action: the example pins the archives (MODULE.bazel), and this job gives the build the NDK that sdkmanager installs
+  # (with the retries the other Android jobs use for dl.google.com) in their place, so a run does not download 664 MB through Bazel.
+  # `undra_android_library` needs the Android SDK (ANDROID_HOME); rules_android fetches one archive without a checksum
+  # (android.googlesource.com, ADR-061): acceptable here, and why it is not part of the job that runs on every developer's machine.
+  bazel-android:
+    name: Bazel example (Android core and library)
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      BAZELISK_VERSION: v1.29.0
+      # The sha256 of that release's bazelisk-linux-amd64.
+      BAZELISK_SHA256: 5a408715e932c0250d28bd84555f12edbf70117de42f9181691c736eacc4a992
+      NDK_VERSION: 27.2.12479018
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Bazelisk
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -sSfLo "$RUNNER_TEMP/bin/bazel" "https://github.com/bazelbuild/bazelisk/releases/download/$BAZELISK_VERSION/bazelisk-linux-amd64"
+          echo "$BAZELISK_SHA256  $RUNNER_TEMP/bin/bazel" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/bazel"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-repository
+          key: bazel-repository-${{ runner.os }}-android-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
+          restore-keys: bazel-repository-${{ runner.os }}-
+      - name: The Android SDK and NDK r27 (a failed download is tried again)
+        run: bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION" "platforms;android-35" "build-tools;35.0.0"
+      - name: The Android core (//:mobile_android, linked with the NDK)
+        working-directory: examples/bazel
+        run: |
+          # On its own line, so that a failed script stops the step (bash -e ignores a failed substitution inside an argument),
+          # where Bazel would otherwise download the 664 MB archive.
+          flags="$(android/use-installed-ndk.sh "$ANDROID_HOME/ndk/$NDK_VERSION")"
+          echo "NDK_FLAGS=$flags" >> "$GITHUB_ENV"
+          bazel build //:mobile_android $flags --repository_cache="$HOME/.cache/bazel-repository"
+          # The build used the installed NDK and not the archive: an NDK repository of the output base links into it. (Were the
+          # override to stop working, Bazel would download the archive and this job would be green for the wrong reason.)
+          ndk_real="$(cd "$ANDROID_HOME/ndk/$NDK_VERSION" && pwd -P)"
+          used=0
+          for repo in "$(bazel info output_base)"/external/*android_ndk_linux; do
+            [ -e "$repo/source.properties" ] || continue
+            case "$(readlink -f "$repo/source.properties")" in "$ndk_real"/*) used=1 ;; esac
+          done
+          [ "$used" = 1 ] || { echo "the build did not use the installed NDK: no NDK repository of the output base links into $ndk_real" >&2; exit 1; }
+      - name: The Kotlin bindings as an Android library (//android:hello)
+        working-directory: examples/bazel
+        run: bazel build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
+      # Both at the ruleset minimums and on the newest 9.x, as the other two Bazel jobs run their targets (the same script and
+      # pin; a newer 9.x moves with theirs).
+      - name: The Android core and library at the ruleset minimums
+        working-directory: examples/bazel
+        run: |
+          scripts/at-minimums.sh build //:mobile_android $NDK_FLAGS --repository_cache="$HOME/.cache/bazel-repository"
+          scripts/at-minimums.sh build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
+      - name: The Android core and library on Bazel 9.x
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: |
+          bazel build //:mobile_android $NDK_FLAGS --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
+          bazel build //android:hello --config=android --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
+      - name: The Android core and library on Bazel 9.x at the ruleset minimums
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: |
+          scripts/at-minimums.sh build //:mobile_android $NDK_FLAGS --repository_cache="$HOME/.cache/bazel-repository"
+          scripts/at-minimums.sh build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
 
   playground-web:
     # The playground's web app and its stories page (src/stories, rendered by stories.html with Vite alone; the modules are Component Story Format
@@ -659,7 +800,7 @@ jobs:
   complete:
     name: Complete
     if: always()
-    needs: [rust, leaf-features, ts, kotlin, wasm-ffi, macos, ios-floor, android, ffi-miri, ffi-asan, contracts, contracts-swift, bazel-example, bazel-example-macos, playground-web, react-native]
+    needs: [rust, leaf-features, ts, kotlin, wasm-ffi, macos, ios-floor, android, ffi-miri, ffi-asan, contracts, contracts-swift, bazel-example, bazel-example-macos, bazel-android, playground-web, react-native]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

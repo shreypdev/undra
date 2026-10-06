@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One core, several hosts · Undra docs</title>
+<meta name="description" content="One Rust core under native, React Native and web apps at once, what each host links, and how a React Native app moves to native screen by screen.">
+<link rel="canonical" href="https://shreypdev.github.io/undra/docs/hosts.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Undra">
+<meta property="og:title" content="One core, several hosts · Undra docs">
+<meta property="og:description" content="One Rust core under native, React Native and web apps at once, and how a React Native app moves to native screen by screen.">
+<meta property="og:url" content="https://shreypdev.github.io/undra/docs/hosts.html">
+<meta property="og:image" content="https://shreypdev.github.io/undra/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Undra: the Rust core for native apps">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="One core, several hosts · Undra docs">
+<meta name="twitter:description" content="When an app should carry one Undra core and when several, how a core's namespace keeps them apart, and how to load two side by side.">
+<meta name="twitter:image" content="https://shreypdev.github.io/undra/assets/og.png">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://shreypdev.github.io/undra/docs/hosts.html#article","headline":"One core, several hosts · Undra docs","description":"When an app should carry one Undra core and when several, how a core's namespace keeps them apart, and how to load two side by side.","url":"https://shreypdev.github.io/undra/docs/hosts.html","inLanguage":"en","dateModified":"2026-10-01","datePublished":"2026-10-01","author":{"@type":"Organization","name":"Undra team"},"publisher":{"@id":"https://shreypdev.github.io/undra/#org"},"isPartOf":{"@id":"https://shreypdev.github.io/undra/#website"},"about":{"@type":"SoftwareApplication","name":"Undra"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Undra","item":"https://shreypdev.github.io/undra/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://shreypdev.github.io/undra/docs/"},{"@type":"ListItem","position":3,"name":"One core or several","item":"https://shreypdev.github.io/undra/docs/hosts.html"}]}]}
+</script>
+<!-- chrome:head -->
+<meta name="theme-color" content="#0a0a0a">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="application/rss+xml" title="Undra blog" href="../feed.xml">
+<script>(function(d){var t,m=/[?&]theme=(light|dark)/.exec(location.search);try{t=m?m[1]:localStorage.getItem('undra-theme')}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'}d.dataset.theme=t;d.classList.add('js')})(document.documentElement)</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..600&amp;family=Geist+Mono:wght@400..500&amp;display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..600&amp;family=Geist+Mono:wght@400..500&amp;display=swap"></noscript>
+<!-- /chrome:head -->
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="../" aria-label="Undra, home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M10.5 7v11a5.5 5.5 0 0 0 11 0V7" fill="none" stroke="var(--accent-ink)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Undra</span></a>
+    <nav class="nav" id="site-nav" aria-label="Primary">
+      <a href="../docs/" aria-current="page">Docs</a>
+      <a href="../blog/">Blog</a>
+      <a href="../roadmap/">Roadmap</a>
+      <a href="../playground/">Playground</a>
+      <span class="sp"></span>
+      <a class="nav-gh" href="https://github.com/shreypdev/undra" rel="noopener">GitHub <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11 11 5M6 5h5v5"/></svg></a>
+    </nav>
+    <button class="search-btn" type="button" data-search-open aria-label="Search the docs" aria-keyshortcuts="Control+K Meta+K"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><span>Search</span><kbd>⌘K</kbd></button>
+    <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch to light theme"><svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg><svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg></button>
+    <button class="icon-btn menu-btn" type="button" data-menu aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  </div>
+</header>
+<div class="wrap docs">
+  <details class="mnav"><summary>Docs menu</summary><nav aria-label="Docs"><div class="side-group"><p class="side-title">Start</p><ul><li><a href="getting-started.html">Getting started</a></li></ul></div><div class="side-group"><p class="side-title">Core</p><ul><li><a href="concepts.html">Core concepts</a></li><li><a href="queries.html">Queries &amp; mutations</a></li><li><a href="ports.html">Ports &amp; adapters</a></li><li><a href="objects.html">Objects and identity</a></li><li><a href="callbacks.html">Host callbacks</a></li><li><a href="types.html">Newtypes, generics and decimals</a></li><li><a href="generics.html">Generic functions, objects and stores</a></li></ul></div><div class="side-group"><p class="side-title">Data and live data</p><ul><li><a href="paging.html">Paging and lazy lists</a></li><li><a href="polling.html">Polling</a></li><li><a href="realtime.html">WebSocket &amp; server-sent events</a></li><li><a href="db.html">Local database</a></li></ul></div><div class="side-group"><p class="side-title">Test, ship, operate</p><ul><li><a href="testing.html">Testing your app</a></li><li><a href="updates.html">Shipping an update</a></li><li><a href="reviewing-generated-code.html">Reviewing generated code</a></li><li><a href="web.html">Workers &amp; crash recovery</a></li><li><a href="production.html">Operating in production</a></li><li><a href="several-cores.html">One core or several</a></li><li><a href="hosts.html" aria-current="page">One core, several hosts</a></li><li><a href="bazel.html">Bazel</a></li></ul></div><div class="side-group"><p class="side-title">Cookbook</p><ul><li><a href="cookbook/index.html">All recipes</a></li><li><a href="cookbook/auth.html">Auth</a></li><li><a href="cookbook/pagination.html">Pagination</a></li><li><a href="cookbook/forms.html">Forms</a></li><li><a href="cookbook/upload.html">File upload</a></li><li><a href="cookbook/realtime.html">Real-time</a></li><li><a href="cookbook/leaderboard.html">Live leaderboard</a></li><li><a href="cookbook/offline.html">Offline-first</a></li><li><a href="cookbook/network-stack.html">Your network stack</a></li></ul></div><div class="side-group"><p class="side-title">Adopting Undra</p><ul><li><a href="cookbook/from-kmp.html">From Kotlin Multiplatform</a></li><li><a href="cookbook/from-uniffi.html">From UniFFI</a></li><li><a href="cookbook/ios-15-16.html">iOS 15 and 16</a></li><li><a href="sample.html">Sample app</a></li></ul></div><div class="side-group"><p class="side-title">Reference</p><ul><li><a href="cli.html">The CLI</a></li><li><a href="architecture.html">Architecture</a></li><li><a href="errors.html">Error codes</a></li><li><a href="../reference/rust/undra/index.html">Rust API</a></li></ul></div><div class="side-group"><p class="side-title">API overview</p><ul><li><a href="api-swift.html">Swift</a></li><li><a href="api-kotlin.html">Kotlin</a></li><li><a href="api-typescript.html">TypeScript</a></li></ul></div></nav></details>
+  <aside class="sidebar"><nav aria-label="Docs"><div class="side-group"><p class="side-title">Start</p><ul><li><a href="getting-started.html">Getting started</a></li></ul></div><div class="side-group"><p class="side-title">Core</p><ul><li><a href="concepts.html">Core concepts</a></li><li><a href="queries.html">Queries &amp; mutations</a></li><li><a href="ports.html">Ports &amp; adapters</a></li><li><a href="objects.html">Objects and identity</a></li><li><a href="callbacks.html">Host callbacks</a></li><li><a href="types.html">Newtypes, generics and decimals</a></li><li><a href="generics.html">Generic functions, objects and stores</a></li></ul></div><div class="side-group"><p class="side-title">Data and live data</p><ul><li><a href="paging.html">Paging and lazy lists</a></li><li><a href="polling.html">Polling</a></li><li><a href="realtime.html">WebSocket &amp; server-sent events</a></li><li><a href="db.html">Local database</a></li></ul></div><div class="side-group"><p class="side-title">Test, ship, operate</p><ul><li><a href="testing.html">Testing your app</a></li><li><a href="updates.html">Shipping an update</a></li><li><a href="reviewing-generated-code.html">Reviewing generated code</a></li><li><a href="web.html">Workers &amp; crash recovery</a></li><li><a href="production.html">Operating in production</a></li><li><a href="several-cores.html">One core or several</a></li><li><a href="hosts.html" aria-current="page">One core, several hosts</a></li><li><a href="bazel.html">Bazel</a></li></ul></div><div class="side-group"><p class="side-title">Cookbook</p><ul><li><a href="cookbook/index.html">All recipes</a></li><li><a href="cookbook/auth.html">Auth</a></li><li><a href="cookbook/pagination.html">Pagination</a></li><li><a href="cookbook/forms.html">Forms</a></li><li><a href="cookbook/upload.html">File upload</a></li><li><a href="cookbook/realtime.html">Real-time</a></li><li><a href="cookbook/leaderboard.html">Live leaderboard</a></li><li><a href="cookbook/offline.html">Offline-first</a></li><li><a href="cookbook/network-stack.html">Your network stack</a></li></ul></div><div class="side-group"><p class="side-title">Adopting Undra</p><ul><li><a href="cookbook/from-kmp.html">From Kotlin Multiplatform</a></li><li><a href="cookbook/from-uniffi.html">From UniFFI</a></li><li><a href="cookbook/ios-15-16.html">iOS 15 and 16</a></li><li><a href="sample.html">Sample app</a></li></ul></div><div class="side-group"><p class="side-title">Reference</p><ul><li><a href="cli.html">The CLI</a></li><li><a href="architecture.html">Architecture</a></li><li><a href="errors.html">Error codes</a></li><li><a href="../reference/rust/undra/index.html">Rust API</a></li></ul></div><div class="side-group"><p class="side-title">API overview</p><ul><li><a href="api-swift.html">Swift</a></li><li><a href="api-kotlin.html">Kotlin</a></li><li><a href="api-typescript.html">TypeScript</a></li></ul></div></nav></aside>
+  <main id="main" class="prose">
+    <h1>One core, several hosts</h1>
+    <p class="lede">The same core runs under a SwiftUI app, a Jetpack Compose app, a React Native app and a web app at the same time. Each host links what it needs; the logic, the state and the data layer exist once.</p>
+<h2 id="what-each-host-links">What each host links<a class="anchor" href="#what-each-host-links" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Host</th><th>The core</th><th>The bindings</th><th>The runtime</th></tr></thead><tbody><tr><td>iOS, SwiftUI</td><td>the XCFramework (<code>undra build --platform ios</code>)</td><td><code>generated/swift</code>: <code>@Observable</code> classes</td><td>the Swift package</td></tr><tr><td>Android, Jetpack Compose</td><td><code>jniLibs/&lt;abi&gt;/</code> (<code>undra build --platform android</code>)</td><td><code>generated/kotlin</code>: <code>StateFlow</code></td><td>the Kotlin modules</td></tr><tr><td>Web, React</td><td>the WebAssembly module, on the main thread or in a <a href="web.html">Web Worker</a></td><td><code>generated/ts</code>: hooks (<code>useSignal</code>, <code>useLazyList</code>)</td><td><code>@undra/runtime</code></td></tr><tr><td>React Native</td><td>the native library, reached over JSI (<code>undra build --platform rn</code>)</td><td><code>generated/ts</code>, the same package as the web</td><td><code>@undra/react-native</code> over <code>@undra/runtime</code></td></tr></tbody></table></div>
+<p>One <code>undra.toml</code> lists the platforms; <code>undra build</code> makes every artifact and <code>undra bindgen</code> the three bindings trees. A change to the core changes all four hosts in one commit, and <code>undra schema diff</code> shows what that change means for each of them.</p>
+<h2 id="web-and-react-native-share-the-typescript">Web and React Native share the TypeScript<a class="anchor" href="#web-and-react-native-share-the-typescript" aria-label="Link to this section">#</a></h2>
+<p>The TypeScript bindings are one package. Under a browser it reaches the WebAssembly core through <code>@undra/runtime</code>; under React Native the same package reaches the native core through <code>@undra/react-native</code>. A hook written for the web app is the hook the React Native app uses; the store code behind it is the same Rust. What differs is only the transport, chosen by the host at start.</p>
+<p>A web team's state management goes with it: the mirror is the store. Where a React app selected from a global store, it reads a signal; where it dispatched, it calls a method on the core. See <a href="updates.html">how updates reach the screen</a> and <a href="web.html">the worker and crash recovery</a> for the web side, and <a href="../docs/cli.html#undra-build">the React Native build</a> for the other.</p>
+<h2 id="moving-a-react-native-app-to-native">Moving a React Native app to native<a class="anchor" href="#moving-a-react-native-app-to-native" aria-label="Link to this section">#</a></h2>
+<p>A team that moves screens from React Native to SwiftUI or Compose keeps the core. The native screens bind to the Swift or Kotlin classes of the same stores the React Native screens were using; both read one state during the move, so a screen can switch over on its own, and nothing is written twice on the way. <a href="cli.html#undra-adopt"><code>undra adopt</code></a> adds the core to an app that already exists without touching its project files.</p>
+<h2 id="one-core-or-several">One core or several<a class="anchor" href="#one-core-or-several" aria-label="Link to this section">#</a></h2>
+<p>Several hosts is not the same question as <a href="several-cores.html">several cores</a>. One core carries an app across every host; a second core is for code that ships on its own, a vendor's SDK or another team's module.</p>
+</main>
+  <aside class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li><a href="#what-each-host-links">What each host links</a></li><li><a href="#web-and-react-native-share-the-typescript">Web and React Native share the TypeScript</a></li><li><a href="#moving-a-react-native-app-to-native">Moving a React Native app to native</a></li><li><a href="#one-core-or-several">One core or several</a></li></ul></aside>
+</div>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="../" aria-label="Undra, home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M10.5 7v11a5.5 5.5 0 0 0 11 0V7" fill="none" stroke="var(--accent-ink)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Undra</span></a>
+        <p class="footer-note">The Rust core for native apps. Undra owns everything under the pixels; the UI stays SwiftUI, Compose, React and React Native.</p>
+      </div>
+      <div>
+        <h3>Docs</h3>
+        <ul>
+          <li><a href="../docs/getting-started.html">Getting started</a></li>
+          <li><a href="../docs/concepts.html">Core concepts</a></li>
+          <li><a href="../docs/queries.html">Queries &amp; mutations</a></li>
+          <li><a href="../docs/ports.html">Ports &amp; adapters</a></li>
+          <li><a href="../docs/cli.html">The CLI</a></li>
+          <li><a href="../docs/architecture.html">Architecture</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Undra</h3>
+        <ul>
+          <li><a href="../blog/">Blog</a></li>
+          <li><a href="../roadmap/">Roadmap</a></li>
+          <li><a href="../playground/">Playground</a></li>
+          <li><a href="../feed.xml">RSS feed</a></li>
+          <li><a href="../llms.txt">llms.txt</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Project</h3>
+        <ul>
+          <li><a href="https://github.com/shreypdev/undra" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/shreypdev/undra/blob/main/docs/SPEC.md" rel="noopener">The specification</a></li>
+          <li><a href="https://github.com/shreypdev/undra/tree/main/.10x/adrs" rel="noopener">Decision records</a></li>
+          <li><a href="https://github.com/shreypdev/undra/blob/main/bench/RESULTS.md" rel="noopener">Benchmark results</a></li>
+          <li><a href="https://github.com/shreypdev/undra/blob/main/CLAUDE.md" rel="noopener">The constitution</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-base">
+      <span>Dual-licensed under <a href="https://github.com/shreypdev/undra/blob/main/LICENSE-MIT" rel="noopener">MIT</a> or <a href="https://github.com/shreypdev/undra/blob/main/LICENSE-APACHE" rel="noopener">Apache-2.0</a>, at your option.</span>
+      <span>Timings are host-measured and guarded by CI budgets; device numbers are tracked separately.</span>
+    </div>
+  </div>
+</footer>
+<script src="../assets/site.js" defer></script>
+</body>
+</html>

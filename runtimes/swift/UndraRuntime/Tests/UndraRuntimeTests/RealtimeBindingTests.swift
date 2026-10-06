@@ -12,6 +12,8 @@ final class ScriptedSocket: WebSocketConnection, @unchecked Sendable {
         var finished = false
         var closedWith: (code: UInt16, reason: String)?
         var pulled = 0
+        /// When the pump took each message (`DispatchTime.uptimeNanoseconds`), in order.
+        var pulledAt: [UInt64] = []
         var sent: [WsMessage] = []
         var waiter: CheckedContinuation<Void, Never>?
         var failSends: WsError?
@@ -42,6 +44,7 @@ final class ScriptedSocket: WebSocketConnection, @unchecked Sendable {
                 }
                 if !current.inbox.isEmpty {
                     current.pulled += 1
+                    current.pulledAt.append(DispatchTime.now().uptimeNanoseconds)
                     return .success(current.inbox.removeFirst())
                 }
                 if let end = current.end {
@@ -103,6 +106,11 @@ final class ScriptedSocket: WebSocketConnection, @unchecked Sendable {
     /// How many messages the binding's pump took.
     var pulled: Int {
         return state.withLock { $0.pulled }
+    }
+
+    /// When the binding's pump took each message, in order (`DispatchTime.uptimeNanoseconds`, read as it took it).
+    var pulledAt: [UInt64] {
+        return state.withLock { $0.pulledAt }
     }
 
     /// What the binding sent.
@@ -176,16 +184,19 @@ final class Locked<Value>: @unchecked Sendable {
     }
 }
 
-/// Polls `condition` every 5 ms for up to 5 s.
-func eventually(_ what: String, file: StaticString = #filePath, line: UInt = #line, _ condition: () -> Bool) async {
-    let deadline = Date().addingTimeInterval(5)
+/// Polls `condition` every 5 ms until it holds. A hang detector, not a speed assertion: it gives up only after ``hangDeadline``, and
+/// returns `false` (after failing the test) when it does, so a caller with more waits to make can stop instead of waiting again.
+@discardableResult
+func eventually(_ what: String, file: StaticString = #filePath, line: UInt = #line, _ condition: () -> Bool) async -> Bool {
+    let deadline = Date().addingTimeInterval(hangDeadline)
     while !condition() {
         if Date() > deadline {
             XCTFail("timed out waiting for \(what)", file: file, line: line)
-            return
+            return false
         }
         try? await Task.sleep(nanoseconds: 5_000_000)
     }
+    return true
 }
 
 /// Starts `body` in a task and returns the task once it has begun running `body`. What `body` does before it first suspends has then been
@@ -333,13 +344,18 @@ final class WebSocketBindingTests: XCTestCase {
         }
         let burst = try await waiting.value
         XCTAssertEqual(burst, texts(0 ..< 10))
-        // A lone message is answered once the burst gap passed.
-        let started = Date()
+        // A lone message is answered once the burst gap passed. How long the answer took is the machine's business, so what is asserted is
+        // what answers it: with fewer than `max` messages, no end and no message after it, the only thing that can answer the pull is the
+        // burst timer (the cap is checked when a message arrives, and none does), so the answer coming at all proves the timer answered it,
+        // and the timer's length is the constant below (a gap raised to 2 s would hold every lone message for 2 s: it fails this assertion).
+        // (That the timer fires when armed, against a timer of the same length armed beside it, is
+        // `RealtimeReviewTests.testALoneMessageIsAnsweredWithinAFewMillisecondsOfItsArrival`.)
+        XCTAssertEqual(burstGap, .milliseconds(2), "a lone message waits the burst gap: 2 ms (ADR-047 section 3)")
+        XCTAssertEqual(burstCap, 8_000_000, "a burst still arriving is answered at the latest 8 ms after its first message")
         let lone = await runningThrowing { try await binding.receive(conn: conn, max: 16) }
         socket.push(.text("lone"))
         let answer = try await lone.value
         XCTAssertEqual(answer, [.text("lone")])
-        XCTAssertLessThan(Date().timeIntervalSince(started), 1.0)
     }
 
     func testAReceiveWaitsForTheFirstMessageAndOnlyOneMayBePending() async throws {

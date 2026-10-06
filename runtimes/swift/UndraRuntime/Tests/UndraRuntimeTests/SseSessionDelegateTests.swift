@@ -121,7 +121,7 @@ final class TlsEventServer: @unchecked Sendable {
             ready.signal()
         }
         reader.start()
-        guard ready.wait(timeout: .now() + 15) == .success,
+        guard ready.wait(timeout: .now() + hangDeadline) == .success,
               let first = line.withLock({ $0 }).split(separator: "\n").first,
               first.hasPrefix("READY "), let port = Int(first.dropFirst("READY ".count))
         else {
@@ -319,7 +319,14 @@ final class SseSessionDelegateTests: XCTestCase {
         XCTAssertEqual(read.events, ["a", "b"])
         XCTAssertEqual(read.end, .ended)
         let challenges = delegate.seen.filter { $0.hasPrefix("task ") }
-        XCTAssertEqual(challenges, ["task \(NSURLAuthenticationMethodServerTrust)", "task \(NSURLAuthenticationMethodHTTPBasic)"])
+        // The stream's trust first, then its HTTP authentication once. Whether the authenticated request reuses the connection of the
+        // refused one is URLSession's decision (a connection that was closed in between is a new handshake, so a second trust challenge),
+        // not the adapter's: any further challenge is a trust one.
+        let trust = "task \(NSURLAuthenticationMethodServerTrust)"
+        let basic = "task \(NSURLAuthenticationMethodHTTPBasic)"
+        XCTAssertEqual(challenges.first, trust)
+        XCTAssertEqual(challenges.filter { $0 == basic }.count, 1, "\(challenges)")
+        XCTAssertTrue(challenges.allSatisfy { $0 == trust || $0 == basic }, "\(challenges)")
         await eventually("the task's metrics at the session's delegate") { delegate.seen.contains("metrics /auth") }
     }
 }

@@ -28,7 +28,7 @@ final class AppSessionTests: XCTestCase {
 
     /// Waits until the session's delegate was told of the task for `path`.
     private func delegateSaw(_ path: String, file: StaticString = #filePath, line: UInt = #line) async throws {
-        let deadline = Date().addingTimeInterval(5)
+        let deadline = Date().addingTimeInterval(hangDeadline)
         while !delegate.paths.contains(path), Date() < deadline {
             try await Task.sleep(nanoseconds: 10_000_000)
         }

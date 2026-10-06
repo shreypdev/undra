@@ -1,0 +1,43 @@
+load("@rules_java//java:java_test.bzl", "java_test")
+load("@rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+
+# Symbol files and crash reports, end to end (ADR-061, ADR-046): a panic report of a Bazel-built core, resolved with the symbol
+# files Bazel built with it. `site/docs/bazel.html#symbols` is the guide; this test is its reference.
+
+kt_jvm_library(
+    name = "symbolicate_test_lib",
+    testonly = True,
+    srcs = ["SymbolicateTest.kt"],
+    deps = ["//kotlin:hello"],
+)
+
+# `bazel test //symbols:symbolicate_test`:
+#
+#   1. loads the release core (`//:core_release_host`: stripped, what a release ships) in a JVM through the generated Kotlin
+#      bindings, with an `onPanic` handler, as an app does;
+#   2. calls `crashForSymbolsTest`, the test-only function of the example's core that panics, and takes the report `onPanic` gets;
+#   3. serialises it (the JSON `undra symbolicate` reads) and runs `undra symbolicate --symbols` on the symbol files of that same
+#      build (`//:core_release_symbols`, the `symbols` output group of `undra_core`);
+#   4. asserts that the frames name `core/src/lib.rs` and the line of the `panic!`, which the source says and the core reported.
+#
+# Nothing in it waits for a time: the report is a future the handler completes. The tools that read a symbol file are the
+# machine's: `atos` (Xcode or the command line tools; DEVELOPER_DIR is passed on) on macOS, `llvm-symbolizer` on Linux.
+java_test(
+    name = "symbolicate_test",
+    data = [
+        "//:core_release_host",
+        "//:core_release_symbols",
+        "//:core/src/lib.rs",
+        "@undra//:cli",
+    ],
+    env_inherit = ["DEVELOPER_DIR"],
+    jvm_flags = [
+        "-Dundra.test.library=$(rootpath //:core_release_host)",
+        "-Dundra.test.symbols=$(rootpath //:core_release_symbols)",
+        "-Dundra.test.source=$(rootpath //:core/src/lib.rs)",
+        "-Dundra.test.cli=$(rootpath @undra//:cli)",
+    ],
+    main_class = "dev.undra.bazel.hello.symbols.SymbolicateTestKt",
+    use_testrunner = False,
+    runtime_deps = [":symbolicate_test_lib"],
+)

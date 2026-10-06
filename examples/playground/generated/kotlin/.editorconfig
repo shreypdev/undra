@@ -4,9 +4,11 @@
 # is the generator's, not yours. Every generated file also starts with `@file:Suppress("ALL", "ktlint")`, which
 # ktlint 1.x, detekt and IntelliJ read without any configuration (the Kotlin compiler does not: its warnings still show).
 #
-# If your repository's own .editorconfig switches ktlint on for everything and you would rather say it once at the root:
+# If your repository's own .editorconfig switches ktlint on for everything and you would rather say it once at the root,
+# give the path of the bindings from that file's directory (a section with a slash is anchored there, so
+# `[**/generated/**]` misses a `generated/` right beside the root .editorconfig):
 #
-#     [**/generated/**]
+#     [generated/**]
 #     ktlint_standard = disabled
 #     ktlint_experimental = disabled
 #
