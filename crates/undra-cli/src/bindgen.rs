@@ -407,7 +407,7 @@ pub fn check(out: &Path, files: &[GeneratedFile]) -> Vec<String> {
     for old in read_manifest(out) {
         if !current.contains(old.as_str()) && out.join(&old).is_file() {
             problems.push(format!(
-                "{old} is stale (the schema no longer generates it)"
+                "{old} is stale (an earlier run wrote it and this one does not: the schema or undra.toml changed)"
             ));
         }
     }

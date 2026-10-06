@@ -535,6 +535,12 @@ fn lint_exclusions_none_writes_no_exclusion_file_and_beside_and_absent_write_the
     );
     assert_eq!(code, 1);
     assert!(stderr.contains("kotlin/.editorconfig is stale"), "{stderr}");
+    // The schema did not change, the setting did: the diagnosis names both causes, not only the core.
+    assert!(
+        stderr.contains("the schema or undra.toml changed")
+            && stderr.contains("the core's schema and the project's undra.toml"),
+        "{stderr}"
+    );
     generate(&beside);
     assert!(written(&beside).is_empty());
 }

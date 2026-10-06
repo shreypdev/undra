@@ -82,7 +82,7 @@ pub fn run(env: &Env<'_>, args: &BindgenArgs) -> Result<()> {
                 release_advice(pinned, crate::config::UNDRA_VERSION),
             ),
             None => (
-                "they are generated from the core's schema, and the core changed (or they were edited by hand)".to_owned(),
+                "they are generated from the core's schema and the project's undra.toml, and one of them changed (or they were edited by hand)".to_owned(),
                 "run `undra bindgen` and commit the result".to_owned(),
             ),
         };
