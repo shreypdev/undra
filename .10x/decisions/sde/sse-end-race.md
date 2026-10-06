@@ -99,3 +99,13 @@ Same load (18 `yes` loops, load average 55 to 65):
   it hung 2 times in 2,000. A real stream gets there only when its consumer is at the mark or a chunk's line ends overstate
   its events by enough (comments, multi-line `data`, CR LF) while the server ends the stream.
 * No change to the Kotlin or web adapters (they do not use URLSession).
+
+## Reviewed (2026-10-06, `.10x/reviews/2026-10-06-user-lens-and-sse-review.md`)
+
+The loop counts above (0 in 12,000, 22 in 28,944, 90 in 3,473, 2 in 2,000 and the rest of the table) come from an
+instrumented scratch build that is not in the repository and stand as the author's claim. Reproduced from the branch:
+`swift test --filter "SseChunk|SseParserBound"` 25 times under 16 `yes` loops (load average 10 to 19 on 18 cores, lower than
+the author's 55 to 65), 26 tests each, 0 failures; the whole target once: 924 tests, 3 skipped, 0 failures. The bound
+(`mostEvents`) was checked against the parser's dispatch rule by reading: an event needs a blank line's end with data
+received, the first in a chunk one line end, each later one at least two; CR, CR LF, a comment line and a LF after a CR
+of the chunk before count line ends that end nothing. Suspend and resume stay balanced on every path.

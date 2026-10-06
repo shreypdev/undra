@@ -105,3 +105,12 @@ exits 1 with the C0003; doctor prints two FAILs with `export ANDROID_NDK_HOME=<s
 `cargo test -p undra-cli` (every suite, 24 binaries, all pass), `cargo clippy --all-targets -- -D warnings`,
 `cargo fmt --check`, `scripts/check-no-em-dash.sh`, `node site/scripts/build-all.mjs` (search index and llms-full
 regenerated), `node site/scripts/check-links.mjs` (56 pages OK).
+
+## Reviewed (2026-10-06, `.10x/reviews/2026-10-06-user-lens-and-sse-review.md`)
+
+Reproduced with the CLI built from `wt/user-lens-pr` on the same scratch project: `undra build --platform android --release`
+exits 0 with 899.0 KB (arm64-v8a) and 961.0 KB (x86_64), the records hold 898960 and 961048 bytes, the debug build's hint
+says "the last release build shipped 961.0 KB, 42x smaller"; with `sysprobe`'s build directories removed, its build script
+ran again under this CLI and the `cc` object and the CMake archive are AArch64 and x86-64 per ABI. `cargo test -p undra-cli`:
+24 binaries, 601 passed, 0 failed, 3 ignored. The `cprobe_abi` values (1026, 2026) need a device and stand as the author's
+claim. The Bazel counts were recounted from the BUILD files (12, 10, 14) and not run.
