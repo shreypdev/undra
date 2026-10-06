@@ -11,7 +11,8 @@
 //!
 //! **The NDK.** `ANDROID_NDK_HOME`, else `ANDROID_HOME/ndk/<version>` (the newest) is the NDK; for each
 //! ABI the CLI runs `cargo rustc --target <triple>` with the environment Cargo reads to link with it:
-//! `CARGO_TARGET_<TRIPLE>_LINKER`, `CC_<triple>`, `AR_<triple>` ([`ndk::environment`]). The API level of
+//! `CARGO_TARGET_<TRIPLE>_LINKER`, `CC_<triple>`, `AR_<triple>`, and for the build scripts of C libraries
+//! the sysroot for `bindgen`, the NDK's clang and a CMake toolchain ([`ndk::environment`]). The API level of
 //! the clang wrapper is `[android] min_sdk` of `undra.toml`, 26 when the project says nothing (what
 //! `undra init` writes).
 //!
@@ -31,7 +32,9 @@ use std::process::{Command, Stdio};
 use crate::binary::{elf_is_64, elf_min_load_alignment};
 use crate::cargo::{Build, Profile};
 use crate::error::{CliError, Code, Result};
-use crate::fsutil::{copy_file, create_dir_all, human_size, remove_dir_all, size_of};
+use crate::fsutil::{
+    copy_file, create_dir_all, human_size, remove_dir_all, size_of, write_if_changed,
+};
 use crate::session::Session;
 use crate::symbols::{Entry, Format, Symbols, image, sha256, slash_relative, tools, zip};
 use crate::toolchain::{Concern, ndk_major};
@@ -106,6 +109,16 @@ pub fn build(
         session
             .ui
             .detail(&format!("rust target {triple} (NDK API {})", cfg.min_sdk));
+        // The CMake toolchain of this ABI, for build scripts that use the `cmake` crate: the NDK's,
+        // with the ABI and the API level it cannot read from the environment ([`ndk::cmake_toolchain`]).
+        let cmake_toolchain = target_dir
+            .join("undra-ndk")
+            .join(format!("{triple}-{}", cfg.min_sdk))
+            .join("android.toolchain.cmake");
+        write_if_changed(
+            &cmake_toolchain,
+            &ndk::cmake_toolchain(&ndk, triple, cfg.min_sdk),
+        )?;
         let files = session.cargo().build_library(&Build {
             manifest: manifest.clone(),
             target_dir: target_dir.clone(),
@@ -113,7 +126,7 @@ pub fn build(
             profile,
             crate_type: "cdylib",
             features: vec!["jni".to_owned()],
-            env: ndk::environment(&ndk, os, triple, cfg.min_sdk)?,
+            env: ndk::environment(session.sys, &ndk, os, triple, cfg.min_sdk, &cmake_toolchain)?,
             lib_name: crate::shim::shim_lib_name(&session.project.root),
             // The image's identity (what a panic report names it by) and the 16 KB pages, in the
             // unstripped library and in the stripped copy alike.
