@@ -11,5 +11,5 @@ script import os, subprocess; root = subprocess.run(["rustc", "--print", "sysroo
 # The struct and enum summaries of the Rust 1.99 formatters follow every pointer field: a `&Runtime` argument in a
 # backtrace walks the whole object graph and, through a cycle (`Weak<Runtime>`), recurses until Python aborts LLDB.
 # Re-registered with the pointers skipped, a pointer prints as its address (`self=0x...`), as LLDB prints it without
-# formatters, and a value keeps its summary (`reason="kaboom"`, `call={method_id:7, ...}`). Older formatters: nothing.
+# formatters, and a value keeps its summary (`reason="kaboom"`, `__call={method_id:..., args:size=10}`). Older formatters: nothing.
 script import sys; L = sys.modules.get("lldb_lookup"); [L.register_summary(getattr(L, p), lldb.SBTypeNameSpecifier("lldb_lookup." + r, lldb.eFormatterMatchCallback), o | lldb.eTypeOptionSkipPointers | lldb.eTypeOptionSkipReferences) for p, r, o in (("StructSummaryProvider", "is_udt", lldb.eTypeOptionCascade | lldb.eTypeOptionHideEmptyAggregates | lldb.eTypeOptionHideChildren), ("ClangEncodedEnumSummaryProvider", "is_gnu_enum", lldb.eTypeOptionCascade))] if L is not None and hasattr(L, "register_summary") and hasattr(lldb, "eFormatterMatchCallback") else None
