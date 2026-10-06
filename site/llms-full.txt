@@ -1880,7 +1880,7 @@ The C linker, and for iOS and Android Xcode, the NDK and `cargo-ndk`, are the ma
 
 ## Symbol files and crash reports
 
-A release core ships stripped, and a crash report from it holds addresses. The files that turn them into a Rust file and line are the build's **symbol files** ([what they are](https://shreypdev.github.io/undra/docs/production.html#symbols)), and under Bazel they are an output of the same target: the `symbols` output group of a release `undra_core`. The web core is always a release build, so `core_web` has one; the host, iOS and Android cores have it when `release = True`. A debug core keeps its symbols in itself and has none.
+A release core ships stripped, and a crash report from it holds addresses. The files that turn them into a Rust file and line are the build's **symbol files** ([what they are](https://shreypdev.github.io/undra/docs/production.html#symbols)), and under Bazel they are an output of the same target: the `symbols` output group of a release `undra_core`. The web core is always a release build, so `core_web` has one; the host, iOS and Android cores have it when `release = True`. A debug core keeps its symbols in itself and has none: a `filegroup` of its group is empty, without an error, so point it at the release target.
 
 BUILD.bazel
 
@@ -1954,7 +1954,7 @@ One line per frame, innermost first (the lines above are three of the report's f
 3. it writes the report as JSON and runs `undra symbolicate --symbols` on `//:core_release_symbols`;
 4. it asserts that a frame is `hello_core::crash_for_symbols_test` at the line of the `panic!` in `core/src/lib.rs`, found in the source, which is also the line the core reported.
 
-It waits for no time: the report is a future the handler completes. With the symbols of another build, or without the host library's, it fails with the CLI's error, which is what a stale or missing symbol directory looks like in production.
+It waits for no time: the report is a future the handler completes. With the symbols of another build it fails, because the report's image id is not the manifest's, and without the host library's symbols it fails with the CLI's error: what a stale or a missing symbol directory looks like in production.
 
 ## Generated code and your linters
 
