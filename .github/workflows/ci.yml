@@ -483,9 +483,16 @@ jobs:
   # host and the web with the pinned Rust 1.99.0 that Bazel fetches (rules_rust, by checksum), generates the bindings from the host
   # library, compiles the Kotlin and TypeScript consumers and runs them against the real core (JNI, Node), and runs ktlint over the
   # generated Kotlin with and without the exclusions `undra bindgen` writes. Bazel is pinned by .bazelversion (Bazelisk; the example's
-  # is a link to bazel/'s), the rulesets by MODULE.bazel, whose lock file is committed. The lock is not run with
-  # --lockfile_mode=error here: it records what the machine that wrote it resolved, per OS, and a Linux runner would fail on every
-  # entry a macOS developer made.
+  # is a link to bazel/'s): 8.8.1, the lowest the rules support, and every step runs again on the newest 9.x through
+  # USE_BAZEL_VERSION (Bazelisk's own override), so both ends of "Bazel 8.8 and 9.x" are tested. The rulesets are tested at both
+  # ends too: the example's MODULE.bazel pins recent versions (what most applications run), and examples/bazel/scripts/at-minimums.sh
+  # runs the same targets with every ruleset at the lowest version undra_rules declares (bazel/MODULE.bazel), failing if anything
+  # in the graph raises one. The lock files are committed as Bazel 8.8.1 writes them. They are not run with
+  # --lockfile_mode=error here: a lock records what the machine that wrote it resolved, per OS, and a Linux runner would fail on
+  # every entry a macOS developer made. The 9.x steps and the minimums run with --lockfile_mode=off: 9.x records other registry
+  # files than 8.8.1, and the minimums are another graph, so neither reads or rewrites the committed lock. Bump the 9.x pin
+  # (USE_BAZEL_VERSION, in the 9.x steps of this job and of the macOS one, and in examples/bazel/README.md) when a newer 9.x
+  # release is out and passes.
   bazel-example:
     name: Bazel example
     runs-on: ubuntu-latest
@@ -515,6 +522,24 @@ jobs:
       - name: bazel test //... (host and web cores, bindings, Kotlin and TypeScript consumers, ktlint)
         working-directory: examples/bazel
         run: bazel test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+      - name: bazel test //... at the ruleset minimums
+        working-directory: examples/bazel
+        run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+      - name: The rules' own tests on Bazel 9.x
+        working-directory: bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: bazel test //tests/... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+      - name: bazel test //... on Bazel 9.x
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: bazel test //... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+      - name: bazel test //... on Bazel 9.x at the ruleset minimums
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
 
   # What only macOS can run, where rules_swift and the iOS core have Xcode: the Swift consumer runs the core in process, and the
   # XCFramework (device and simulator slices) builds in a Bazel action. The Kotlin and TypeScript targets are the Linux job's.
@@ -537,6 +562,27 @@ jobs:
         run: |
           bazel test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
           bazel build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
+      # rules_swift and rules_apple are only exercised here, so their minimums are too: the same targets with every ruleset at the
+      # version undra_rules declares, then all of it on the newest 9.x (rules_swift is the ruleset a new Bazel breaks first).
+      - name: The Swift consumer and the iOS core at the ruleset minimums
+        working-directory: examples/bazel
+        run: |
+          scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+          scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
+      - name: The Swift consumer and the iOS core on Bazel 9.x
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: |
+          bazel test //swift/... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+          bazel build //:mobile_ios --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
+      - name: The Swift consumer and the iOS core on Bazel 9.x at the ruleset minimums
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: |
+          scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+          scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
 
   playground-web:
     # The playground's web app and its stories page (src/stories, rendered by stories.html with Vite alone; the modules are Component Story Format
