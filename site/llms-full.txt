@@ -1892,9 +1892,29 @@ The rest (`apple_support` 1.24.2, `rules_cc` 0.2.17, `rules_java` 9.3.0, `rules_
 | `ios` | Xcode, and `apple_support` first in your `MODULE.bazel` | macOS, in CI on every change; the target is `manual` |
 | `android` | the NDK as a labelled input (`undra_core(ndk = ..)`, an `http_archive` of the NDK pinned by checksum, or `rules_android_ndk`'s repository) and `undra.android_std`: no `cargo-ndk`, no `--action_env`, no `extra_path` | Linux, in CI on every change; the target is `manual` |
 
-The Android core is a Cargo cross-build that `undra build` links with the NDK's clang, so it is built in the host configuration, with the host's Rust toolchain: there is no Android platform to resolve a C++ toolchain for. The API level of the linker is `[android] min_sdk` of `undra.toml`. The archive is per host OS (a `select()` on `@platforms//os:*` picks the label) and is fetched only by a build that asks for the Android core, never by `bazel test //...`. CI gives that build the NDK that `sdkmanager` installed instead of downloading it through Bazel: `examples/bazel/android/use-installed-ndk.sh` prints the `--override_repository` flags that do it (each NDK repository by its name and by the canonical name Bazel 8 needs), which is also the way to use an NDK you already have.
+The Android core is a Cargo cross-build that `undra build` links with the NDK's clang, so it is built in the host configuration, with the host's Rust toolchain: there is no Android platform to resolve a C++ toolchain for. The API level of the linker is `[android] min_sdk` of `undra.toml`. The archive is per host OS (a `select()` on `@platforms//os:*` picks the label) and is fetched only by a build that asks for the Android core, never by `bazel test //...`. CI gives that build the NDK that `sdkmanager` installed instead of downloading it through Bazel: `examples/bazel/android/use-installed-ndk.sh` prints the `--override_repository` flags that do it (each NDK repository by its name and by the canonical name Bazel 8 needs), which is also the way to use an NDK you already have. The pins themselves are fetched through Bazel, with their checksums checked, by a workflow of their own (`.github/workflows/ndk-pins.yml`, monthly and on demand), so a stale archive shows there before it shows on a machine.
 
 `undra_android_library` needs the Android SDK only (`rules_android` reads `ANDROID_HOME`), not the NDK. The example's (`bazel build //android:hello --config=android`) is built in the same CI job; `rules_android` then downloads its own tools, one of them an archive without a checksum, which is why it stays a `manual` target and is not part of `bazel test //...`.
+
+## Committed bindings
+
+There are two ways to hold the bindings, and both are checked by the build. `undra_bindings` alone makes them outputs: nothing is committed and nothing can be stale. A repository whose policy requires generated code in the tree commits them and adds `undra_bindings_test`, so a pull request cannot change the core's API and leave the committed copy behind.
+
+| Choose | When | What the build guarantees |
+| --- | --- | --- |
+| Generated outputs: `undra_bindings` | Your repository treats generated code as an artifact: reviewers read the schema, not the bindings, and nothing outside Bazel needs the files | The bindings are a function of the core library, so they cannot be stale |
+| Committed, with the test: `undra_bindings` and `undra_bindings_test` | Your policy puts generated code in the tree: a tool outside Bazel reads it, an IDE or a review wants it on disk, or the app is also built without Bazel | The committed directory equals the build's output, or `bazel test` fails and names the command that fixes it |
+
+Create the files once and refresh them after every change to the core:
+
+shell
+
+```sh
+bazel run //:bindings_check.update    # writes the trees into the source tree; commit the result
+bazel test //:bindings_check          # fails, naming the line above, when they are out of date
+```
+
+The comparison is the one `undra bindgen --check` makes: the same files, byte for byte, nothing normalised (not line endings, not trailing space). `undra bindgen --check --out generated` accepts the directory the update writes, and a file edited by hand fails both. The rule is stricter in one way: it compares the directory as a whole, so a file that you keep beside the generated ones fails the test (the CLI ignores files its manifest does not list), and the update removes it. Keep the directory for the bindings alone, `BUILD.bazel` files included: a target that compiles the committed copy lives in the package around it and globs it (`glob(["generated/ts/**"])`). A directory that does not exist yet fails the test when it runs, with the update command in its message, and the rest of `bazel test //...` still runs; the first run of the update target creates it.
 
 ## Symbol files and crash reports
 
@@ -2047,18 +2067,6 @@ Expect the Rust frame with its file and line, the generated dispatcher under it,
 
 Three things to know about the kept objects. They are not a build output, so a core that Bazel restores from its cache after the directory is gone has no Rust frames: build it again, with any new value of a variable the action reads (`--action_env=UNDRA_REBUILD=2` rebuilds the iOS core, verified). macOS removes what is in `/tmp` at a restart and, once a day, files unused for three days, so a debugging session days after the build may need that rebuild too. And the directory belongs to the target and to `keep_debug_objects`, so a build of the same core without it (the default configuration) does not remove them, but the bytes of the debug core differ from that one's, because the directory's name is in them.
 
-## Generated code and your linters
-
-A repository that lints everything reports the bindings, because they are the output of a generator. `undra bindgen` now writes the exclusions beside each tree and lists them in its manifest, so `--check` keeps them honest:
-
-| Tree | File | Read by |
-| --- | --- | --- |
-| Kotlin | `.editorconfig`, and `@file:Suppress("ALL", "ktlint")` in every file | ktlint 1.x; detekt and IntelliJ read the annotation too |
-| Swift | `.swiftlint.yml`, an `excluded:` list to merge into yours | SwiftLint |
-| TypeScript | `.eslintrc.json`, and `eslint.config.undra.mjs` to spread into a flat config | ESLint 8 and 9 |
-
-ktlint 1.8 reports 90 findings on the example's generated Kotlin without them and none with either one; `bazel test //kotlin:lint_test` in the example runs that comparison. The annotation does not silence the Kotlin compiler: its warnings about the generated code still show. The detekt, IntelliJ, SwiftLint and ESLint readings follow each tool's documentation and are not run in CI.
-
 ## Linters over the whole tree
 
 A repository whose CI lints everything meets the generated bindings in every linter it runs. `undra bindgen` writes these four files, beside the tree each one belongs to, and lists them in `.undra-generated` with the rest (so `undra bindgen --check` fails when one is missing or edited, and the next run removes one the schema no longer needs). Paths are relative to the directory the bindings are written to (`generated/` in a project made by `undra init`); none of the files names that directory, so a tree that moves is still excluded.
@@ -2071,6 +2079,8 @@ A repository whose CI lints everything meets the generated bindings in every lin
 | `ts/eslint.config.undra.mjs` | ESLint 9 (flat config) | `export default [{ ignores: ["<its own directory>/**"] }]`, the directory worked out from `import.meta.url` relative to where ESLint runs. A flat config is read only from that directory, so you spread it into your `eslint.config.js`: `export default [...undraGenerated, /* yours */]` |
 
 A tree is written only for a platform the project builds, so a project without `web` has no `ts/` files. Every generated Kotlin file also starts, after its header line, with `@file:Suppress("ALL", "ktlint")`. That line is not one of the four files: it is part of the Kotlin file itself, it travels with the file when it is copied or packed into a source jar, ktlint 1.x, detekt and IntelliJ read it with no configuration, and it stays whatever you set below. The generated `.gitattributes` and `.gitignore` are not lint files either.
+
+ktlint 1.8 reports 90 findings on the example's generated Kotlin without them and none with either the file or the annotation; `bazel test //kotlin:lint_test` in the example runs that comparison. The annotation does not silence the Kotlin compiler: its warnings about the generated code still show.
 
 ### A repository that configures its linters in one place
 
@@ -2128,26 +2138,6 @@ BasedOnStyles =
 ```
 
 As with the rest of this section, the SwiftLint, ESLint and Vale lines follow each tool's documentation and are not run in Undra's CI; ktlint is (the example's `bazel test //kotlin:lint_test`).
-
-## Committed bindings
-
-There are two ways to hold the bindings, and both are checked by the build. `undra_bindings` alone makes them outputs: nothing is committed and nothing can be stale. A repository whose policy requires generated code in the tree commits them and adds `undra_bindings_test`, so a pull request cannot change the core's API and leave the committed copy behind.
-
-| Choose | When | What the build guarantees |
-| --- | --- | --- |
-| Generated outputs: `undra_bindings` | Your repository treats generated code as an artifact: reviewers read the schema, not the bindings, and nothing outside Bazel needs the files | The bindings are a function of the core library, so they cannot be stale |
-| Committed, with the test: `undra_bindings` and `undra_bindings_test` | Your policy puts generated code in the tree: a tool outside Bazel reads it, an IDE or a review wants it on disk, or the app is also built without Bazel | The committed directory equals the build's output, or `bazel test` fails and names the command that fixes it |
-
-Create the files once and refresh them after every change to the core:
-
-shell
-
-```sh
-bazel run //:bindings_check.update    # writes the trees into the source tree; commit the result
-bazel test //:bindings_check          # fails, naming the line above, when they are out of date
-```
-
-The comparison is the one `undra bindgen --check` makes: the same files, byte for byte, nothing normalised (not line endings, not trailing space). `undra bindgen --check --out generated` accepts the directory the update writes, and a file edited by hand fails both. The rule is stricter in one way: it compares the directory as a whole, so a file that you keep beside the generated ones fails the test (the CLI ignores files its manifest does not list), and the update removes it. Keep the directory for the bindings alone, `BUILD.bazel` files included: a target that compiles the committed copy lives in the package around it and globs it (`glob(["generated/ts/**"])`). A directory that does not exist yet fails the test when it runs, with the update command in its message, and the rest of `bazel test //...` still runs; the first run of the update target creates it.
 
 ## Good to know
 
@@ -2424,7 +2414,7 @@ A call that arrives during an in-call apply waits out the parse. That is about o
 
 - **Never take the app's lock on the core.** Anything that reads the structure goes through the pool, as `follow` does. A core call that waits for the mutex while a snapshot is being swapped in would hold the core lock while it waits: the in-call parse again, by the back door. Keep the time under the app's lock to the swap and the window.
 - **The pool cannot write signals.** The closure returns the window and the awaiting task writes it; a write from the pool is refused with E0065.
-- **On the web, `spawn_blocking` runs inline.** The wasm core has no pool, so the parse runs synchronously inside the call and blocks the core's thread whichever design you pick. What the design still gives you there is the 771-byte change-set instead of 1.2 MB for the main thread to decode. Run the web core in a worker ([Workers & crash recovery](https://shreypdev.github.io/undra/docs/web.html)) so a long step does not stall a frame.
+- **On the web, `spawn_blocking` runs inline.** The wasm core has no pool, so the parse runs synchronously inside the call and blocks the core's thread whichever design you pick. What the design still gives you there is the 780-byte change-set instead of 1.2 MB for the main thread to decode. Run the web core in a worker ([Workers & crash recovery](https://shreypdev.github.io/undra/docs/web.html)) so a long step does not stall a frame.
 - **A feed faster than the screen.** Each batch of deltas is one hand to the pool and one publish. A feed that sends thousands a second should be batched before it reaches `apply_deltas`, as the demo feed does with one batch every 100 ms; the platform's frame merge ([High-frequency data](https://github.com/shreypdev/undra/blob/main/docs/HIGH_FREQUENCY.md)) takes care of the rest.
 - **Memory.** The structure holds each player twice (about 1.6 MB for 100,000) and a swap briefly holds the old ranking and the new one. A snapshot is not part of the core's own snapshot: a restored store has no players, so it clears its window and the app loads the standings again.
 - **A window is not a lazy list.** `Lazy<T>` ([Paging and lazy lists](https://shreypdev.github.io/undra/docs/paging.html)) lets a platform scroll through a collection in the core; this recipe is for a screen that only ever shows a derived summary of it.
