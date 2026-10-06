@@ -36,6 +36,8 @@ dist
 /contract-tests/swift/floor-*
 /contract-tests/swift/PackagesFloor
 
+# The copy of MODULE.bazel that examples/bazel/scripts/at-minimums.sh keeps beside it while a command runs at the minimums.
+/examples/bazel/MODULE.bazel.at-minimums~
 # Bazel (bazel/, examples/bazel): its convenience symlinks. Its output lives in the output base, not here.
 /bazel/bazel-*
 /examples/bazel/bazel-*
