@@ -30,4 +30,12 @@ ln -s "$ndk/toolchains" "$repo/toolchains"
 ln -s "$ndk/source.properties" "$repo/source.properties"
 cp "$here/ndk.BUILD" "$repo/BUILD.bazel"
 : > "$repo/REPO.bazel"
-echo "--override_repository=android_ndk_macos=$repo --override_repository=android_ndk_linux=$repo"
+# Each repository by two names, because Bazel reads the name differently by version and silently ignores one it does not know:
+# 9.x takes the apparent name, while 8.x takes only the canonical one (`+_repo_rules+<name>`, the name of a repository that
+# MODULE.bazel defines with `use_repo_rule`) and treats an apparent name as a repository that does not exist, so the override
+# would do nothing and Bazel would download the archive.
+flags=""
+for name in android_ndk_macos android_ndk_linux; do
+  flags="$flags --override_repository=$name=$repo --override_repository=+_repo_rules+$name=$repo"
+done
+echo "${flags# }"
