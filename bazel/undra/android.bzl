@@ -1,7 +1,8 @@
 """`undra_android_library`: the generated Kotlin bindings as an Android library (ADR-061).
 
-Declared, not built by CI: it needs the Android SDK and `rules_android`, which a machine without them cannot configure. It is its own
-file, not part of `defs.bzl`, so that nothing that loads `defs.bzl` loads the Android rules.
+It needs the Android SDK (`ANDROID_HOME`) and `rules_android`, which a machine without them cannot configure, so it is its own file,
+not part of `defs.bzl`: nothing that loads `defs.bzl` loads the Android rules. CI builds it on Linux, next to the Android core
+(`undra_core(platforms = ["android"], ndk = ..)`, whose NDK is a declared input and needs no SDK).
 
     load("@undra_rules//undra:android.bzl", "undra_android_library")
 """

@@ -13,11 +13,8 @@ build --tool_java_language_version=17
 # uses to Aspect. This example does not: https://github.com/aspect-build/tools_telemetry (your repository decides for itself).
 common --repo_env=DO_NOT_TRACK=1
 
-# Android: `bazel build //android:hello --config=android` compiles the bindings as an Android library against the SDK that
-# ANDROID_HOME names (rules_android). The Android core (`//:mobile_android`) would also take the machine's NDK and cargo-ndk from
-# the environment, but it does not build as this example stands: rules_rust needs a C++ toolchain for the Android platforms
-# (rules_android_ndk), which is not set up here (ADR-061). The iOS core (`//:mobile_ios`) needs Xcode, which is the machine's too.
+# Android: the core (`//:mobile_android`) needs no flags: the NDK is a declared input of the build (MODULE.bazel), not the machine's.
+# `bazel build //android:hello --config=android` compiles the bindings as an Android library against the SDK that ANDROID_HOME
+# names (rules_android). The iOS core (`//:mobile_ios`) needs Xcode, which is the machine's.
 common:android --repo_env=ANDROID_HOME
 build:android --action_env=ANDROID_HOME
-build:android --action_env=ANDROID_NDK_HOME
-build:android --action_env=PATH

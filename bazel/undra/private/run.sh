@@ -48,6 +48,7 @@ SWIFT_FILES=""
 BINDGEN_PLATFORMS=""
 BINDGEN_DOCS=0
 EXTRA_PATH=""
+NDK=""
 INHERIT_PATH=0
 ORIG_PATH="${PATH:-}"
 EXTRA_ENV=""
@@ -86,6 +87,7 @@ $value" ;;
     bindgen_platforms) BINDGEN_PLATFORMS="$value" ;;
     bindgen_docs) BINDGEN_DOCS="$value" ;;
     path) case "$value" in /*) EXTRA_PATH="$EXTRA_PATH:$value" ;; *) EXTRA_PATH="$EXTRA_PATH:$EXECROOT/$value" ;; esac ;;
+    ndk) NDK="$value" ;;
     inherit_path) INHERIT_PATH="$value" ;;
     env) EXTRA_ENV="$EXTRA_ENV
 $value" ;;
@@ -237,8 +239,9 @@ fi
   fi
 } > "$CARGO_HOME/config.toml"
 
-# The toolchain's cargo and rustc first, then the system's; a platform whose toolchain is the machine's (Xcode, the NDK and
-# cargo-ndk) also gets the PATH the build was started with, after them.
+# The toolchain's cargo and rustc first, then the system's; iOS, whose toolchain is Xcode's and so the machine's, also gets the
+# PATH the build was started with, after them. The Android NDK is not the machine's: it is an input of the action (`ndk=`), and
+# the CLI links with it through the variables it computes from ANDROID_NDK_HOME (ADR-065).
 export PATH="$WORK/bin${EXTRA_PATH}:/usr/bin:/bin:/usr/sbin:/sbin"
 if [ "$INHERIT_PATH" = 1 ] && [ -n "$ORIG_PATH" ]; then export PATH="$PATH:$ORIG_PATH"; fi
 export RUSTC="$WORK/bin/rustc"
@@ -250,6 +253,10 @@ export CARGO_TERM_COLOR=never
 export LC_ALL=C
 export TZ=UTC
 unset RUSTUP_TOOLCHAIN RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
+if [ -n "$NDK" ]; then
+  unset ANDROID_NDK_ROOT NDK_HOME ANDROID_HOME ANDROID_SDK_ROOT
+  export ANDROID_NDK_HOME="$(abs "$NDK")"
+fi
 if [ -n "$EXTRA_ENV" ]; then
   # key=value lines
   OLD_IFS="$IFS"

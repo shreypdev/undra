@@ -13,7 +13,7 @@ examples/bazel/
   ts/               the Node test (hello_core.wasm through the compiled bindings)
   swift/            the Swift test (macOS): the core in process
   consumer/         what an app team adds on top: its own Kotlin library over the store, a Node test importing the runtime
-  android/          the bindings as an Android library (manual: --config=android, the Android SDK)
+  android/          the bindings as an Android library (manual: --config=android, the Android SDK), the NDK repositories' BUILD file and the script that uses an installed NDK instead of the archive
 ```
 
 ```sh
@@ -22,6 +22,8 @@ bazel test //...                      # needs Bazelisk; .bazelversion pins Bazel
 bazel build //:core_web               # bazel-bin/core_web/hello_core.wasm: 112.7 KB gzipped (2026-10-02), budget 120 KB
 bazel build //:bindings               # the Swift, Kotlin and TypeScript trees, as outputs
 bazel build //:mobile_ios             # macOS: the XCFramework (manual target)
+bazel build //:mobile_android         # jniLibs/<abi>/libhello_core.so, linked with the NDK, a declared input (manual target; downloads it)
+bazel build //:mobile_android $(android/use-installed-ndk.sh)   # the same with the NDK sdkmanager installed (CI does this)
 bazel build //android:hello --config=android   # the bindings as an Android library (ANDROID_HOME)
 ```
 
@@ -39,12 +41,20 @@ bazel build //android:hello --config=android   # the bindings as an Android libr
 The actions run the `undra` CLI of this checkout with the Rust toolchain Bazel resolved, crates.io packages downloaded by the
 checksum `Cargo.lock` records and unpacked into a Cargo directory source, and no network. An action copies exactly the files its
 target declares into a scratch directory named by the target (`/tmp/undra-bazel-<key>`), so a core built twice, or in two
-checkouts, is the same file. The C linker (and Xcode for iOS, the NDK and `cargo-ndk` for Android) are the machine's.
+checkouts, is the same file. The C linker (and Xcode for iOS) are the machine's.
 
-The Android core (`//:mobile_android`) is declared and does not build: the core's Rust toolchain for an Android platform needs a
-C++ toolchain for it (`rules_android_ndk`), which this example does not register, and analysis stops at "Unable to find a CC
-toolchain" even on a machine with the NDK and `cargo-ndk`. `//android:hello`, the bindings as an Android library, needs only the
-SDK and builds (by hand: CI does not run it, since `rules_android` then downloads its own tools, one archive without a checksum).
+**The Android core** (`//:mobile_android`, ADR-065) has no machine inputs. `undra_core(ndk = ..)` takes the NDK as a label, an
+input of the action, and the action sets `ANDROID_NDK_HOME` to it itself: no `--action_env`, no `extra_path`, no `cargo-ndk`. It is
+a Cargo cross-build that `undra build` links with the NDK's clang, so the target does not transition to an Android platform (that
+would need a C++ toolchain for one, `rules_android_ndk`) and runs with the host's Rust toolchain; the standard library of the
+Android targets is `undra.android_std` in `MODULE.bazel`, by checksum. The NDK here is the archive of the host OS
+(`android_ndk_linux`, `android_ndk_macos`: r27c, 27.2.12479018, the version CI and the size gate use), selected by OS in
+`BUILD.bazel`, with `android/ndk.BUILD` as its BUILD file. A build that asks for the core fetches it (664 MB on Linux, 836 MB on
+macOS); `bazel test //...` does not. `android/use-installed-ndk.sh` overrides the two repositories with the NDK that `sdkmanager`
+or Android Studio installed, which is what CI's "Bazel example (Android core and library)" job does.
+
+`//android:hello`, the bindings as an Android library, needs only the SDK (`ANDROID_HOME`). The same CI job builds it; `rules_android`
+then downloads its own tools, one archive without a checksum, which is why it is a `manual` target and CI is where it is built.
 
 ## Notes
 
