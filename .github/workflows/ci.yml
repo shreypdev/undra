@@ -576,7 +576,11 @@ jobs:
         run: bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION" "platforms;android-35" "build-tools;35.0.0"
       - name: The Android core (//:mobile_android, linked with the NDK)
         working-directory: examples/bazel
-        run: bazel build //:mobile_android $(android/use-installed-ndk.sh "$ANDROID_HOME/ndk/$NDK_VERSION") --repository_cache="$HOME/.cache/bazel-repository"
+        run: |
+          # On its own line, so that a failed script stops the step (bash -e ignores a failed substitution inside an argument),
+          # where Bazel would otherwise download the 664 MB archive.
+          flags="$(android/use-installed-ndk.sh "$ANDROID_HOME/ndk/$NDK_VERSION")"
+          bazel build //:mobile_android $flags --repository_cache="$HOME/.cache/bazel-repository"
       - name: The Kotlin bindings as an Android library (//android:hello)
         working-directory: examples/bazel
         run: bazel build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"

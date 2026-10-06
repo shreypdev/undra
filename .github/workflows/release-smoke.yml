@@ -78,12 +78,16 @@ jobs:
           newest="$(ls -d /Applications/Xcode_*.app | grep -v -i -E 'beta|candidate|_rc' | sort -V | tail -n 1)"
           sudo xcode-select -s "$newest/Contents/Developer"
           xcodebuild -version
-      # cargo-ndk stays: this job smokes a published release, and the releases before ADR-065 (1.0.x) build Android through it.
-      - name: The Android NDK and cargo-ndk
+      # 1.1.0 and later link with the NDK's clang themselves (ADR-065) and need no cargo-ndk, so for them this job proves that a
+      # machine without it can build Android. The releases before (0.x, 1.0.x) build Android through cargo-ndk.
+      - name: The Android NDK (and cargo-ndk for a release that needs it)
         run: |
+          set -euo pipefail
           bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-          cargo install cargo-ndk
+          case "$V" in
+            0.* | 1.0.*) cargo install cargo-ndk ;;
+          esac
       - name: Install undra the way the site says
         run: |
           set -euo pipefail
