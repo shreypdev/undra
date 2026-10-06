@@ -8,7 +8,8 @@ examples/bazel/
   MODULE.bazel      undra_rules (bazel/, by path), rules_rust 1.99.0 pinned by checksum, rules_kotlin, rules_swift, aspect_rules_ts/js
   undra.toml        the project file `undra build` and `undra bindgen` read; [core] namespace = "hello_core"
   Cargo.toml, core/ the core: a store, a typed error and a function
-  BUILD.bazel       undra_core, undra_bindings, undra_ts_library
+  BUILD.bazel       undra_core, undra_bindings, undra_bindings_test, undra_ts_library
+  committed/        the bindings, committed too: the Swift, Kotlin and TypeScript trees `undra_bindings` produces
   kotlin/           the JVM test (JNI against libhello_core) and the ktlint test of the generated Kotlin
   ts/               the Node test (hello_core.wasm through the compiled bindings)
   swift/            the Swift test (macOS): the core in process
@@ -30,6 +31,7 @@ bazel build //android:hello --config=android   # the bindings as an Android libr
 | `//kotlin:hello_test` | the Kotlin bindings, the Kotlin runtime and `core_host` work together: a call, a store's signals, a typed error, a command, through JNI |
 | `//ts:hello_test` | the same through the TypeScript bindings (type-checked by `tsc` against the compiled runtime) and `core_web` under Node |
 | `//swift:hello_test` | the same in Swift, with the XCFramework's host twin linked (macOS only; skipped on Linux) |
+| `//:bindings_check` | `committed/` is what the core's schema generates, byte for byte (`undra bindgen --check`'s comparison); when it is not, the failure says `bazel run //:bindings_check.update`, which rewrites it |
 | `//kotlin:lint_test` | ktlint 1.8 reports nothing on the generated Kotlin, and 90 findings once the exclusions `undra bindgen` writes are taken away |
 | `//consumer:summary_test` | a Kotlin library an app writes over the generated store compiles and runs, the core loaded by `-Dundra.native.hello_core.path=$(rootpath //:core_host)` |
 | `//consumer:runtime_test` | a Node test that imports `@undra/runtime` beside the bindings resolves both |
@@ -53,3 +55,6 @@ SDK and builds (by hand: CI does not run it, since `rules_android` then download
 * `.bazelrc` sets `DO_NOT_TRACK=1`: `aspect_rules_js` and `aspect_rules_ts` depend on a telemetry module that reports the rulesets a
   build uses to Aspect.
 * `MODULE.bazel.lock` is committed. `.bazelversion` is a link to `bazel/.bazelversion`: one pin for the rules and the example.
+* `committed/` is not called `generated/` on purpose: its files name the Undra release `undra.toml` pins (`[undra] version`), not the
+  workspace's, and `scripts/bump-version.sh` rewrites the runtime range of every `examples/*/generated/ts/package.json`. Nothing
+  reads `committed/` but `//:bindings_check`; `bazel run //:bindings_check.update` regenerates it.

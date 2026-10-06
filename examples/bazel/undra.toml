@@ -14,7 +14,8 @@ package = "hello-core"
 namespace = "hello_core"
 
 [paths]
-# Not used under Bazel: the bindings are an output of `undra_bindings`, not a committed tree.
+# Not used under Bazel: the bindings are an output of `undra_bindings`. (A copy is committed in committed/, kept equal to the
+# output by `undra_bindings_test`: ADR-064.)
 generated = "generated"
 build = "build"
 

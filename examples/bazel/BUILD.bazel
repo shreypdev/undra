@@ -1,4 +1,4 @@
-load("@undra_rules//undra:defs.bzl", "undra_bindings", "undra_core")
+load("@undra_rules//undra:defs.bzl", "undra_bindings", "undra_bindings_test", "undra_core")
 load("@undra_rules//undra:ts.bzl", "undra_ts_library")
 
 package(default_visibility = ["//:__subpackages__"])
@@ -33,6 +33,18 @@ undra_bindings(
         "Sources/HelloCoreFFI/include/hello_core_undra.h",
         "Sources/HelloCoreFFI/include/module.modulemap",
     ],
+)
+
+# The bindings, committed as well (ADR-064): for a repository whose policy keeps generated code in the tree. `bazel test
+# //:bindings_check` fails when committed/ is not what the core's schema generates, and says what to run:
+#
+#   bazel run //:bindings_check.update      writes committed/{swift,kotlin,ts} from the build
+#
+# Nothing below reads committed/: the consumers use the build's own outputs, so a stale tree can never break them.
+undra_bindings_test(
+    name = "bindings_check",
+    bindings = ":bindings",
+    committed = "committed",
 )
 
 # The TypeScript bindings, compiled against the runtime and linked into node_modules for the tests under ts/.

@@ -1,6 +1,9 @@
 load(":actions_test.bzl", "actions_test_suite")
+load(":bindings_test_test.bzl", "bindings_test_suite")
 load(":cargo_vendor_test.bzl", "cargo_vendor_test_suite")
 
 cargo_vendor_test_suite(name = "cargo_vendor_tests")
 
 actions_test_suite(name = "actions_tests")
+
+bindings_test_suite(name = "bindings_tests")
