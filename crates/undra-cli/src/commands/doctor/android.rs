@@ -1,4 +1,4 @@
-//! The Android checks: the SDK and its environment variables, the NDK, `cargo-ndk`, the JDK,
+//! The Android checks: the SDK and its environment variables, the NDK, the JDK,
 //! `adb` and an attached device, the Gradle wrapper and the Rust targets of the project's ABIs.
 
 use std::path::{Path, PathBuf};
@@ -23,10 +23,8 @@ pub const ADB: Check = Check::new("android.adb", "adb-and-a-device").optional();
 pub const DEVICE: Check = Check::new("android.device", "adb-and-a-device").optional();
 /// The NDK, r27 or newer.
 pub const NDK: Check = Check::new("android.ndk", "android-ndk");
-/// `ANDROID_NDK_HOME`, which `cargo-ndk` and Gradle read.
+/// `ANDROID_NDK_HOME`, which Gradle and `ndk-build` read (`undra build` finds the NDK without it).
 pub const NDK_HOME: Check = Check::new("android.ndk-home", "android-ndk");
-/// `cargo-ndk`, which `undra build --platform android` runs.
-pub const CARGO_NDK: Check = Check::new("android.cargo-ndk", "cargo-ndk");
 /// A JDK, 17 or newer, for Gradle.
 pub const JDK: Check = Check::new("android.jdk", "jdk-17");
 /// The Gradle wrapper of the project's Android app.
@@ -48,7 +46,6 @@ pub const ALL: &[Check] = &[
     DEVICE,
     NDK,
     NDK_HOME,
-    CARGO_NDK,
     JDK,
     GRADLE_WRAPPER,
     LLDB,
@@ -63,8 +60,6 @@ pub const MIN_NDK: u32 = 27;
 pub const COMPILE_SDK: u32 = 35;
 /// The JDK the Android Gradle plugin needs.
 pub const MIN_JDK: u32 = 17;
-/// The first `cargo-ndk` that aligns libraries to 16 KB pages.
-pub const MIN_CARGO_NDK: (u32, u32) = (3, 5);
 /// The Gradle version of the wrapper `undra init` creates.
 pub const GRADLE_VERSION: &str = "8.14.3";
 
@@ -79,14 +74,6 @@ pub fn java_major(line: &str) -> Option<u32> {
     } else {
         Some(first)
     }
-}
-
-/// `cargo-ndk 4.1.2` into `(4, 1)`.
-#[must_use]
-pub fn cargo_ndk_version(line: &str) -> Option<(u32, u32)> {
-    let version = line.split_whitespace().nth(1)?;
-    let mut parts = version.split('.');
-    Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
 }
 
 /// The highest `android-<N>` platform in `<sdk>/platforms`.
@@ -158,7 +145,6 @@ pub fn check(cx: &Context<'_>) -> Vec<Finding> {
         out.push(ndk_home(cx, ndk));
         out.push(lldb(cx, ndk, sdk.as_deref()));
     }
-    out.push(cargo_ndk(cx));
     for abi in cx.android_abis {
         let triple = crate::builds::android::triple_of(abi);
         out.push(target(cx, triple, &format!("the {abi} ABI"), false));
@@ -423,37 +409,11 @@ fn ndk_home(cx: &Context<'_>, ndk: &Path) -> Finding {
             State::Missing,
             None,
             format!(
-                "ANDROID_NDK_HOME is not set (undra finds the NDK at {} anyway; cargo-ndk and Gradle may not)",
+                "ANDROID_NDK_HOME is not set (undra finds the NDK at {} anyway; Gradle and other tools may not)",
                 ndk.display()
             ),
             &[&format!("export ANDROID_NDK_HOME={}", quoted_path(&ndk.to_string_lossy()))],
         ),
-    }
-}
-
-fn cargo_ndk(cx: &Context<'_>) -> Finding {
-    let install = "cargo install cargo-ndk";
-    if cx.toolchain.which(cx.sys, "cargo-ndk").is_none() {
-        return CARGO_NDK.missing("cargo-ndk was not found", &[install]);
-    }
-    // `cargo ndk --version`: the binary alone does not answer outside of cargo.
-    let line = cx
-        .toolchain
-        .which(cx.sys, "cargo")
-        .and_then(|cargo| version_line(cx, &cargo, &["ndk", "--version"]));
-    match line {
-        Some(line) => match cargo_ndk_version(&line) {
-            Some(v) if v < MIN_CARGO_NDK => CARGO_NDK.warn_version(
-                line.clone(),
-                format!(
-                    "{line}: libraries are only 16 KB page aligned by cargo-ndk {}.{} or newer",
-                    MIN_CARGO_NDK.0, MIN_CARGO_NDK.1
-                ),
-                &["cargo install cargo-ndk --force"],
-            ),
-            _ => CARGO_NDK.ok(line),
-        },
-        None => CARGO_NDK.ok("cargo-ndk"),
     }
 }
 
@@ -610,8 +570,6 @@ mod tests {
         );
         assert_eq!(java_major("java version \"1.8.0_292\""), Some(8));
         assert_eq!(java_major("nonsense"), None);
-        assert_eq!(cargo_ndk_version("cargo-ndk 4.1.2"), Some((4, 1)));
-        assert_eq!(cargo_ndk_version("cargo-ndk"), None);
     }
 
     #[test]
@@ -783,20 +741,16 @@ mod tests {
     }
 
     #[test]
-    fn cargo_ndk_is_installed_and_new_enough() {
-        let f = by_id(&scan(&good_machine(), &["android"]), "android.cargo-ndk").clone();
-        assert_eq!(f.status, Status::Ok);
-        assert_eq!(f.observed.as_deref(), Some("cargo-ndk 4.1.2"));
-
-        let old = good_machine().with_output("cargo", "ndk --version", "cargo-ndk 3.4.0\n");
-        let f = by_id(&scan(&old, &["android"]), "android.cargo-ndk").clone();
-        assert_eq!((f.status, f.state), (Status::Warn, State::WrongVersion));
-        assert_eq!(f.fix, ["cargo install cargo-ndk --force"]);
-
-        let missing = good_machine_without_cargo_ndk();
-        let f = by_id(&scan(&missing, &["android"]), "android.cargo-ndk").clone();
-        assert_eq!((f.status, f.state), (Status::Fail, State::Missing));
-        assert_eq!(f.fix, ["cargo install cargo-ndk"]);
+    fn the_build_needs_the_ndk_and_nothing_that_wraps_it() {
+        // ADR-065: Cargo links with the NDK's clang itself, so `cargo-ndk` is no prerequisite and no
+        // finding mentions it, whether or not it happens to be installed.
+        let report = scan(&good_machine(), &["android"]);
+        let text = format!("{report:?}");
+        assert!(
+            !text.contains("cargo-ndk") && !text.contains("cargo ndk"),
+            "{text}"
+        );
+        assert_eq!(by_id(&report, "android.ndk").status, Status::Ok);
     }
 
     #[test]

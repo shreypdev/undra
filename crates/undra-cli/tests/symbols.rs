@@ -27,8 +27,8 @@ use std::process::{Command, Output, Stdio};
 use std::sync::{Mutex, OnceLock};
 
 use common::{
-    StableProject, has_rust_target, has_tool, playground_at, repo_root, run_ok, serial,
-    skip_unless, toolchains_required,
+    StableProject, has_android_ndk, has_rust_target, has_tool, playground_at, repo_root, run_ok,
+    serial, skip_unless, toolchains_required,
 };
 
 // ---- the projects ------------------------------------------------------------------------------
@@ -785,7 +785,10 @@ fn android_device() -> Option<Device> {
 #[test]
 fn android_frames_resolve_with_the_unstripped_twin_and_the_play_archive_has_every_abi() {
     let _serial = serial();
-    if skip_unless(on_path("cargo-ndk"), "cargo install cargo-ndk") {
+    if skip_unless(
+        has_android_ndk(),
+        "install the NDK: sdkmanager \"ndk;27.2.12479018\"",
+    ) {
         return;
     }
     if skip_unless(
@@ -1229,7 +1232,7 @@ fn shipped_artefacts_do_not_grow_and_no_symbols_writes_none() {
         );
         compared += 1;
     }
-    if on_path("cargo-ndk")
+    if has_android_ndk()
         && has_rust_target("aarch64-linux-android")
         && has_rust_target("x86_64-linux-android")
         && android_device().is_some()

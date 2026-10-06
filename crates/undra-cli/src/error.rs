@@ -263,13 +263,13 @@ mod tests {
     #[test]
     fn missing_tool_teaches_the_install() {
         let e = CliError::missing_tool(
-            "cargo-ndk",
-            "building for Android",
-            "install it with `cargo install cargo-ndk`",
+            "adb",
+            "listing devices",
+            "install it with `sdkmanager \"platform-tools\"`",
         );
         let text = e.to_string();
-        assert!(text.contains("`cargo-ndk` was not found"), "{text}");
-        assert!(text.contains("cargo install cargo-ndk"), "{text}");
+        assert!(text.contains("`adb` was not found"), "{text}");
+        assert!(text.contains("sdkmanager"), "{text}");
         assert!(text.contains("undra doctor"), "{text}");
     }
 }

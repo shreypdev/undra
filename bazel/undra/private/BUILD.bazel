@@ -10,6 +10,11 @@ bzl_library(
 )
 
 bzl_library(
+    name = "android_std",
+    srcs = ["android_std.bzl"],
+)
+
+bzl_library(
     name = "cargo_vendor",
     srcs = ["cargo_vendor.bzl"],
 )

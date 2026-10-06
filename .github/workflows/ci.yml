@@ -342,12 +342,19 @@ jobs:
         with:
           targets: aarch64-linux-android, x86_64-linux-android
       - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk
+      # `undra build --platform android` links with the NDK's clang itself (ADR-065): this is the same environment, for the JNI
+      # library of undra-ffi, which no project builds (the variables are the ones crates/undra-cli/src/builds/ndk.rs computes).
       - name: Build the JNI library for both ABIs
-        run: cargo ndk -t arm64-v8a -t x86_64 build -p undra-ffi --features jni
+        run: |
+          bash scripts/android-sdk-install.sh "ndk;27.2.12479018"
+          bin="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$bin/aarch64-linux-android26-clang"
+          export CC_aarch64_linux_android="$bin/aarch64-linux-android26-clang" AR_aarch64_linux_android="$bin/llvm-ar"
+          export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$bin/x86_64-linux-android26-clang"
+          export CC_x86_64_linux_android="$bin/x86_64-linux-android26-clang" AR_x86_64_linux_android="$bin/llvm-ar"
+          cargo build --target aarch64-linux-android --target x86_64-linux-android -p undra-ffi --features jni
       # Gradle's undraBuild task over undra init's Android app (debug, release, debug again). It needs a
-      # JDK 17, platform 35 and NDK r27 besides cargo-ndk; UNDRA_TEST_BUILD_SYSTEMS (not REQUIRE) runs it
+      # JDK 17, platform 35 and NDK r27; UNDRA_TEST_BUILD_SYSTEMS (not REQUIRE) runs it
       # when the runner image has them and prints why it skipped when it does not.
       - uses: actions/setup-java@v4
         with:
@@ -584,6 +591,46 @@ jobs:
           scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
           scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
 
+  # The Android core and the Kotlin bindings as an Android library, built by Bazel on Linux (ADR-065). The core's NDK is a declared
+  # input of its action: the example pins the archives (MODULE.bazel), and this job gives the build the NDK that sdkmanager installs
+  # (with the retries the other Android jobs use for dl.google.com) in their place, so a run does not download 664 MB through Bazel.
+  # `undra_android_library` needs the Android SDK (ANDROID_HOME); rules_android fetches one archive without a checksum
+  # (android.googlesource.com, ADR-061): acceptable here, and why it is not part of the job that runs on every developer's machine.
+  bazel-android:
+    name: Bazel example (Android core and library)
+    runs-on: ubuntu-latest
+    env:
+      BAZELISK_VERSION: v1.29.0
+      # The sha256 of that release's bazelisk-linux-amd64.
+      BAZELISK_SHA256: 5a408715e932c0250d28bd84555f12edbf70117de42f9181691c736eacc4a992
+      NDK_VERSION: 27.2.12479018
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Bazelisk
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -sSfLo "$RUNNER_TEMP/bin/bazel" "https://github.com/bazelbuild/bazelisk/releases/download/$BAZELISK_VERSION/bazelisk-linux-amd64"
+          echo "$BAZELISK_SHA256  $RUNNER_TEMP/bin/bazel" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/bazel"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-repository
+          key: bazel-repository-${{ runner.os }}-android-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
+          restore-keys: bazel-repository-${{ runner.os }}-
+      - name: The Android SDK and NDK r27 (a failed download is tried again)
+        run: bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION" "platforms;android-35" "build-tools;35.0.0"
+      - name: The Android core (//:mobile_android, linked with the NDK)
+        working-directory: examples/bazel
+        run: |
+          # On its own line, so that a failed script stops the step (bash -e ignores a failed substitution inside an argument),
+          # where Bazel would otherwise download the 664 MB archive.
+          flags="$(android/use-installed-ndk.sh "$ANDROID_HOME/ndk/$NDK_VERSION")"
+          bazel build //:mobile_android $flags --repository_cache="$HOME/.cache/bazel-repository"
+      - name: The Kotlin bindings as an Android library (//android:hello)
+        working-directory: examples/bazel
+        run: bazel build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
+
   playground-web:
     # The playground's web app and its stories page (src/stories, rendered by stories.html with Vite alone; the modules are Component Story Format
     # over @undra/testkit): type-checked and built against the wasm core `undra build` makes.
@@ -705,7 +752,7 @@ jobs:
   complete:
     name: Complete
     if: always()
-    needs: [rust, leaf-features, ts, kotlin, wasm-ffi, macos, ios-floor, android, ffi-miri, ffi-asan, contracts, contracts-swift, bazel-example, bazel-example-macos, playground-web, react-native]
+    needs: [rust, leaf-features, ts, kotlin, wasm-ffi, macos, ios-floor, android, ffi-miri, ffi-asan, contracts, contracts-swift, bazel-example, bazel-example-macos, bazel-android, playground-web, react-native]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

@@ -34,7 +34,7 @@ http_jar(
 )
 
 undra = use_extension("//:extensions.bzl", "undra")
-use_repo(undra, "undra", "undra_binaryen", "undra_vendor")
+use_repo(undra, "undra", "undra_android_std", "undra_binaryen", "undra_vendor")
 
 # The TypeScript compiler the runtime and the generated bindings are compiled with. A root module that wants another version
 # declares its own `typescript.deps(version = ..)`: the root's tag wins.

@@ -17,7 +17,8 @@ use std::path::Path;
 use std::process::Command;
 
 use common::{
-    flag, has_rust_target, has_tool, init_project, init_project_with, path_with_undra, run_ok,
+    flag, has_android_ndk, has_rust_target, init_project, init_project_with, path_with_undra,
+    run_ok,
 };
 
 fn skipped(variable: &str) -> bool {
@@ -176,8 +177,8 @@ fn android_builds_a_16kb_aligned_library_per_abi() {
         return;
     }
     assert!(
-        has_tool("cargo-ndk", "--version"),
-        "cargo install cargo-ndk"
+        has_android_ndk(),
+        "install the NDK: sdkmanager \"ndk;27.2.12479018\""
     );
     assert!(
         has_rust_target("aarch64-linux-android") && has_rust_target("x86_64-linux-android"),
@@ -205,7 +206,7 @@ fn android_builds_a_16kb_aligned_library_per_abi() {
         eprintln!("android {abi}: {bytes} bytes");
     }
     assert!(stdout.contains("16 KB aligned"), "{stdout}");
-    // Only the core's library is shipped (cargo-ndk also copies what else it built).
+    // Only the core's library is shipped (a Cargo cross-build only builds the shim).
     assert!(
         !project
             .root
@@ -251,8 +252,8 @@ fn a_debug_android_build_hints_at_release_and_lands_where_the_gradle_app_looks()
         return;
     }
     assert!(
-        has_tool("cargo-ndk", "--version"),
-        "cargo install cargo-ndk"
+        has_android_ndk(),
+        "install the NDK: sdkmanager \"ndk;27.2.12479018\""
     );
     assert!(
         has_rust_target("aarch64-linux-android") && has_rust_target("x86_64-linux-android"),

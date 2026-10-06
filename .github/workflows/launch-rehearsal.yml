@@ -80,11 +80,10 @@ jobs:
           newest="$(ls -d /Applications/Xcode_*.app | grep -v -i -E 'beta|candidate|_rc' | sort -V | tail -n 1)"
           sudo xcode-select -s "$newest/Contents/Developer"
           xcodebuild -version
-      - name: The Android NDK and cargo-ndk
+      - name: The Android NDK
         run: |
           bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-          cargo install cargo-ndk
       - name: Rehearse the release
         env:
           VERSION: ${{ inputs.version }}

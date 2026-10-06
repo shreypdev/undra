@@ -65,7 +65,7 @@ Install only what your target platforms need. `undra doctor` checks all of it an
 | --- | --- |
 | Any core (everything in `crates/`) | Rust stable, plus the cross targets Undra ships to |
 | Web | Node 20+, and `binaryen` (for `wasm-opt`, optional: it makes the wasm core smaller) |
-| Android | JDK 17, Kotlin, Gradle, the Android SDK and NDK r27, `cargo-ndk` |
+| Android | JDK 17, Kotlin, Gradle, the Android SDK and NDK r27 (no `cargo-ndk`: Undra links with the NDK's clang itself) |
 | iOS (macOS only) | Full Xcode from the App Store, plus an iOS simulator runtime |
 
 ## 1. Install the toolchain
@@ -92,7 +92,6 @@ brew install node binaryen
 # Android: JDK, Kotlin, Gradle, then the SDK and NDK
 brew install openjdk@17 kotlin gradle
 brew install --cask android-commandlinetools
-cargo install cargo-ndk
 ```
 
 For iOS, install Xcode from the App Store (the Command Line Tools alone have no XCTest and no simulators), then:
@@ -1853,19 +1852,19 @@ The rules support Bazel 8.8 and 9.x, tested in CI on 8.8.1, the lowest, and 9.2.
 
 If you use `undra_ts_library`, add `common --repo_env=DO_NOT_TRACK=1` to your `.bazelrc`. The TypeScript rules it loads (`aspect_rules_js`) report which rulesets and versions your build uses to Aspect unless that variable is set, and only your repository can set it: a module cannot do it for you. The other rules never load them.
 
-`bazel test //...` in [examples/bazel](https://github.com/shreypdev/undra/tree/main/examples/bazel) builds the to-do core for the host and the web, generates the bindings, and runs Kotlin tests against the real core through JNI, TypeScript tests against the wasm module under Node, and, on macOS, a Swift test that loads it in process. CI runs it on Linux for every change, and the Swift test and the iOS core on macOS.
+`bazel test //...` in [examples/bazel](https://github.com/shreypdev/undra/tree/main/examples/bazel) builds the to-do core for the host and the web, generates the bindings, and runs Kotlin tests against the real core through JNI, TypeScript tests against the wasm module under Node, and, on macOS, a Swift test that loads it in process. CI runs it on Linux for every change, and the Swift test and the iOS core on macOS; a third job builds the Android core and the Android library on Linux.
 
 ## Why it is hermetic
 
 The rules call the CLI rather than copy its build: the shim, the release profiles, the `wasm-opt` pipeline, the path remapping and the symbol files stay in one place, so the web size gate and the schema hash are the CLI's. What makes an action that runs Cargo safe to cache:
 
-- **The compiler is Bazel's.** `rustc`, `cargo` and each target's standard library come from your `rules_rust` toolchain, pinned by checksum. No `rustup`.
+- **The compiler is Bazel's.** `rustc`, `cargo` and each target's standard library come from your `rules_rust` toolchain, pinned by checksum (the Android standard library from `undra.android_std`, also by checksum). No `rustup`.
 - **The crates are the lock file's.** `undra_vendor` downloads each crates.io package once, by the checksum `Cargo.lock` records, and an action unpacks them into a Cargo directory source with the network off.
 - **The CLI is built the same way,** from the checkout the core is built against.
 - **The build sees only what the target declares.** The action copies `undra.toml`, `srcs` and `workspace` into a private directory and builds there, with any spawn strategy, sandboxed or not; a file missing from `srcs` is a build error, not a silent read of your tree.
 - **The build directory is named by the target,** because Cargo and `undra build` put the build's path into symbol names: the same target builds in the same place in every checkout, so the same inputs give the same bytes (two clones on one Mac produced byte-identical cores).
 
-The C linker, and for iOS and Android Xcode, the NDK and `cargo-ndk`, are the machine's: no Bazel rule distributes them for Rust.
+The machine's are the C linker (the host's own, as `rules_rust` uses it) and, for iOS, Xcode, which no Bazel rule distributes: `DEVELOPER_DIR` comes in through `--action_env`. The Android NDK is not the machine's: it is a label, an input of the action, so an Android core is cached like the others.
 
 ## Ruleset versions
 
@@ -1889,9 +1888,11 @@ The rest (`apple_support` 1.24.2, `rules_cc` 0.2.17, `rules_java` 9.3.0, `rules_
 | --- | --- | --- |
 | `host`, `web` | nothing outside the rules | Linux and macOS, in CI on every change |
 | `ios` | Xcode, and `apple_support` first in your `MODULE.bazel` | macOS, in CI on every change; the target is `manual` |
-| `android` | the NDK and `cargo-ndk` on the machine, and a C++ toolchain registered for the Android platforms (`rules_android_ndk`), which the rules do not set up | declared, not built anywhere yet: without that toolchain, analysis stops at `Unable to find a CC toolchain`, even with the NDK installed |
+| `android` | the NDK as a labelled input (`undra_core(ndk = ..)`, an `http_archive` of the NDK pinned by checksum, or `rules_android_ndk`'s repository) and `undra.android_std`: no `cargo-ndk`, no `--action_env`, no `extra_path` | Linux, in CI on every change; the target is `manual` |
 
-`undra_android_library` needs the Android SDK only (`rules_android` reads `ANDROID_HOME`), not the NDK. The example's (`bazel build //android:hello --config=android`) was built by hand on macOS; CI does not build it, because `rules_android` then downloads its own tools, one of them an archive without a checksum.
+The Android core is a Cargo cross-build that `undra build` links with the NDK's clang, so it is built in the host configuration, with the host's Rust toolchain: there is no Android platform to resolve a C++ toolchain for. The API level of the linker is `[android] min_sdk` of `undra.toml`. The archive is per host OS (a `select()` on `@platforms//os:*` picks the label) and is fetched only by a build that asks for the Android core, never by `bazel test //...`. CI gives that build the NDK that `sdkmanager` installed instead of downloading it through Bazel: `examples/bazel/android/use-installed-ndk.sh` prints the two `--override_repository` flags that do it, which is also the way to use an NDK you already have.
+
+`undra_android_library` needs the Android SDK only (`rules_android` reads `ANDROID_HOME`), not the NDK. The example's (`bazel build //android:hello --config=android`) is built in the same CI job; `rules_android` then downloads its own tools, one of them an archive without a checksum, which is why it stays a `manual` target and is not part of `bazel test //...`.
 
 ## Generated code and your linters
 
@@ -2611,7 +2612,7 @@ undra doctor --fix       # the commands that close every gap, as one block to pa
 undra doctor --json      # the report for tools
 ```
 
-Checks every prerequisite that `undra init`, `build`, `dev` and the device benchmarks use, and prints one line per finding. Each finding says what was found (`ok`, `missing`, or the wrong version), the value it observed, the exact fix command and the heading of `docs/ONBOARDING.md` that explains it. It covers rustup, stable Rust at the minimum version and the Rust targets of the platforms (`wasm32`, the iOS device and simulator targets, the Android ABIs of `undra.toml`); full Xcode against the command line tools and a simulator runtime; the Android SDK, `platform-tools`, NDK r27, `ANDROID_HOME` and `ANDROID_NDK_HOME`, `cargo-ndk`, JDK 17, `adb` and whether a device or emulator is attached, and the Gradle wrapper; Node 20+ and npm; `wasm-opt` (optional: it makes the wasm core 10-20% smaller); free disk space (a warning under 10 GB); and whether `undra` is on `PATH`, since the build integrations run it by name. Checks that matter only to people working on Undra (the Kotlin compiler, the `undra` emulator) are marked *for contributors*.
+Checks every prerequisite that `undra init`, `build`, `dev` and the device benchmarks use, and prints one line per finding. Each finding says what was found (`ok`, `missing`, or the wrong version), the value it observed, the exact fix command and the heading of `docs/ONBOARDING.md` that explains it. It covers rustup, stable Rust at the minimum version and the Rust targets of the platforms (`wasm32`, the iOS device and simulator targets, the Android ABIs of `undra.toml`); full Xcode against the command line tools and a simulator runtime; the Android SDK, `platform-tools`, NDK r27, `ANDROID_HOME` and `ANDROID_NDK_HOME`, JDK 17, `adb` and whether a device or emulator is attached, and the Gradle wrapper; Node 20+ and npm; `wasm-opt` (optional: it makes the wasm core 10-20% smaller); free disk space (a warning under 10 GB); and whether `undra` is on `PATH`, since the build integrations run it by name. Checks that matter only to people working on Undra (the Kotlin compiler, the `undra` emulator) are marked *for contributors*.
 
 Inside a project only the platforms named in `undra.toml` are checked; elsewhere it checks all of them. It exits with status 1 when something the project needs is missing. `--fix` prints the fix commands as one block with a comment per finding and runs nothing; `--json` prints each finding with its id, state, severity, observed value, fix commands and documentation link.
 

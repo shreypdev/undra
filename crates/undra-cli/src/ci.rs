@@ -133,7 +133,7 @@ mod tests {
         let (config, names) = project(&[Platform::Web]);
         let text = workflow(&config, &names, "1.2.3");
         assert!(
-            !text.contains("setup-java") && !text.contains("cargo-ndk"),
+            !text.contains("setup-java") && !text.contains("ndk;27"),
             "{text}"
         );
         assert!(

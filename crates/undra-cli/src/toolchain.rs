@@ -34,7 +34,7 @@ pub struct Note {
     pub text: String,
 }
 
-/// The environment child processes (cargo, xcodebuild, cargo-ndk) are started with, on top of
+/// The environment child processes (cargo, xcodebuild, the NDK's tools) are started with, on top of
 /// the CLI's own.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Toolchain {

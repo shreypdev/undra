@@ -4,7 +4,7 @@
 //! |---|---|---|
 //! | `host` | `host/lib<ns>.{dylib,so}` | the shim as a cdylib, with the JNI shim (Kotlin on the JVM); on macOS its install name is `@rpath/lib<ns>.dylib`, not a path into `target/` |
 //! | `ios` | `ios/<Ns>Core.xcframework` | the shim as a staticlib for device and simulator, each slice prelinked into one object (`lib<ns>.a`), with `<ns>_undra.h`, `xcodebuild -create-xcframework` |
-//! | `android` | `android/jniLibs/<abi>/lib<ns>.so` | `cargo ndk`, 16 KB page aligned; a release build strips the shipped copy |
+//! | `android` | `android/jniLibs/<abi>/lib<ns>.so` | Cargo cross-build per ABI, linked with the NDK's clang (ADR-065), 16 KB page aligned; a release build strips the shipped copy |
 //! | `web` | `web/<ns>.wasm` | the wasm profile of SPEC 7, then `wasm-opt -Oz` when present; the shipped module has no names or DWARF |
 //! | `rn` | `ios/<Ns>Core.xcframework` + `ios/<Ns>Core.podspec`, `android/jniLibs/` | the iOS and Android builds and the pod React Native apps link (ADR-038) |
 //!
@@ -18,6 +18,7 @@ pub(crate) mod android;
 pub(crate) mod gradle;
 pub(crate) mod host;
 pub(crate) mod ios;
+pub(crate) mod ndk;
 pub(crate) mod rn;
 pub(crate) mod web;
 pub(crate) mod xcode;

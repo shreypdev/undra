@@ -1,15 +1,28 @@
 """`undra_core`: the core of an Undra app, built for each platform it ships to (ADR-061)."""
 
+load("//undra/private:android_std.bzl", "VERSION_FILE")
 load("//undra/private:actions.bzl", "RUNNER_ATTRS", "below", "short_dirname", "stage_manifest", "vendor_params", "write_params")
 
 # The Bazel platforms (undra/platforms) each target platform of `undra build` selects the Rust toolchain for. A platform
-# with several is built for all of them in one action: iOS is a device slice and a simulator slice, Android one per ABI.
+# with several is built for all of them in one action: iOS is a device slice and a simulator slice. Android has none: its core
+# is a Cargo cross-build linked by the NDK, which is an input of the action (`ndk`), so it is built in the host configuration
+# (a target platform of Android would need a C++ toolchain for it, which only `rules_android_ndk` provides) and its standard
+# library is `android_std`, not a Rust toolchain resolved for a platform (ADR-065).
 _PLATFORMS = {
     "host": [],
     "web": ["wasm32"],
     "ios": ["ios_arm64", "ios_sim_arm64"],
-    "android": ["android_arm64", "android_x86_64"],
+    "android": [],
 }
+
+# The marker of an NDK's root directory among the files of the `ndk` label.
+_NDK_MARKER = "source.properties"
+
+def _sysroot_of(file):
+    """The sysroot a Rust standard library file lies in: the directory above `lib/rustlib/`."""
+    marker = "/lib/rustlib/"
+    index = file.path.find(marker)
+    return file.path[:index] if index >= 0 else None
 
 def _target_platforms_impl(settings, attr):
     names = _PLATFORMS[attr.platform]
@@ -106,9 +119,36 @@ def _undra_core_impl(ctx):
     inputs = app_files + [app_manifest]
     for directory in ctx.attr.extra_path:
         lines.append("path=" + directory)
-    if platform in ("ios", "android"):
+    if platform == "ios":
+        # Xcode is the machine's (the documented exception, ADR-065): the PATH the build was started with comes along.
         lines.append("inherit_path=1")
     extra_tools = []
+    android_inputs = []
+    if platform == "android":
+        # The NDK and the standard library of the Android targets are declared inputs: nothing of the machine's is read.
+        if not ctx.attr.ndk or not ctx.attr.android_std:
+            fail("{}: the android platform needs `ndk` and `android_std` (`undra_core` passes them)".format(ctx.label))
+        markers = [f for f in ctx.files.ndk if f.basename == _NDK_MARKER]
+        shallowest = min([len(f.path) for f in markers]) if markers else 0
+        markers = [f for f in markers if len(f.path) == shallowest]
+        if len(markers) != 1:
+            fail("{}: `ndk` must name the files of one Android NDK, with `{}` at its root (found {} such files)".format(ctx.label, _NDK_MARKER, len(markers)))
+        lines.append("ndk=" + markers[0].dirname)
+        android_inputs.append(ctx.attr.ndk[DefaultInfo].files)
+        sysroots_of_std = {}
+        for f in ctx.files.android_std:
+            root = _sysroot_of(f)
+            if root:
+                sysroots_of_std[root] = True
+        if not sysroots_of_std:
+            fail("{}: the Rust standard library of the Android targets is not declared: add `undra.android_std(version = .., sha256s = ..)` to MODULE.bazel and `use_repo(undra, \"undra_android_std\")`".format(ctx.label))
+        for root in sorted(sysroots_of_std):
+            lines.append("sysroot=" + root)
+        versions = [f for f in ctx.files.android_std if f.basename == VERSION_FILE]
+        if len(versions) != 1:
+            fail("{}: `android_std` has no `{}` (it is `@undra_android_std//:std`)".format(ctx.label, VERSION_FILE))
+        lines.append("std_version=" + versions[0].path)
+        android_inputs.append(ctx.attr.android_std[DefaultInfo].files)
     if ctx.attr.wasm_opt:
         tool = [f for f in ctx.files.wasm_opt if f.basename == "wasm-opt"]
         if len(tool) != 1:
@@ -137,14 +177,14 @@ def _undra_core_impl(ctx):
         arguments = [params.path],
         inputs = depset(
             [params, undra_manifest] + inputs + extra_tools,
-            transitive = [depset(undra_files), vendor_files] + tool_files,
+            transitive = [depset(undra_files), vendor_files] + tool_files + android_inputs,
         ),
         tools = [ctx.executable.cli],
         outputs = outputs,
         mnemonic = "UndraBuild",
         progress_message = "Building the {} core of {}".format(platform, ctx.label),
         env = {"LC_ALL": "C"},
-        use_default_shell_env = platform in ("ios", "android"),
+        use_default_shell_env = platform == "ios",
         execution_requirements = ctx.attr.execution_requirements,
     )
     groups = {"core": depset([out])}
@@ -168,6 +208,8 @@ _undra_core = rule(
         "wasm_opt": attr.label(allow_files = True, cfg = "exec"),
         "execution_requirements": attr.string_dict(),
         "extra_path": attr.string_list(),
+        "ndk": attr.label(allow_files = True),
+        "android_std": attr.label(allow_files = True),
         "cli": attr.label(default = Label("@undra//:cli"), executable = True, cfg = "exec"),
         "_undra_sources": attr.label(default = Label("@undra//:sources")),
         "_undra_manifest": attr.label(default = Label("@undra//:Cargo.toml"), allow_single_file = True),
@@ -194,6 +236,7 @@ def undra_core(
         release = False,
         symbols = True,
         wasm_opt = None,
+        ndk = None,
         extra_path = [],
         tags = [],
         visibility = None,
@@ -206,7 +249,10 @@ def undra_core(
     * `host`: `<name>_host/lib<namespace>.dylib` (`.so` on Linux), for the JVM and for `undra_bindings`;
     * `web`: `<name>_web/<namespace>.wasm`, the release-wasm profile then `wasm-opt -Oz` when `wasm_opt` is given;
     * `ios`: the directory `<name>_ios` holding `<Namespace>Core.xcframework` (macOS with Xcode only);
-    * `android`: the directory `<name>_android` holding `jniLibs/<abi>/lib<namespace>.so` (needs the NDK and cargo-ndk).
+    * `android`: the directory `<name>_android` holding `jniLibs/<abi>/lib<namespace>.so`, a Cargo cross-build per ABI linked
+      with the NDK of `ndk` (ADR-065; no `cargo-ndk`). It is built in the host configuration, with the host's Rust toolchain: no
+      Android platform, no C++ toolchain for one. The standard library of the Android targets is the application's
+      `undra.android_std(..)` (a checksum-pinned `rust-std`), and the API level of the linker is `[android] min_sdk` of undra.toml.
 
     Each target also has an output group `symbols`: the symbol files `undra build --release` writes (a crash report's
     addresses resolve to file and line with them; `undra symbolicate` reads them).
@@ -222,12 +268,21 @@ def undra_core(
         symbols: also write the symbol files of a release build, as `undra build` does by default (the shipped web module differs
             by about 0.1% when it does not: `wasm-opt` sees the names, ADR-046), so the default is the CLI's own bytes.
         wasm_opt: an executable `wasm-opt` (binaryen); without it the web module is not shrunk further, as the CLI says.
-        extra_path: directories (absolute) put on the action's `PATH` for the `ios` and `android` builds, whose toolchains are the
-            machine's: `cargo-ndk`'s directory, for one. `ANDROID_NDK_HOME` and `DEVELOPER_DIR` come in through `--action_env`.
+        ndk: the Android NDK as a label (required by `android`): a target whose files are the NDK's root directory tree, with
+            its `source.properties` at the root, such as the repository an `http_archive` of the NDK zip makes, pinned by sha256,
+            with a `build_file` that exports `source.properties` and `toolchains/llvm/prebuilt/**` (`examples/bazel` has it), or
+            the one `rules_android_ndk` makes. The action sets `ANDROID_NDK_HOME` to that directory itself: no `--action_env`
+            and no `extra_path` for Android. The archive is per host OS, so a `select()` on `@platforms//os:*` is the usual
+            value.
+        extra_path: directories (absolute) put on the action's `PATH` for the `ios` build, whose toolchain is the machine's
+            (the documented exception: `DEVELOPER_DIR` comes in through `--action_env` and the `PATH` the build was started with
+            is inherited). Android does not use it.
         tags: tags of the generated targets.
         visibility: the visibility of every generated target.
         **kwargs: passed to the generated rule instances (`execution_requirements`).
     """
+    if "android" in platforms and ndk == None:
+        fail("undra_core({}): `platforms` has \"android\", which needs `ndk`: the label of the Android NDK's files (an http_archive of the NDK, see examples/bazel)".format(name))
     targets = []
     for platform in platforms:
         target = "{}_{}".format(name, platform)
@@ -241,8 +296,10 @@ def undra_core(
             release = release,
             symbols = symbols,
             wasm_opt = wasm_opt if platform == "web" else None,
+            ndk = ndk if platform == "android" else None,
+            android_std = Label("@undra_android_std//:std") if platform == "android" else None,
             extra_path = extra_path,
-            # The Apple and Android toolchains are the machine's, not Bazel's (ADR-061): they build when asked for by name.
+            # Xcode is the machine's, not Bazel's (ADR-061), and the NDK is a large download: both build when asked for by name.
             tags = tags + (["manual", "requires-darwin"] if platform == "ios" else []) + (["manual"] if platform == "android" else []),
             target_compatible_with = ["@platforms//os:macos"] if platform == "ios" else [],
             visibility = visibility,

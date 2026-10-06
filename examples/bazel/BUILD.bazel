@@ -55,16 +55,22 @@ undra_ts_library(
     visibility = ["//:__subpackages__"],
 )
 
-# The cores of the mobile apps. They build when asked for by name, because their toolchains are the machine's, not Bazel's:
+# The cores of the mobile apps. They build when asked for by name: the iOS core takes Xcode from the machine, and the Android core
+# downloads the NDK (see MODULE.bazel).
 #
 #   bazel build //:mobile_ios       an XCFramework (macOS with Xcode; CI builds it)
-#   //:mobile_android               declared, does not build here: rules_rust needs a C++ toolchain for the Android platforms
-#                                   (rules_android_ndk), which this example does not set up (ADR-061)
+#   bazel build //:mobile_android   jniLibs/<abi>/libhello_core.so for arm64-v8a and x86_64, linked with the NDK of `ndk` (CI builds it)
+#
+# The NDK is a declared input (ADR-065): the archive of the host OS, pinned in MODULE.bazel. No ANDROID_NDK_HOME, no cargo-ndk.
 undra_core(
     name = "mobile",
     srcs = glob(["core/**"]) + ["Cargo.toml"],
     config = "undra.toml",
     namespace = "hello_core",
+    ndk = select({
+        "@platforms//os:linux": "@android_ndk_linux//:ndk",
+        "@platforms//os:macos": "@android_ndk_macos//:ndk",
+    }),
     platforms = [
         "ios",
         "android",
