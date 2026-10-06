@@ -254,7 +254,7 @@ While you work on screens, the core rarely changes, and a debug core is much slo
 | Where | How |
 | --- | --- |
 | Android | `./gradlew :app:installDebug -PundraRelease=true` (the `undraBuild` task reads the property; without it a debug variant builds a debug core) |
-| iOS | in the **Build the Undra core** Run Script phase, change `--configuration $CONFIGURATION` to `--configuration Release`; the app's own configuration stays Debug |
+| iOS | in the **Build the Undra core** Run Script phase, the last line (the one that starts `exec env -i`) ends `--configuration "$CONFIGURATION"`: change that to `--configuration Release` (the `echo "note: ..."` line above it only prints the command). The app's own configuration stays Debug |
 | Web | nothing to do: the web core is always optimized |
 | React Native | `undra build --platform rn --release` |
 | Bazel | `undra_core(release = True)` on the core target the app links |
@@ -1871,7 +1871,7 @@ A web team's state management goes with it: the mirror is the store. Where a Rea
 
 ## Moving a React Native app to native
 
-A team that moves screens from React Native to SwiftUI or Compose keeps the core. The native screens bind to the Swift or Kotlin classes of the same stores the React Native screens were using; both read one state during the move, so a screen can switch over on its own, and nothing is written twice on the way. [`undra adopt`](https://shreypdev.github.io/undra/docs/cli.html#undra-adopt) adds the core to an app that already exists without touching its project files.
+A team that moves screens from React Native to SwiftUI or Compose keeps the core: the Rust code and its stores do not change with the move. The native screens bind to the Swift or Kotlin classes of the same stores the React Native screens use. One process holds one instance of a core, though: a core image is initialised once per process, so a Swift or Kotlin host in the same app cannot hold the core React Native has loaded ([React Native limits](https://github.com/shreypdev/undra/blob/main/docs/REACT_NATIVE.md#limits)). The host therefore switches per app, not per screen: the native app is built against the same core and takes over from the React Native one when its screens are ready. [`undra adopt`](https://shreypdev.github.io/undra/docs/cli.html#undra-adopt) adds the core to a native app that already exists without touching its project files.
 
 ## One core or several
 
@@ -2441,14 +2441,14 @@ The benchmark rows time one core call on the host. A call holds the core lock fo
 
 The lock is held about 6,800 times shorter at the median and 6,400 times at the 99th percentile. The cost of the snapshot did not go away: it moved to a thread that does not hold the lock, and the snapshot reaches the screen about as soon either way. The second wrong design is only 15% worse under the lock on a host, because encoding and copying 1.2 MB is cheap next to parsing 1.4 MB; its price is paid on each platform, which has to decode and apply those 1.2 MB, and that no host-side row shows.
 
-What a caller sees: a second thread made a call that does nothing but need the core lock, in a loop, while a snapshot was applied about every 9 ms for 8 seconds per design (best of four runs; a busy machine deschedules the probe itself, so the maximum is the noisiest figure):
+What a caller sees: a second thread made a call that does nothing but need the core lock, in a loop, while a snapshot was applied about every 9 ms for 8 seconds per design (`UNDRA_STRESS_SECONDS=8`; the test runs 5 without it; best of four runs; a busy machine deschedules the probe itself, so the maximum is the noisiest figure):
 
 | Design | Wait p50 | p99 | p99.9 | Max |
 | --- | --- | --- | --- | --- |
 | This recipe | 125 ns | 2.0 us | 7.8 us | 132 us |
 | Snapshot applied inside a call | 125 ns | 2.9 us | 3.47 ms | 7.04 ms |
 
-A call that arrives during an in-call apply waits out the parse. That is about one call in 200 here, so it is the p99.9 and the maximum that show it, and not the median or the p99. Both tables come from the same code: `cargo test -p undra-bench --test budgets --release -- --nocapture leaderboard` prints the rows and `cargo test -p undra-bench --test leaderboard --release -- --ignored --nocapture stall_report` the caller's wait. CI holds the first one to a budget (the recommended row's p50 and p99, in `bench/budgets.toml`) and to a ratio that does not depend on the machine: the publish must stay under 5% of the in-call apply, and it is 0.015%. A publish that grew with the players, the ranking read or sorted on the core or every row in a signal, would put that ratio near 1. These are host numbers; [finding 9 of the benchmark results](https://github.com/shreypdev/undra/blob/main/bench/RESULTS.md) has the method and the limits.
+A call that arrives during an in-call apply waits out the parse. That is about one call in 200 here, so it is the p99.9 and the maximum that show it, and not the median or the p99. Both tables come from the same code: `UNDRA_BENCH_FILTER=leaderboard cargo test -p undra-bench --test budgets --release -- --nocapture --exact budgets` prints the `leaderboard/` rows (without the variable it times every row of the benchmark) and `UNDRA_STRESS_SECONDS=8 cargo test -p undra-bench --test leaderboard --release -- --ignored --nocapture stall_report` the caller's wait. CI holds the first one to a budget (the recommended row's p50 and p99, in `bench/budgets.toml`) and to a ratio that does not depend on the machine: the publish must stay under 5% of the in-call apply, and it is 0.015%. A publish that grew with the players, the ranking read or sorted on the core or every row in a signal, would put that ratio near 1. These are host numbers; [finding 9 of the benchmark results](https://github.com/shreypdev/undra/blob/main/bench/RESULTS.md) has the method and the limits.
 
 ## What the tests prove
 
