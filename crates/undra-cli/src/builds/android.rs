@@ -113,7 +113,7 @@ pub fn build(
             profile,
             crate_type: "cdylib",
             features: vec!["jni".to_owned()],
-            env: ndk::environment(&ndk, os, triple, cfg.min_sdk),
+            env: ndk::environment(&ndk, os, triple, cfg.min_sdk)?,
             lib_name: crate::shim::shim_lib_name(&session.project.root),
             // The image's identity (what a panic report names it by) and the 16 KB pages, in the
             // unstripped library and in the stripped copy alike.

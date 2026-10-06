@@ -11,6 +11,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::error::{CliError, Code, Result};
 use crate::sys::{Os, Sys};
 
 /// The `-C` argument that makes the linker align LOAD segments to 16 KB pages, which Google Play
@@ -132,11 +133,28 @@ pub fn is_64_bit(triple: &str) -> bool {
 ///
 /// Nothing is run and nothing is read from the machine: the paths are computed (a missing file is
 /// [`missing_tools`]'s to report).
-#[must_use]
-pub fn environment(ndk: &Path, os: Os, triple: &str, api: u32) -> Vec<(String, String)> {
+///
+/// # Errors
+///
+/// `C0003` when `ndk` is not valid UTF-8: the variables hold text, and a path that cannot be
+/// spelled as text would reach Cargo mangled (the usual replacement character), naming a linker
+/// that does not exist.
+pub fn environment(ndk: &Path, os: Os, triple: &str, api: u32) -> Result<Vec<(String, String)>> {
+    if ndk.to_str().is_none() {
+        return Err(CliError::new(
+            Code::MissingTool,
+            format!(
+                "the Android NDK's path, {}, is not valid UTF-8",
+                ndk.display()
+            ),
+            "Cargo is told where the NDK's linker and compilers are through environment variables (CARGO_TARGET_<triple>_LINKER, CC_<triple>, AR_<triple>), which hold text; a path with bytes that are not UTF-8 cannot be passed as it is",
+            "move the NDK to a path of plain characters, or point ANDROID_NDK_HOME at one",
+        ));
+    }
+    // Every path below is `ndk` plus ASCII components, so this is exact.
     let path = |p: PathBuf| p.to_string_lossy().into_owned();
     let cc_triple = cc_env_triple(triple);
-    vec![
+    Ok(vec![
         (
             format!("CARGO_TARGET_{}_LINKER", cargo_env_triple(triple)),
             path(linker(ndk, os, triple, api)),
@@ -149,7 +167,7 @@ pub fn environment(ndk: &Path, os: Os, triple: &str, api: u32) -> Vec<(String, S
         (format!("AR_{cc_triple}"), path(ar(ndk, os))),
         (format!("RANLIB_{cc_triple}"), path(ranlib(ndk, os))),
         ("ANDROID_NDK_HOME".to_owned(), path(ndk.to_path_buf())),
-    ]
+    ])
 }
 
 /// The arguments for rustc itself (after `--`) of the Android library for `triple` at `api` on `os`: the GNU build
@@ -216,7 +234,8 @@ mod tests {
             Os::Macos,
             "aarch64-linux-android",
             26,
-        );
+        )
+        .unwrap();
         let bin = "/sdk/ndk/27.2.12479018/toolchains/llvm/prebuilt/darwin-x86_64/bin";
         let clang = format!("{bin}/aarch64-linux-android26-clang");
         assert_eq!(
@@ -241,7 +260,7 @@ mod tests {
 
     #[test]
     fn x86_64_on_linux_follows_the_api_level_and_the_host() {
-        let env = environment(Path::new("/ndk"), Os::Linux, "x86_64-linux-android", 31);
+        let env = environment(Path::new("/ndk"), Os::Linux, "x86_64-linux-android", 31).unwrap();
         assert_eq!(
             get(&env, "CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER"),
             "/ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android31-clang"
@@ -258,7 +277,7 @@ mod tests {
 
     #[test]
     fn the_32_bit_abis_get_the_wrapper_names_the_ndk_gives_them() {
-        let arm = environment(Path::new("/ndk"), Os::Linux, "armv7-linux-androideabi", 26);
+        let arm = environment(Path::new("/ndk"), Os::Linux, "armv7-linux-androideabi", 26).unwrap();
         assert_eq!(
             get(&arm, "CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER"),
             "/ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi26-clang"
@@ -267,7 +286,7 @@ mod tests {
         assert!(
             get(&arm, "CC_armv7_linux_androideabi").ends_with("armv7a-linux-androideabi26-clang")
         );
-        let x86 = environment(Path::new("/ndk"), Os::Linux, "i686-linux-android", 26);
+        let x86 = environment(Path::new("/ndk"), Os::Linux, "i686-linux-android", 26).unwrap();
         assert!(
             get(&x86, "CARGO_TARGET_I686_LINUX_ANDROID_LINKER")
                 .ends_with("i686-linux-android26-clang")
@@ -281,7 +300,8 @@ mod tests {
             Os::Windows,
             "aarch64-linux-android",
             26,
-        );
+        )
+        .unwrap();
         // The linker is not a `.cmd` (cmd.exe would re-read the quoting of rustc's arguments), so the target comes as an argument.
         assert!(
             get(&env, "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER")
@@ -353,6 +373,20 @@ mod tests {
             rustc_args(Os::Linux, "armv7-linux-androideabi", 26),
             ["-C", "link-arg=-Wl,--build-id=sha1"]
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_path_that_is_not_utf8_is_refused_not_mangled() {
+        use std::os::unix::ffi::OsStrExt;
+        let ndk = Path::new(std::ffi::OsStr::from_bytes(b"/sdk/ndk/27\xff"));
+        let error = environment(ndk, Os::Linux, "aarch64-linux-android", 26).unwrap_err();
+        let text = error.to_string();
+        assert!(
+            text.contains("C0003") && text.contains("not valid UTF-8"),
+            "{text}"
+        );
+        assert!(text.contains("ANDROID_NDK_HOME"), "{text}");
     }
 
     #[test]
