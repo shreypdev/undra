@@ -897,7 +897,7 @@ fn baseline() {
         println!("budget_ns = {budget}");
         println!("measured_ns = {:.1}", stats.p50_ns);
         println!(
-            "# p99 {:.1} (a row whose claim is its tail takes p99_ns, 5x this, and measured_p99_ns)",
+            "# p99 {:.1} (a row whose claim is its tail takes p99_ns, 10x this, and measured_p99_ns)",
             stats.p99_ns
         );
         if let Some(old) = existing.benches.get(&workload.name) {

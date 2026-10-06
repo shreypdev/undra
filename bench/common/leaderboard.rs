@@ -59,14 +59,14 @@ pub struct Place {
     pub score: u32,
 }
 
-/// The four numbers about the whole ranking.
+/// The numbers about the whole ranking, and the followed player: the recipe's `Summary`.
 #[undra::api]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tally {
     pub players: u32,
     pub top_score: u32,
     pub median_score: u32,
-    pub my_rank: u32,
+    pub me: Option<Place>,
 }
 
 fn place(r: &Ranked) -> Place {
@@ -86,7 +86,9 @@ fn locked<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 pub struct Ranking {
     snapshot: Vec<u8>,
     standings: Mutex<Standings>,
-    staged: Mutex<Option<View>>,
+    staged: Mutex<Option<(u64, View)>>,
+    /// The recipe's `Inner::version`: every window is newer than the last.
+    version: AtomicU64,
 }
 
 impl Ranking {
@@ -95,6 +97,7 @@ impl Ranking {
             snapshot: synthetic_snapshot(1, players),
             standings: Mutex::new(Standings::new()),
             staged: Mutex::new(None),
+            version: AtomicU64::new(0),
         }
     }
 
@@ -110,7 +113,11 @@ impl Ranking {
     /// Leaves `view` where the next `publish_staged` call finds it: what the awaiting task holds
     /// when the blocking pool's closure returns.
     pub fn stage(&self, view: View) {
-        *locked(&self.staged) = Some(view);
+        *locked(&self.staged) = Some((self.next_version(), view));
+    }
+
+    fn next_version(&self) -> u64 {
+        self.version.fetch_add(1, Ordering::Relaxed) + 1
     }
 
     pub fn snapshot_len(&self) -> usize {
@@ -122,22 +129,26 @@ impl Ranking {
 #[undra::store(restore = "Self::rebuild")]
 pub struct Standing {
     ranking: Arc<Ranking>,
+    published: Arc<AtomicU64>,
     top: Signal<Vec<Place>>,
     around: Signal<Vec<Place>>,
     summary: Signal<Tally>,
 }
 
 impl Standing {
-    /// The recipe's `Board::publish`, but every write unconditional: the worst case, a window
-    /// that changed in every signal.
-    fn publish(&self, view: &View) {
+    /// The recipe's `Board::publish` (the version check included), but every write unconditional:
+    /// the worst case, a window that changed in every signal.
+    fn publish(&self, version: u64, view: &View) {
+        if self.published.fetch_max(version, Ordering::SeqCst) >= version {
+            return;
+        }
         let top: Vec<Place> = view.top.iter().map(place).collect();
         let around: Vec<Place> = view.around.iter().map(place).collect();
         let summary = Tally {
             players: view.players,
             top_score: view.top_score,
             median_score: view.median_score,
-            my_rank: view.me.map_or(0, |m| m.rank),
+            me: view.me.as_ref().map(place),
         };
         txn(|| {
             self.top.set(top);
@@ -158,7 +169,7 @@ impl Standing {
                 players: 0,
                 top_score: 0,
                 median_score: 0,
-                my_rank: 0,
+                me: None,
             }),
         )
     }
@@ -172,6 +183,7 @@ impl Standing {
     ) -> Self {
         Standing {
             ranking: Arc::new(Ranking::new(PLAYERS)),
+            published: Arc::new(AtomicU64::new(0)),
             top,
             around,
             summary,
@@ -187,17 +199,17 @@ impl Standing {
     /// The recommended design's step on the core: the pool's closure returned a window, the
     /// awaiting task writes it. Takes the staged window.
     pub fn publish_staged(&self) {
-        let view = locked(&self.ranking.staged)
+        let (version, view) = locked(&self.ranking.staged)
             .take()
             .expect("a window was staged");
-        self.publish(&view);
+        self.publish(version, &view);
     }
 
     /// The first naive design: the snapshot is applied inside the call (parse, sort, swap), and
     /// the same window is published.
     pub fn apply_in_call(&self) -> u32 {
         let view = self.ranking.ingest();
-        self.publish(&view);
+        self.publish(self.ranking.next_version(), &view);
         view.players
     }
 }
@@ -277,8 +289,9 @@ fn recommended() -> Box<dyn Bench> {
     );
     let shipped = host.counts.change_set_bytes() - bytes;
     assert_eq!(
-        shipped, 771,
-        "the window is 771 bytes whatever the players: 50 + 7 rows of 12 bytes and four numbers"
+        shipped, 780,
+        "the window is 780 bytes whatever the players: 50 + 7 rows of 12 bytes, three numbers and \
+         the followed row (what the recipe's own test asserts)"
     );
     with_reset(
         move || {
@@ -296,7 +309,7 @@ fn in_core_call() -> Box<dyn Bench> {
     let (sets, bytes) = (host.counts.change_sets(), host.counts.change_set_bytes());
     call_ok(&rt, &payload);
     assert_eq!(host.counts.change_sets() - sets, 1);
-    assert_eq!(host.counts.change_set_bytes() - bytes, 771);
+    assert_eq!(host.counts.change_set_bytes() - bytes, 780);
     plain(move || {
         black_box(rt.call_sync(black_box(&payload)));
     })
@@ -387,8 +400,10 @@ pub fn stall(naive: bool, run: Duration) -> Stall {
         // A closed loop: one call, a pause, the next. A call that waits out a core-lock hold is one
         // slow sample, so the percentiles say how often a caller is held up and `max` says for how long
         // (a probe that is itself descheduled by a busy machine adds its own noise: best of several runs).
+        // It also runs until one snapshot was applied: on a loaded machine the applying thread may not
+        // have been scheduled yet when `run` is over, and a run that saw no snapshot measured nothing.
         let start = Instant::now();
-        while start.elapsed() < run {
+        while start.elapsed() < run || snapshots.load(Ordering::Relaxed) == 0 {
             let t = Instant::now();
             black_box(rt.call_sync(black_box(&ping)));
             hist.record(u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX));
