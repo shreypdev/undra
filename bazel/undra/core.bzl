@@ -238,7 +238,7 @@ def undra_core(
             directory is its own, named by the target and this attribute, so a build without it never removes them, and the
             bytes of this build differ from the other's, which the directory name reaches). They are not an output, so a core
             restored from a cache after the directory is gone has none: build it again (change the core, or a flag the action
-            reads) to debug it.
+            reads) to debug it. Only the `ios` core reads it.
         tags: tags of the generated targets.
         visibility: the visibility of every generated target.
         **kwargs: passed to the generated rule instances (`execution_requirements`).
@@ -257,7 +257,7 @@ def undra_core(
             symbols = symbols,
             wasm_opt = wasm_opt if platform == "web" else None,
             extra_path = extra_path,
-            keep_debug_objects = keep_debug_objects,
+            keep_debug_objects = keep_debug_objects if platform == "ios" else False,  # only an iOS slice has a debug map
             # The Apple and Android toolchains are the machine's, not Bazel's (ADR-061): they build when asked for by name.
             tags = tags + (["manual", "requires-darwin"] if platform == "ios" else []) + (["manual"] if platform == "android" else []),
             # The iOS core is built from a Mac, for iOS: also compatible with an iOS target platform, so the app (an
