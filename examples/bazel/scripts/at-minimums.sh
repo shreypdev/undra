@@ -25,7 +25,7 @@ dep='^bazel_dep\(name = "([^"]+)", version = "([^"]+)"\)$'
 
 backup=$(mktemp)
 cp "$module" "$backup"
-restore() { cat "$backup" > "$module" && rm -f "$backup"; }
+restore() { if [ -f "$backup" ]; then cp "$backup" "$module" && rm -f "$backup"; fi; }
 trap restore EXIT
 trap 'exit 130' INT TERM
 
