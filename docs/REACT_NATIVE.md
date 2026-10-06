@@ -28,8 +28,16 @@ its own once per display frame (ADR-031), exactly as on the web.
 ## Requirements
 
 * React Native with the New Architecture, bridgeless, on Hermes. **0.87 is the version it is built and
-  proven on** (the playground); the package's peer range starts at 0.82, which has the APIs it uses
-  (pure C++ TurboModules on both platforms), but nothing below 0.87 has been run.
+  proven on** (the playground), and **0.86 is verified too**: the playground app, rebuilt on
+  `react-native@0.86.3` with its matching `@react-native/*` 0.86 packages and the module unchanged, passes the
+  on-device checks on the iOS simulator (24 of 24) and the Android emulator (23 of 23; RN24 and RN25 were not
+  run there), and `UndraJsi.cpp` and `UndraTurboModule.cpp` compile with `-Werror` against 0.86.3's headers
+  (see "What was run on React Native 0.86" below). The package's peer range starts at 0.82, which has the
+  APIs it uses (pure C++ TurboModules on both platforms), but nothing below 0.86 has been run.
+  An Android app on 0.86 keeps 0.86's own toolchain, not the 0.87 template's: Gradle 9.3.1, Kotlin 2.1.20,
+  compileSdk 36. Gradle 9.4.1 bundles Kotlin 2.3.0, which cannot read the classes of 0.86's Gradle plugin
+  (`:gradle-plugin:settings-plugin:compileKotlin` fails with "Incompatible classes were found"); that is the
+  app's build, not the module.
 * iOS: CocoaPods (`brew install cocoapods`), and the deployment target of your core (`[ios]
   deployment_target` in `undra.toml`, 17.0 by default) as the app's `platform :ios`.
 * Android: the NDK the app builds with (React Native 0.87's template asks for r27), and the ABIs of
@@ -319,6 +327,26 @@ C++ module: that is the C++ host test plus RN01..RN10 on a device. Count it as "
 stand-in", never as a native column next to Swift and Kotlin.
 
 ## What is verified
+
+**What was run on React Native 0.86** (2026-10-05, `wt/rn-086`, a Mac shared with other agents' builds): a
+scratch copy of `examples/playground` outside the tracked tree (`@undra/react-native` and `@undra/runtime`
+linked from the copy of this checkout, the playground's Metro and Babel config unchanged), with `react-native`
+pinned to `0.86.3` (the newest 0.86 patch), `@react-native/babel-preset`, `eslint-config`, `metro-config` and
+`typescript-config` to 0.86.x, New Architecture, bridgeless and Hermes as the playground has them
+(`hermes-compiler` 250829098.0.17), and a release core from `undra build --platform rn --release`. Nothing in
+`runtimes/rn` was changed.
+
+| What | Where | Result |
+|---|---|---|
+| The JSI layer against 0.86's headers | `clang++ -std=c++20 -fsyntax-only -Wall -Wextra -Werror` on `UndraJsi.cpp` and `UndraTurboModule.cpp`, the include paths of `cpp/test/run.sh` step 3 | both compile |
+| The playground's types | `npx tsc --noEmit` in the app | clean |
+| The iOS app | `pod install` (79 dependencies, React-Core 0.86.3), `xcodebuild` Release for the iPhone 17 Pro simulator (iOS 26.5), `ONLY_ACTIVE_ARCH=YES ARCHS=arm64`; the module's pod compiles | builds |
+| The on-device checks, iOS | `scripts/rn-device-checks.sh ios --no-build` | `UNDRA-RN CHECKS 24/24 passed` (RN01..RN21, then RN22..RN24) |
+| The Android app | Gradle 9.3.1, `:app:assembleRelease -PreactNativeArchitectures=arm64-v8a`, compileSdk 36, build-tools 36.0.0, NDK 27.2, Kotlin 2.1.20 | builds (with Gradle 9.4.1 and Kotlin 2.2.0 it does not: the toolchain note under Requirements) |
+| The on-device checks, Android | `scripts/rn-device-checks.sh android --no-build` on the `undra` emulator (arm64, API 35) | `UNDRA-RN CHECKS 23/23 passed` (RN01..RN21, RN22, RN23); RN24 (the Home key) and RN25 (airplane mode) were left out because the emulator is shared |
+
+The contract scenarios (`npm run test:contract`) go through a stand-in of the module and do not load React
+Native, so they say nothing about a React Native version. 0.82 to 0.85 have not been run.
 
 **After ADR-044's table** (2026-10-01, `wt/abi-table`): the module reaches each core through its `UndraApi`
 table, by namespace. On a Mac (Apple clang, Xcode 26.6):
