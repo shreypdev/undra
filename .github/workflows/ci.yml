@@ -516,8 +516,9 @@ jobs:
         working-directory: examples/bazel
         run: bazel test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
 
-  # What only macOS can run, where rules_swift and the iOS core have Xcode: the Swift consumer runs the core in process, and the
-  # XCFramework (device and simulator slices) builds in a Bazel action. The Kotlin and TypeScript targets are the Linux job's.
+  # What only macOS can run, where rules_swift and the iOS core have Xcode: the Swift consumer runs the core in process, the
+  # XCFramework (device and simulator slices) builds in a Bazel action, and the example's iOS app, built to debug (`-c dbg`), has a
+  # dSYM that resolves the Rust core (`keep_debug_objects`). The Kotlin and TypeScript targets are the Linux job's.
   # Every change runs it, like the other macOS jobs: what moves its result is the Undra crates, the Swift runtime, the CLI and
   # the rules, which is nearly every change, and a job that can be skipped cannot be part of the roll-up.
   bazel-example-macos:
@@ -532,11 +533,13 @@ jobs:
           path: ~/.cache/bazel-repository
           key: bazel-repository-${{ runner.os }}-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
           restore-keys: bazel-repository-${{ runner.os }}-
-      - name: The Swift consumer and the iOS core
+      - name: The Swift consumer, the iOS core and the iOS app's dSYM
         working-directory: examples/bazel
         run: |
           bazel test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
           bazel build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
+          bazel test //ios:symbols_test --ios_multi_cpus=sim_arm64 -c dbg --apple_generate_dsym \
+            --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
 
   playground-web:
     # The playground's web app and its stories page (src/stories, rendered by stories.html with Vite alone; the modules are Component Story Format
