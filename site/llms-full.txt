@@ -1947,7 +1947,7 @@ Expect the Rust frame with its file and line, the generated dispatcher under it,
 - LLDB warns that it has "no plugin for the language rust"; the frames work without it, and a Rust variable prints as its fields.
 - A breakpoint by `-f lib.rs -l 145` works too and also sets a location in every dependency that has a `lib.rs` (24 here), so a function name is the better choice.
 
-Two things to know about the kept objects. They are not a build output, so a core that Bazel restores from its cache after the directory is gone has no Rust frames: build it again (change the core, or a flag the action reads). And the directory belongs to the target and to `keep_debug_objects`, so a build of the same core without it (the default configuration) does not remove them, but the bytes of the debug core differ from that one's, because the directory's name is in them.
+Three things to know about the kept objects. They are not a build output, so a core that Bazel restores from its cache after the directory is gone has no Rust frames: build it again, with any new value of a variable the action reads (`--action_env=UNDRA_REBUILD=2` rebuilds the iOS core, verified). macOS removes what is in `/tmp` at a restart and, once a day, files unused for three days, so a debugging session days after the build may need that rebuild too. And the directory belongs to the target and to `keep_debug_objects`, so a build of the same core without it (the default configuration) does not remove them, but the bytes of the debug core differ from that one's, because the directory's name is in them.
 
 ## Generated code and your linters
 

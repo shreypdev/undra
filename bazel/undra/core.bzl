@@ -237,8 +237,8 @@ def undra_core(
             target triple (about 80 MB each in a debug build) stay there until the next build of the target with this attribute (the
             directory is its own, named by the target and this attribute, so a build without it never removes them, and the
             bytes of this build differ from the other's, which the directory name reaches). They are not an output, so a core
-            restored from a cache after the directory is gone has none: build it again (change the core, or a flag the action
-            reads) to debug it. Only the `ios` core reads it.
+            restored from a cache after the directory is gone, or after macOS cleared `/tmp` (a restart, or files unused for three
+            days), has none: build it again (`--action_env=UNDRA_REBUILD=<new value>`, or a change to the core) to debug it. Only the `ios` core reads it.
         tags: tags of the generated targets.
         visibility: the visibility of every generated target.
         **kwargs: passed to the generated rule instances (`execution_requirements`).
