@@ -24,8 +24,11 @@ trees are build outputs that never reach the source tree.
    from the schema's output, and a runnable `<name>.update` target that writes the outputs into the source tree. The
    failure message names the update command. It is built on `bazel_lib`'s `write_source_files`, already a dependency of
    the rules, so the diff, the update and the test are the ones every Bazel user knows.
-3. **The comparison is `undra bindgen --check`'s.** The same files, the same normalisation: a file the CLI check ignores,
-   the Bazel test ignores. One definition of "current" for both paths.
+3. **The comparison is `undra bindgen --check`'s, byte for byte, with one deliberate addition.** The same generated
+   files, no normalisation on either side. The committed directory belongs to the rule: a file in it that the schema
+   does not generate fails the test and is removed by the update (the committed tree carries no manifest, so comparing
+   the whole directory is the only way to catch a file the schema stopped generating), where the CLI's check ignores
+   files its manifest does not list. The guide says to keep `BUILD` files and anything hand-written outside it.
 4. **The guide says when to choose which.** Generated outputs when the repository treats generated code as an
    artifact; committed with the test when its policy requires generated code in the tree. Neither is the default.
 
@@ -41,5 +44,5 @@ trees are build outputs that never reach the source tree.
 
 * Positive: a repository with a drift-gate policy can adopt Undra without an exception; the updater is one command.
 * Negative: two models to document and keep equivalent. The test is the proof of equivalence and runs in the example.
-* Risk: `write_source_files` compares file trees; if `undra bindgen --check` ever normalises more than tree equality, the
-  test must follow it, which is why decision 3 ties them together.
+* Risk: if `undra bindgen --check` ever normalises more than byte equality, the test must follow it, which is why
+  decision 3 ties them together.
