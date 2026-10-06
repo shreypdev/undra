@@ -17,6 +17,9 @@ import {
 import { RecordKind } from "../src/native.js";
 import { NativeTransport } from "../src/transport.js";
 import { FakeNative } from "./support/fake-native.js";
+import { arrived, testTimeout } from "./support/wait.js";
+
+vi.setConfig({ testTimeout });
 
 /*
  * What a `Lazy<T>` list needs of React Native (ADR-043 decision 3.5): nothing of its own. The page call is an
@@ -91,13 +94,10 @@ async function attach(): Promise<{ core: UndraCore; native: FakeNative; server: 
 }
 
 const tick = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-/**
- * Waits until what a change-set from a core thread causes has happened, then the check holds. That delivery is a chain of
- * timers (the fake's drain, then the mirror's `schedule`), each a timeout the event loop may run late under load, and a
- * fixed wait of 5 ms ran out before the chain did (an empty `server.calls`). The check says what arrives, not when; 10 s
- * only catches a delivery that never comes (the same rule as `arrived` in transport.test.ts).
- */
-const arrived = (check: () => void): Promise<void> => vi.waitFor(check, { timeout: 10_000, interval: 5 });
+// `arrived` (support/wait.ts) waits until what a change-set from a core thread causes has happened, then the check holds.
+// That delivery is a chain of timers (the fake's drain, then the mirror's `schedule`), each a timeout the event loop may run
+// late under load, and a fixed wait of 5 ms ran out before the chain did (an empty `server.calls`). The check says what
+// arrives, not when; the deadline only catches a delivery that never comes.
 
 describe("a LazyList over the native transport", () => {
   test("takes its length from the observed value and reads rows through module.callSync, in one batch", async () => {

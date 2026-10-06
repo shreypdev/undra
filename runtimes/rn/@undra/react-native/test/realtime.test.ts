@@ -1,5 +1,5 @@
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import {
   HeaderCodec,
   PortIds,
@@ -34,6 +34,9 @@ import { RecordKind } from "../src/native.js";
 import { setTurboModule } from "./support/react-native-stub.js";
 import { FakeNative, le } from "./support/fake-native.js";
 import { NodeXhr } from "./support/node-xhr.js";
+import { eventually, testTimeout } from "./support/wait.js";
+
+vi.setConfig({ testTimeout });
 
 /*
  * The opt-in ports of ADR-047 and ADR-048 in @undra/react-native: the `WebSocket` and `Sse` defaults (React Native's
@@ -76,16 +79,6 @@ afterEach(() => {
   delete g.__undraNative;
   setTurboModule("UndraNative", undefined);
 });
-
-const tick = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function eventually(condition: () => boolean, ms = 3000): Promise<void> {
-  const until = Date.now() + ms;
-  while (!condition()) {
-    if (Date.now() > until) throw new Error("timed out");
-    await tick(10);
-  }
-}
 
 function lastConnection(path: string): Connection {
   const found = server.stats().connections.filter((c) => c.path === path);
@@ -181,7 +174,10 @@ describe.skipIf(!hasWebSocket)("reactNativeWebSocket against the realtime server
   test("a stalled reader: React Native cannot pause, so past the limit the stream ends with Closed(1008)", async () => {
     const small = reactNativeWebSocket({ WebSocket: RnWebSocket, maxBufferedMessages: 50 });
     const conn = await small.connect(`${server.wsUrl}/ws/flood?n=200&size=16`, [], []);
-    await tick(200);
+    // The flood has arrived when this side closed the connection: the adapter gave up at the 51st message (Node's
+    // `WebSocket` dispatches the messages before it answers the server's close frame, so the close is never earlier than
+    // the give-up), or, were the limit not honoured, after the whole flood. Reading before then would keep up with it.
+    await eventually(() => lastConnection("/ws/flood").closeCode !== null, "the client's close of /ws/flood");
     const flooded = await drain(conn.messages());
     expect(flooded.items.length).toBe(50);
     expect(flooded.end).toBeInstanceOf(WsError.Closed);
@@ -191,15 +187,14 @@ describe.skipIf(!hasWebSocket)("reactNativeWebSocket against the realtime server
   test("a stalled reader past the byte limit (16 MiB by default) also ends with Closed(1008)", async () => {
     const small = reactNativeWebSocket({ WebSocket: RnWebSocket, maxBufferedBytes: 64 * 1024 });
     const conn = await small.connect(`${server.wsUrl}/ws/flood?n=200&size=4096`, [], []);
-    await tick(200);
+    // The connection was given up: closed from this side (with 1008 on React Native; Node's `WebSocket`, which plays
+    // it here, refuses 1008 from a script and sends a close frame without a code). As above, that is when the flood has arrived.
+    await eventually(() => lastConnection("/ws/flood").closeCode !== null, "the client's close of /ws/flood");
     const flooded = await drain(conn.messages());
     // 16 messages of 4 KiB fit in 64 KiB; the 17th is past it.
     expect(flooded.items.length).toBe(16);
     expect(flooded.end).toBeInstanceOf(WsError.Closed);
     expect(flooded.end).toMatchObject({ code: 1008, reason: "the core did not keep up" });
-    // The connection was given up: closed from this side (with 1008 on React Native; Node's `WebSocket`, which plays
-    // it here, refuses 1008 from a script and sends a close frame without a code).
-    await eventually(() => lastConnection("/ws/flood").closeCode !== null);
   });
 
   test("the binding: one receive at a time (a second is Protocol), a lone message answered within milliseconds, close during a receive answers []", async () => {
@@ -383,7 +378,10 @@ describe("reactNativeSse over XMLHttpRequest progress events", () => {
   test("events wait for the core up to the limit, then the stream ends with Network (an XMLHttpRequest cannot pause)", async () => {
     const small = reactNativeSse({ transport: "xhr", XMLHttpRequest: NodeXhr, maxBufferedEvents: 2 });
     const stream = await small.open(`${server.url}/sse/feed`, [], null);
-    await tick(100);
+    // The request is over once the adapter gave up at the third event and aborted it (or the feed ended first): the events
+    // and the end are settled in the same turn, so that is when to read.
+    const request = NodeXhr.made[NodeXhr.made.length - 1];
+    await eventually(() => request?.readyState === 4, "the end of the /sse/feed request");
     const read = await drain(stream.events());
     expect(read.items).toEqual(FEED.slice(0, 2));
     expect(read.end).toBeInstanceOf(SseError.Network);
@@ -397,8 +395,7 @@ describe("reactNativeSse over XMLHttpRequest progress events", () => {
     // once or pauses for `drain`, and so whether the client's abort comes before the last write, depends on the Node and the
     // OS, and the reader must still be stalled when it is over: reading earlier would keep up with the flood.)
     const request = NodeXhr.made[NodeXhr.made.length - 1];
-    await eventually(() => request?.readyState === 4);
-    await tick(100);
+    await eventually(() => request?.readyState === 4, "the end of the /sse/flood request");
     const read = await drain(stream.events());
     expect(read.items.length).toBe(4096);
     expect(read.items[4095]?.id).toBe("4095");

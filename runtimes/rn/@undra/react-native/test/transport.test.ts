@@ -23,6 +23,9 @@ import {
 import { NativeStartCode, RecordKind, portPlan } from "../src/native.js";
 import { NativeTransport } from "../src/transport.js";
 import { FakeNative, le } from "./support/fake-native.js";
+import { arrived, testTimeout } from "./support/wait.js";
+
+vi.setConfig({ testTimeout });
 
 /** A `Reply` payload. */
 function reply(callId: number, status: number, body: Uint8Array = new Uint8Array(0)): Uint8Array {
@@ -85,13 +88,9 @@ function fakeStore(core: UndraCore, handle: Handle): Array<[number, number]> {
   return applied;
 }
 
-const tick = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-/**
- * Waits until what the drain delivers is there, then the check holds. The delivery is a frame or a microtask away, a few
- * milliseconds on an idle machine and more on a loaded one: a fixed wait failed under load (the check says what arrives,
- * not when; 10 s only catches a delivery that never comes).
- */
-const arrived = (check: () => void): Promise<void> => vi.waitFor(check, { timeout: 10_000, interval: 5 });
+// `arrived` (support/wait.ts) waits until what the drain delivers is there, then the check holds. The delivery is a frame or
+// a microtask away, a few milliseconds on an idle machine and more on a loaded one: a fixed wait failed under load (the check
+// says what arrives, not when; the deadline only catches a delivery that never comes).
 
 describe("start", () => {
   test("hands the core an encoded RuntimeConfig and the schema's port plan", async () => {
@@ -263,7 +262,8 @@ describe("calls", () => {
     await core.call(CallTarget.FreeFunction, 1, new Uint8Array(0));
     // Merged per drain (docs/SPEC.md section 11.1): the last value of the commit order wins.
     expect(applied.at(-1)).toEqual([0, 200]);
-    await tick(5);
+    // The drain txn 1's core thread posted runs later and finds nothing left: the order still holds once it has run.
+    await arrived(() => expect(native.drainPosted).toBe(false));
     expect(applied.at(-1)).toEqual([0, 200]);
   });
 

@@ -20,6 +20,9 @@ import { RecordKind } from "../src/native.js";
 import { NativeTransport } from "../src/transport.js";
 import { FakeNative, le } from "./support/fake-native.js";
 import { setTurboModule } from "./support/react-native-stub.js";
+import { arrived, testTimeout } from "./support/wait.js";
+
+vi.setConfig({ testTimeout });
 
 /*
  * ADR-046 on React Native: the native host answers the core's `Diagnostics.panicked` itself and queues each report for the JS
@@ -63,8 +66,6 @@ async function attach(options: { onPanic?: (report: UndraPanicReport) => void; n
   return { core, native, errors, logs };
 }
 
-const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
-
 const opened: UndraCore[] = [];
 afterEach(() => {
   for (const core of opened.splice(0)) core.close();
@@ -76,7 +77,7 @@ describe("a panic report of the native core", () => {
     const { core, native } = await attach({ onPanic: (r) => seen.push(r) });
     opened.push(core);
     native.queue(RecordKind.PortCall, panicRecord(report(1)), "core");
-    await flush();
+    await arrived(() => expect(seen).toHaveLength(1));
     expect(seen).toEqual([report(1)]);
     expect(native.portReplies, "nothing waits for an answer to the core's own report: none is sent").toEqual([]);
     expect(typeof seen[0]?.schemaHash).toBe("bigint");
@@ -90,7 +91,7 @@ describe("a panic report of the native core", () => {
     native.queue(RecordKind.PortCall, panicRecord(report(1)), "core");
     native.queue(RecordKind.PortCall, panicRecord(report(2)), "core");
     native.queue(RecordKind.PortCall, panicRecord(report(3)), "js");
-    await flush();
+    await arrived(() => expect(seen.length).toBeGreaterThanOrEqual(3));
     expect(seen).toEqual(["kaboom 1", "kaboom 2", "kaboom 3"]);
   });
 
@@ -125,7 +126,7 @@ describe("a panic report of the native core", () => {
     opened.push(core);
     native.queue(RecordKind.PortCall, panicRecord(report(1)), "core");
     native.queue(RecordKind.PortCall, panicRecord(report(2)), "core");
-    await flush();
+    await arrived(() => expect(seen.length).toBeGreaterThanOrEqual(2));
     expect(seen).toEqual(["kaboom 1", "kaboom 2"]);
     const unhandled = errors.filter((e): e is UndraUnhandledError => e instanceof UndraUnhandledError);
     expect(unhandled).toHaveLength(1);
@@ -137,7 +138,7 @@ describe("a panic report of the native core", () => {
     const { core, native, logs } = await attach();
     opened.push(core);
     native.queue(RecordKind.PortCall, panicRecord(report(1)), "core");
-    await flush();
+    await arrived(() => expect(logs.some(([, target]) => target === "undra::panic")).toBe(true));
     expect(logs.filter(([, target]) => target === "undra::panic")).toEqual([[4, "undra::panic", "explode: kaboom 1 (core/src/lab.rs:42:9)"]]);
   });
 
@@ -146,7 +147,7 @@ describe("a panic report of the native core", () => {
     const { core, native, errors } = await attach({ onPanic: (r) => seen.push(r) });
     opened.push(core);
     native.queue(RecordKind.PortCall, panicRecord(report(1)).subarray(0, 20), "core");
-    await flush();
+    await arrived(() => expect(errors.length).toBeGreaterThan(0)); // the report of the record that does not decode
     expect(seen).toEqual([]);
     expect(errors).toHaveLength(1);
   });
@@ -166,7 +167,7 @@ describe("loadNative and the panic report", () => {
     const core = await loadNative({ namespace: native.namespace, schemaHash: native.hash }, { adapters: { http: null }, onPanic: (r) => seen.push(r) });
     opened.push(core);
     native.queue(RecordKind.PortCall, panicRecord(report(4)), "core");
-    await flush();
+    await arrived(() => expect(seen).toHaveLength(1));
     expect(seen.map((r) => r.message)).toEqual(["kaboom 4"]);
     delete g.__undraNative;
     setTurboModule("UndraNative", undefined);
@@ -209,7 +210,7 @@ describe("runInBackground and the stats through the native transport", () => {
       (e: unknown) => e,
     );
     // `runInBackground` loads on demand (ADR-052, prod-ops review): the call reaches the core a few ticks later.
-    await vi.waitFor(() => expect(sent).toBe(1));
+    await arrived(() => expect(sent).toBe(1));
     abort.abort();
     const error = await run;
     expect((error as Error).name).toBe("AbortError");
@@ -259,8 +260,7 @@ describe("runInBackground and the stats through the native transport", () => {
       return 0;
     };
     (emit as (state: AppState) => void)("background");
-    await flush();
-    expect(native.log.some((entry) => entry.startsWith("event "))).toBe(true);
+    await arrived(() => expect(native.log.some((entry) => entry.startsWith("event "))).toBe(true));
     expect(calls, "the OS grants windows on a phone (ADR-046); a page's own window is the browser's").toBe(0);
   });
 });
