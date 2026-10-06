@@ -13,7 +13,9 @@
 //! * **Publish a window, once.** The closure returns a [`View`] (the top 50, a few rows around the
 //!   followed player, and four aggregates). The awaiting task takes it back to the core and writes
 //!   three signals in one transaction (`Board::publish`): the core lock is held for as long as
-//!   that takes, not for as long as the snapshot takes.
+//!   that takes, not for as long as the snapshot takes. Each window carries the version it was
+//!   read at, so two updates whose tasks resume in the other order never leave the older window
+//!   on screen.
 //! * **Nothing reads the big structure on the core.** `follow` moves the window and goes through
 //!   the same two steps. No generated getter, no signal and no call ever holds 100,000 rows.
 //!
@@ -113,6 +115,15 @@ impl From<&Ranked> for Row {
 struct Inner {
     standings: Standings,
     me: Option<u32>,
+    version: u64, // bumped by every change, under this lock
+}
+
+impl Inner {
+    /// The window, and the version it shows: read under the lock, right after a change.
+    fn window(&mut self) -> (u64, View) {
+        self.version += 1;
+        (self.version, self.standings.view(self.me, TOP, AROUND))
+    }
 }
 // docs:end
 
@@ -120,6 +131,8 @@ struct Inner {
 #[derive(Default)]
 struct Shared {
     inner: Mutex<Inner>,
+    /// The newest version written to the signals (read and written on the core only).
+    published: AtomicU64,
     /// Bumped by `stop_demo`: a demo task of an older generation ends.
     generation: AtomicU64,
     running: AtomicBool,
@@ -167,17 +180,17 @@ impl Board {
     async fn load(&self, bytes: Vec<u8>) -> Result<u32, LeaderboardError> {
         let ctx = self.ctx.upgrade().map_err(|_| LeaderboardError::Closed)?;
         let shared = self.shared.clone();
-        let work = ctx.spawn_blocking(move || -> Result<View, SnapshotError> {
+        let work = ctx.spawn_blocking(move || -> Result<(u64, View), SnapshotError> {
             // Milliseconds of parsing and sorting, with no lock held at all.
             let fresh = Standings::from_snapshot(&bytes)?;
             // The lock is held for the swap and the window, not for the parse.
             let mut inner = lock(&shared.inner);
             inner.standings = fresh;
-            Ok(inner.standings.view(inner.me, TOP, AROUND))
+            Ok(inner.window())
         });
         drop(ctx);
-        let view = work.await?; // back on the core, with 50 rows and four numbers
-        self.publish(&view);
+        let (version, view) = work.await?; // back on the core, with 50 rows and four numbers
+        self.publish(version, &view);
         Ok(view.players)
     }
     // docs:end
@@ -190,11 +203,11 @@ impl Board {
         let work = ctx.spawn_blocking(move || {
             let mut inner = lock(&shared.inner);
             let applied = inner.standings.apply(&deltas);
-            (applied, inner.standings.view(inner.me, TOP, AROUND))
+            (applied, inner.window())
         });
         drop(ctx);
-        let (applied, view) = work.await;
-        self.publish(&view);
+        let (applied, (version, view)) = work.await;
+        self.publish(version, &view);
         Ok(u32::try_from(applied).unwrap_or(u32::MAX))
     }
 
@@ -205,17 +218,22 @@ impl Board {
         let work = ctx.spawn_blocking(move || {
             let mut inner = lock(&shared.inner);
             inner.me = id;
-            inner.standings.view(id, TOP, AROUND)
+            inner.window()
         });
         drop(ctx);
-        self.publish(&work.await);
+        let (version, view) = work.await;
+        self.publish(version, &view);
         Ok(())
     }
 
     // docs:begin leaderboard-publish
     /// Writes the window: three signals, one transaction, and nothing that grows with the players.
     /// This is the only part of an update that runs on the core.
-    fn publish(&self, view: &View) {
+    fn publish(&self, version: u64, view: &View) {
+        // Two updates can come back from the pool in either order: never write an older window.
+        if self.shared.published.fetch_max(version, Ordering::SeqCst) >= version {
+            return;
+        }
         let top: Vec<Row> = view.top.iter().map(Row::from).collect();
         let around: Vec<Row> = view.around.iter().map(Row::from).collect();
         let summary = Summary {
@@ -375,8 +393,8 @@ mod tests {
     use undra::meta::ids;
     use undra::ports::HttpResponse;
     use undra::ports::fakes::Matcher;
-    use undra::wire::payload::{CallTarget, ReplyStatus};
-    use undra::wire::{Decode, Handle};
+    use undra::wire::payload::{CallTarget, ChangeSet, ReplyStatus};
+    use undra::wire::{Decode, Handle, Reader};
 
     use super::*;
     use crate::net::testing::{App, BASE};
@@ -488,6 +506,11 @@ mod tests {
         ));
         assert_eq!(board.top.get(), before);
         assert_eq!(board.summary.get().players, 500);
+        // The structure itself is untouched, not only the signals: a window read from it again is
+        // the same one.
+        assert_eq!(app.run(board.apply_deltas(vec![])), Ok(0));
+        assert_eq!(board.top.get(), before);
+        assert_eq!(board.summary.get().players, 500);
         app.fakes.http.reset();
         app.fakes
             .http
@@ -496,6 +519,44 @@ mod tests {
             app.run(board.load_snapshot("/standings".into())),
             Err(LeaderboardError::Net(NetError::Status { code: 503 }))
         );
+    }
+
+    #[test]
+    fn updates_that_resume_out_of_order_never_leave_an_older_window_on_screen() {
+        // Eight batches of +1 for one player, awaited together: the pool takes them in some order
+        // and the core resumes them in another (here, in the order they are polled). Whatever
+        // the order, the window on screen at the end is the newest one.
+        let app = App::new();
+        serve(&app, 5_000);
+        let board = Leaderboard::new(app.ctx());
+        app.run(board.load_snapshot("/standings".into())).unwrap();
+        app.run(board.follow(Some(2_500))).unwrap();
+        for round in 0..20 {
+            let start = board.summary.get().me.expect("player 2500 is ranked").score;
+            let mut batches: Vec<_> = (0..8)
+                .map(|_| {
+                    Box::pin(board.apply_deltas(vec![Delta {
+                        id: 2_500,
+                        points: 1,
+                    }]))
+                })
+                .collect();
+            let mut done = [false; 8];
+            app.run(std::future::poll_fn(|cx| {
+                for (batch, done) in batches.iter_mut().zip(done.iter_mut()) {
+                    if !*done && batch.as_mut().poll(cx).is_ready() {
+                        *done = true;
+                    }
+                }
+                if done.iter().all(|d| *d) {
+                    std::task::Poll::Ready(())
+                } else {
+                    std::task::Poll::Pending
+                }
+            }));
+            let shown = board.summary.get().me.unwrap().score;
+            assert_eq!(shown, (start + 8).min(MAX_SCORE), "round {round}");
+        }
     }
 
     #[test]
@@ -555,6 +616,14 @@ mod tests {
         app.t
             .runtime()
             .observe(store.0, undra::signals::ALL_SIGNALS, true);
+        // A player is followed before the snapshot arrives, so all three signals change with it.
+        let me = undra::wire::Encode::encode_to_vec(&Some(777_u32));
+        let follow = CallTarget::Method {
+            handle: store,
+            method_id: ids::method_id("Leaderboard", "follow"),
+        };
+        assert_eq!(app.t.call(follow, 2, &me), 0);
+        app.t.run_pending();
         app.t.host().take_decoded_change_sets();
 
         let args = undra::wire::Encode::encode_to_vec(&"/standings".to_owned());
@@ -562,14 +631,26 @@ mod tests {
             handle: store,
             method_id: ids::method_id("Leaderboard", "load_snapshot"),
         };
-        assert_eq!(app.t.call(target, 2, &args), 0);
+        assert_eq!(app.t.call(target, 3, &args), 0);
         app.t.run_pending();
         let raw = app.t.take_change_sets();
         assert_eq!(raw.len(), 1, "the three signals arrive together");
-        assert!(
-            raw[0].len() < 3_000,
-            "{} bytes for 100,000 players",
-            raw[0].len()
+        // 12 bytes of header, 17 a signal, 50 + 7 rows of 12 bytes with their two lengths, and the
+        // summary's three numbers and the followed row: the same for 1,000 players or 1,000,000.
+        assert_eq!(raw[0].len(), 780, "bytes for 100,000 players");
+        let decoded = ChangeSet::decode(&mut Reader::new(&raw[0])).expect("a change-set");
+        assert_eq!(decoded.entries.len(), 3);
+        assert!(decoded.entries.iter().all(|e| e.handle == store));
+        let rows: Vec<usize> = decoded
+            .entries
+            .iter()
+            .filter_map(|e| Vec::<Row>::decode_exact(&e.value).ok())
+            .map(|rows| rows.len())
+            .collect();
+        assert_eq!(
+            rows,
+            [TOP, 2 * AROUND + 1],
+            "the top and the rows around the player"
         );
     }
 }
