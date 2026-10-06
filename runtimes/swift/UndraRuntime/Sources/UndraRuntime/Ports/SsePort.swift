@@ -263,6 +263,28 @@ public struct SseParser: Sendable {
         return lastEventId.isEmpty ? nil : lastEventId
     }
 
+    /// The most events `bytes` can complete, whatever the parser holds from the bytes before them, counted up to `limit`
+    /// (the count stops there, so a chunk with many line ends is not read to its end).
+    ///
+    /// An event is dispatched only at a line end (the blank line after it). The first one `bytes` complete may take just
+    /// that line end, the earlier bytes having begun it; every one after it takes at least two (a `data` line's end, then
+    /// the blank line's). A CR LF pair or a comment line counts more line ends than it ends events, so the count may be
+    /// higher than what the bytes complete, never lower.
+    static func mostEvents(in bytes: UnsafeRawBufferPointer, upTo limit: Int) -> Int {
+        guard limit > 0 else {
+            return 0
+        }
+        let enough = limit > Int.max / 2 ? Int.max : 2 * limit - 1
+        var lineEnds = 0
+        for byte in bytes where byte == lineFeed || byte == carriageReturn {
+            lineEnds += 1
+            if lineEnds == enough {
+                break
+            }
+        }
+        return lineEnds == 0 ? 0 : 1 + (lineEnds - 1) / 2
+    }
+
     /// Parses `bytes` and returns the events they completed, in order.
     public mutating func push<Bytes: Sequence>(_ bytes: Bytes) throws(SseError) -> [SseEvent] where Bytes.Element == UInt8 {
         var events: [SseEvent] = []

@@ -164,6 +164,12 @@ extension URLSessionTask: SseTaskControl {}
 /// below it. A chunk may hold several events, so the read-ahead is `room` plus at most one chunk
 /// (plus the few chunks already in flight when the task was suspended), and it ends in the
 /// kernel's socket buffers, where TCP pushes back on the server.
+///
+/// The task is suspended only when that bound needs it, never for a chunk that cannot take
+/// `waiting` to `room`: URLSession can lose the end of a body (no `didCompleteWithError`, ever,
+/// and the task stays `.running`) when its task is resumed and at once suspended again while the
+/// body ends, which a suspend around every chunk risked at the end of every stream
+/// (`.10x/decisions/sde/sse-end-race.md`).
 final class URLSessionSseStream: NSObject, SseStream, URLSessionDataDelegate, @unchecked Sendable {
     /// How the request's head came out: the stream is open, or why it is not.
     enum Head: Sendable {
@@ -413,12 +419,17 @@ final class URLSessionSseStream: NSObject, SseStream, URLSessionDataDelegate, @u
     /// One chunk of the body: parsed whole, its events queued. The parser keeps what is left of an
     /// event the chunk ended in; bytes that are not UTF-8 end the stream after the events before them.
     ///
-    /// The task is suspended before the chunk is parsed, not after: parsing takes time (a chunk is
-    /// up to megabytes), and URLSession goes on reading the socket meanwhile and hands the lot over
-    /// in one piece, so a suspend that came after the parse would have nothing left to stop. It is
-    /// resumed once the events are queued, unless `waiting` has reached `room`: then the binding's
-    /// next pull below the mark resumes it.
+    /// A chunk that may take `waiting` to `room` is parsed with the task suspended, not suspended
+    /// after: parsing takes time (a chunk is up to megabytes), and URLSession goes on reading the
+    /// socket meanwhile and hands the lot over in one piece, so a suspend that came after the parse
+    /// would have nothing left to stop. It is resumed once the events are queued, unless `waiting`
+    /// has reached `room`: then the binding's next pull below the mark resumes it. A chunk with too
+    /// few line ends to reach the mark (``SseParser/mostEvents(in:upTo:)``) is parsed with the task
+    /// running, as it would be resumed right after anyway.
     func receive(_ chunk: Data) {
+        let most = chunk.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) -> Int in
+            return SseParser.mostEvents(in: bytes, upTo: room)
+        }
         let proceed = state.withLock { (current: inout State) -> Bool in
             current.chunks += 1
             current.bytes += chunk.count
@@ -426,7 +437,7 @@ final class URLSessionSseStream: NSObject, SseStream, URLSessionDataDelegate, @u
                 return false
             }
             current.parsing += 1
-            if !current.suspended {
+            if !current.suspended && current.waiting + most >= room {
                 current.suspended = true
                 current.control?.suspend()
             }

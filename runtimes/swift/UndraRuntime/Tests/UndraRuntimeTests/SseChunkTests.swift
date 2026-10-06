@@ -272,6 +272,60 @@ final class SseChunkBoundaryTests: XCTestCase {
     }
 }
 
+// MARK: - How many events a chunk can complete
+
+/// ``SseParser/mostEvents(in:upTo:)``, what the stream decides on whether a chunk is parsed with the task suspended: never fewer
+/// than the events the bytes complete, whatever the bytes before them left in the parser.
+final class SseParserBoundTests: XCTestCase {
+    private func most(_ bytes: [UInt8], upTo limit: Int = Int.max) -> Int {
+        return bytes.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> Int in
+            return SseParser.mostEvents(in: raw, upTo: limit)
+        }
+    }
+
+    /// Over a seeded run of bodies made of the pieces an event stream has (fields, comments, every line end, unknown fields,
+    /// bare text), cut once anywhere: the second piece completes no more events than the bound says, with any limit.
+    func testTheBoundIsNeverBelowWhatTheBytesComplete() throws {
+        var seed: UInt64 = 0x5EED_0000_2026_1006
+        func next(_ bound: Int) -> Int {
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return Int((seed >> 33) % UInt64(bound + 1))
+        }
+        let pieces = ["data", "data: x", "data:", "id: 1", "event: e", "retry: 9", ":", ": c", "x", "\n", "\n", "\r", "\r\n", "\r\r", "\n\n"]
+        for round in 0 ..< 3_000 {
+            var body: [UInt8] = []
+            for _ in 0 ..< next(40) {
+                body += Array(pieces[next(pieces.count - 1)].utf8)
+            }
+            let cut = next(body.count)
+            var parser = SseParser()
+            _ = try parser.push(body[..<cut])
+            let completed = try parser.push(body[cut...]).count
+            let rest = Array(body[cut...])
+            XCTAssertGreaterThanOrEqual(most(rest), completed, "round \(round): \(String(decoding: rest, as: UTF8.self).debugDescription)")
+            let limit = 1 + next(6)
+            XCTAssertGreaterThanOrEqual(most(rest, upTo: limit), min(completed, limit), "round \(round), limit \(limit)")
+            XCTAssertLessThanOrEqual(most(rest, upTo: limit), limit, "round \(round), limit \(limit)")
+        }
+    }
+
+    /// The densest bytes reach the bound: one line end that ends an event the earlier bytes began, then `data` and two line ends
+    /// per event, with LF or with CR.
+    func testTheDensestBytesReachTheBound() throws {
+        for end in ["\n", "\r"] {
+            var parser = SseParser()
+            _ = try parser.push(Array("data: begun\(end)".utf8))
+            let bytes = Array((end + String(repeating: "data\(end)\(end)", count: 5)).utf8)
+            XCTAssertEqual(try parser.push(bytes).count, 6)
+            XCTAssertEqual(most(bytes), 6)
+            XCTAssertEqual(most(bytes, upTo: 4), 4, "the count stops at the limit")
+        }
+        XCTAssertEqual(most([]), 0)
+        XCTAssertEqual(most(Array("data: no line end".utf8)), 0)
+        XCTAssertEqual(most(Array("\n".utf8), upTo: 0), 0)
+    }
+}
+
 // MARK: - Backpressure with a recorded task
 
 /// What the stream asks of its task while the core does and does not pull: the rule is the Kotlin adapter's, the socket is read
@@ -333,16 +387,43 @@ final class SseChunkBackpressureTests: XCTestCase {
         XCTAssertEqual(control.calls, [.suspend, .resume])
     }
 
-    /// A chunk that does not complete an event (or has room left) does not leave the task suspended.
-    func testAChunkThatLeavesRoomResumesTheTaskAtOnce() {
+    /// A chunk with too few line ends to take the queue to the mark is parsed with the task running: it is neither suspended
+    /// nor resumed.
+    func testAChunkThatCannotReachTheMarkIsParsedWithTheTaskRunning() {
         let control = RecordingControl()
         let stream = URLSessionSseStream(lastEventId: nil, room: 4, control: control)
         stream.receive(Data(Array("id: 0\ndata: par".utf8)))
+        stream.receive(Data(Array("tial\n\n".utf8)))
+        XCTAssertEqual(control.calls, [])
+        XCTAssertFalse(stream.isSuspended)
+    }
+
+    /// A chunk that may take the queue to the mark is parsed with the task suspended, and when it did not (seven comment lines
+    /// could end four events, and end none) the task is resumed at once.
+    func testAChunkThatMayReachTheMarkIsSuspendedWhileParsedAndResumedWhenItLeftRoom() {
+        let control = RecordingControl()
+        let stream = URLSessionSseStream(lastEventId: nil, room: 4, control: control)
+        stream.receive(Data(Array(String(repeating: ":\n", count: 7).utf8)))
         XCTAssertEqual(control.calls, [.suspend, .resume])
         XCTAssertFalse(stream.isSuspended)
-        stream.receive(Data(Array("tial\n\n".utf8)))
-        XCTAssertEqual(control.calls, [.suspend, .resume, .suspend, .resume])
-        XCTAssertFalse(stream.isSuspended)
+        // Six line ends could end three events, one fewer than the room: no suspend.
+        stream.receive(Data(Array(String(repeating: ":\n", count: 6).utf8)))
+        XCTAssertEqual(control.calls, [.suspend, .resume])
+    }
+
+    /// The body of the wire test's short stream (the opening comment, three events, the end) never suspends the task: URLSession
+    /// can lose the end of a body when its task is resumed and at once suspended again as the body ends, which a suspend around
+    /// every chunk did to this stream (`.10x/decisions/sde/sse-end-race.md`).
+    func testAShortStreamThatEndsNeverSuspendsTheTask() async {
+        let control = RecordingControl()
+        let stream = URLSessionSseStream(lastEventId: nil, control: control)
+        stream.receive(Data(ScriptedEventServer.opening))
+        stream.receive(Data(eventBytes(0 ..< 3)))
+        stream.finish(nil)
+        let (events, end) = await drain(stream)
+        XCTAssertEqual(events, expectedEvents(0 ..< 3))
+        XCTAssertEqual(end, .ended)
+        XCTAssertEqual(control.calls, [], "the task was suspended for chunks that could not fill the queue")
     }
 
     /// The queue is the mark's, not the window's: a core that pulls as fast as events come keeps the task running.
