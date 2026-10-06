@@ -271,14 +271,24 @@ shadow_note() {
 # The first line that `<file> --version` prints, or "version unknown" when it fails, prints
 # nothing or has not finished within 10 seconds (an old build that waits must not hang the
 # install). Its stdin is /dev/null: under `curl | sh` the shell's stdin is this script.
+# POSIX has no timeout(1) (macOS ships none), so the guard is a subshell that sleeps, then kills.
 version_of() {
   "$1" --version </dev/null >"$tmp/other-version" 2>/dev/null &
   version_pid=$!
   # The guard's output goes nowhere, so a caller reading this script's output does not wait for it.
-  (sleep 10; kill "$version_pid" 2>/dev/null) </dev/null >/dev/null 2>&1 &
+  # Its sleep runs in the background and is killed by the trap: a TERM to the subshell alone would
+  # leave the sleep running for the rest of its 10 seconds.
+  (
+    trap 'kill "$sleep_pid" 2>/dev/null; exit 0' TERM
+    sleep 10 &
+    sleep_pid=$!
+    wait "$sleep_pid"
+    kill "$version_pid" 2>/dev/null
+  ) </dev/null >/dev/null 2>&1 &
   guard_pid=$!
   version_line=""
-  if wait "$version_pid"; then
+  # stderr closed: dash reports a child killed by the guard ("Terminated") from wait.
+  if wait "$version_pid" 2>/dev/null; then
     version_line=$(head -n 1 "$tmp/other-version")
   fi
   kill "$guard_pid" 2>/dev/null || true
@@ -398,8 +408,10 @@ add_path_line() {
   say ""
 }
 
-# Whether a line of <file>, comments aside, already names $bin_dir in a PATH setting or in
-# fish_add_path, spelt in full or from the home directory with $HOME, ${HOME} or ~.
+# Whether a line of <file>, comments aside, already names $bin_dir in a PATH setting (PATH=,
+# zsh's path=(...), fish_add_path), spelt in full or from the home directory with $HOME, ${HOME}
+# or ~. The name must be whole: ~/.undra/bin-old, ~/.undra/bin2 or ~/.undra/bin/sub is another
+# directory (a trailing slash is not).
 has_path_line() {
   with_var=""
   with_braces=""
@@ -413,10 +425,18 @@ has_path_line() {
   esac
   UNDRA_N1=$bin_dir UNDRA_N2=$with_var UNDRA_N3=$with_braces UNDRA_N4=$with_tilde awk '
     /^[[:space:]]*#/ { next }
-    /PATH|fish_add_path/ {
+    /[Pp][Aa][Tt][Hh]/ {
       for (k = 1; k <= 4; k++) {
         name = ENVIRON["UNDRA_N" k]
-        if (name != "" && index($0, name)) found = 1
+        if (name == "") continue
+        rest = $0
+        while ((i = index(rest, name)) > 0) {
+          before = i > 1 ? substr(rest, i - 1, 1) : ""
+          after = substr(rest, i + length(name), 1)
+          if (after == "/") after = substr(rest, i + length(name) + 1, 1)
+          if (before !~ "[A-Za-z0-9._~/-]" && after !~ "[A-Za-z0-9._-]") found = 1
+          rest = substr(rest, i + 1)
+        }
       }
     }
     END { exit !found }' "$1"
