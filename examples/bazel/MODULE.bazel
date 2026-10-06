@@ -8,18 +8,20 @@ local_path_override(
     path = "../../bazel",
 )
 
+# The ruleset versions are the minimums undra_rules declares (bazel/MODULE.bazel), not the newest: this workspace is what proves they
+# build and test on Bazel 8.8.1 and the newest 9.x. An application on a newer ruleset keeps it, because Bazel resolves to the highest.
 # apple_support first: its C++ toolchain (Xcode's clang) must come before the default one for rules_swift to find Apple targets.
-bazel_dep(name = "apple_support", version = "2.8.4")
+bazel_dep(name = "apple_support", version = "1.24.2")
 bazel_dep(name = "platforms", version = "1.1.0")
-bazel_dep(name = "rules_cc", version = "0.2.20")
+bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "rules_java", version = "9.3.0")
-bazel_dep(name = "rules_kotlin", version = "2.4.20")
-bazel_dep(name = "rules_rust", version = "0.74.0")
+bazel_dep(name = "rules_kotlin", version = "2.3.0")
+bazel_dep(name = "rules_rust", version = "0.70.0")
 bazel_dep(name = "rules_shell", version = "0.6.1")
-bazel_dep(name = "rules_swift", version = "4.1.2")
-bazel_dep(name = "rules_apple", version = "5.2.0")
-bazel_dep(name = "aspect_rules_js", version = "3.5.1")
-bazel_dep(name = "aspect_rules_ts", version = "3.10.1")
+bazel_dep(name = "rules_swift", version = "3.4.0")
+bazel_dep(name = "rules_apple", version = "4.1.0")
+bazel_dep(name = "aspect_rules_js", version = "2.0.0")
+bazel_dep(name = "aspect_rules_ts", version = "3.10.0")
 bazel_dep(name = "rules_nodejs", version = "6.7.5")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
@@ -34,7 +36,7 @@ rust.toolchain(
         "x86_64-linux-android",
     ],
     # The compiler CI pins (every rust-toolchain line of .github/workflows), by checksum: the goldens, the size gate and the
-    # budgets are recorded on it. rules_rust 0.74 knows up to 1.98; these are static.rust-lang.org's own .sha256 files.
+    # budgets are recorded on it. rules_rust 0.70 to 0.74 know up to 1.98; these are static.rust-lang.org's own .sha256 files.
     sha256s = {
         "rustc-1.99.0-aarch64-apple-darwin.tar.xz": "334a66714ca316d71bbe5efe44f71762d0b276cea73be2987374693a837f7450",
         "clippy-1.99.0-aarch64-apple-darwin.tar.xz": "c31a0765ed31d98515a09a13b44486048873d90ac75bb1e6690a17fb36a5d4e2",
