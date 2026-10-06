@@ -50,3 +50,14 @@ and libunwind detail that once made the tool necessary.
 * Negative: the CLI owns a few lines of NDK knowledge (toolchain paths per host OS, the API-level suffix) that `cargo-ndk`
   used to own. They are covered by the build-systems tests and `undra doctor`'s C0003 message.
 * Risk: the NDK archive is around 600 MB; CI uses the repository cache and the existing retry on `dl.google.com`.
+
+Amendment (2026-10-06): the first cut set only what Cargo links with (the linker, `CC`/`CXX`, `AR`/`RANLIB`,
+`ANDROID_NDK_HOME`), so a dependency whose build script runs `bindgen` over C headers failed with `'stdio.h' file not
+found` where 1.0 built through `cargo-ndk`. The build now also exports, per ABI, what `cargo-ndk` gave build scripts:
+`BINDGEN_EXTRA_CLANG_ARGS_<triple>` (`--sysroot=<sysroot> --target=<triple><api> -I<sysroot>/usr/include/<triple>`),
+`CLANG_PATH` (the NDK's clang), `ANDROID_ABI`, `ANDROID_PLATFORM`, and `CMAKE_TOOLCHAIN_FILE_<triple>` naming a file in the
+target directory that sets `ANDROID_ABI` and `ANDROID_PLATFORM` and includes the NDK's `android.toolchain.cmake` (the NDK's
+file reads both only as CMake variables, so pointing the `cmake` crate at it alone builds `armeabi-v7a`). A value the user
+exported for any of these, or a name its reader takes first or instead, is kept. `CFLAGS_<triple>` and `CARGO_NDK_*` are
+not set: the C compiler is the NDK's wrapper of the API level, which carries its target. Proven by a scratch dependency
+using `cc`, `cmake` and `bindgen` over `<stdio.h>` and `<android/log.h>`, built debug and release for both ABIs.

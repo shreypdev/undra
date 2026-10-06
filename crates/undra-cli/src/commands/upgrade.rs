@@ -29,7 +29,7 @@ pub fn run(env: &Env<'_>, args: &UpgradeArgs) -> Result<()> {
     let target = Semver::parse(crate::version::SEMVER)
         .expect("the CLI's own version is a version: a test checks it");
     // ADR-063: the pins name the release where the environment says (GitHub unless a mirror is set).
-    let dist = crate::dist::Dist::announced(env.sys, &env.ui)?;
+    let dist = crate::dist::Dist::announced_for_upgrade(env.sys, &env.ui)?;
     let plan = upgrade::plan(&project.root, &project.generated_dir(), &target, &dist);
 
     // A dependency on a checkout of the repository is the version of that checkout.

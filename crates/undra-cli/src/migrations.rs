@@ -123,7 +123,11 @@ pub const MIGRATIONS: &[Migration] = &[
         notes: &[
             Note {
                 kind: Kind::Changed,
-                text: "`undra build --platform android` links with the NDK's clang itself: `cargo-ndk` is no longer needed, nor checked by `undra doctor`, and the API level is `[android] min_sdk` of undra.toml (26 when it says nothing). The `cargo install cargo-ndk` line of a workflow `undra init` wrote (`.github/workflows/undra.yml`) can be deleted; leaving it costs a few minutes of CI and nothing else.",
+                text: "`undra build --platform android` links with the NDK's clang itself: `cargo-ndk` is no longer needed, nor checked by `undra doctor`, and the API level is `[android] min_sdk` of undra.toml (26 when it says nothing). The `cargo install cargo-ndk` line of a workflow `undra init` wrote (`.github/workflows/undra.yml`) can be deleted; leaving it costs a few minutes of CI and nothing else. `undra doctor --json` has no `android.cargo-ndk` finding any more: a tool that reads the JSON should drop that id.",
+            },
+            Note {
+                kind: Kind::Changed,
+                text: "For the build scripts of crates that wrap C libraries, `undra build --platform android` exports what `cargo-ndk` did, per ABI: `BINDGEN_EXTRA_CLANG_ARGS_<triple>` (the NDK's sysroot, `--target=<triple><min_sdk>` and the ABI's include directory, so `bindgen` finds `stdio.h`), `CLANG_PATH` (the NDK's clang), `ANDROID_ABI` and `ANDROID_PLATFORM`, and `CMAKE_TOOLCHAIN_FILE_<triple>`, a toolchain file in the target directory that sets the ABI and API level and includes the NDK's `android.toolchain.cmake` (the `cmake` crate reads it). A value you export yourself is kept. `CFLAGS_<triple>` and `CARGO_NDK_*` are not set: the compiler is the NDK's wrapper of the API level, which knows its target.",
             },
             Note {
                 kind: Kind::New,

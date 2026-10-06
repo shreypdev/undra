@@ -252,12 +252,21 @@ pub fn has_rust_target(triple: &str) -> bool {
         .is_dir()
 }
 
-/// Whether an Android NDK is installed where `undra build --platform android` looks for one:
-/// `ANDROID_NDK_HOME`, else a version below `ANDROID_HOME/ndk` (ADR-065: no `cargo-ndk`).
+/// Whether an Android NDK is installed where `undra build --platform android` looks for one: the
+/// first of `ANDROID_NDK_HOME`, `ANDROID_NDK_ROOT` and `NDK_HOME` that is set (and only that one:
+/// the build stops with C0003 when it names no directory, so the tests that need the NDK skip
+/// rather than fail on it), else a version below `ANDROID_HOME/ndk` (ADR-065: no `cargo-ndk`).
 pub fn has_android_ndk() -> bool {
-    let named = |key: &str| std::env::var_os(key).map(PathBuf::from);
-    if named("ANDROID_NDK_HOME").is_some_and(|dir| dir.is_dir()) {
-        return true;
+    let named = |key: &str| {
+        std::env::var_os(key)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+    };
+    if let Some(chosen) = ["ANDROID_NDK_HOME", "ANDROID_NDK_ROOT", "NDK_HOME"]
+        .iter()
+        .find_map(|key| named(key))
+    {
+        return chosen.is_dir();
     }
     ["ANDROID_HOME", "ANDROID_SDK_ROOT"]
         .iter()

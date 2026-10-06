@@ -10,6 +10,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::error::{CliError, Code};
 use crate::sys::{Os, Sys};
 
 /// Where Xcode is installed by default.
@@ -49,6 +50,44 @@ pub struct Toolchain {
     pub android_sdk: Option<PathBuf>,
     /// The Android NDK directory, if one was found.
     pub android_ndk: Option<PathBuf>,
+    /// The NDK variable the user set to a path that is not a directory, if they did: then
+    /// `android_ndk` is `None` (no other NDK is chosen behind the variable's back) and an Android
+    /// build stops with [`UnusableNdk::error`].
+    pub android_ndk_unusable: Option<UnusableNdk>,
+}
+
+/// The variables that name the Android NDK, in the order they are read: the first one set decides.
+pub const NDK_VARIABLES: [&str; 3] = ["ANDROID_NDK_HOME", "ANDROID_NDK_ROOT", "NDK_HOME"];
+
+/// An NDK variable ([`NDK_VARIABLES`]) the user set to a path that is not a directory.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnusableNdk {
+    /// The variable, `ANDROID_NDK_HOME` for example.
+    pub variable: &'static str,
+    /// The path it holds.
+    pub path: PathBuf,
+}
+
+impl UnusableNdk {
+    /// The `C0003` an Android build stops with: the variable chose an NDK that is not there, and
+    /// building with another one would hide that.
+    #[must_use]
+    pub fn error(&self) -> CliError {
+        let variable = self.variable;
+        CliError::new(
+            Code::MissingTool,
+            format!(
+                "{variable} is {}, which is not a directory",
+                self.path.display()
+            ),
+            format!(
+                "{variable} names the Android NDK the core is compiled and linked with; undra does not fall back to another NDK (such as the newest in the SDK's ndk/ directory) that the variable did not choose"
+            ),
+            format!(
+                "point {variable} at an installed NDK, r27 or newer (`sdkmanager \"ndk;27.2.12479018\"` installs one under $ANDROID_HOME/ndk/), or unset it to use the newest NDK of the SDK"
+            ),
+        )
+    }
 }
 
 impl Toolchain {
@@ -113,11 +152,12 @@ impl Toolchain {
                 );
             }
         }
-        self.android_ndk = find_android_ndk(sys, self.android_sdk.as_deref());
+        match find_android_ndk(sys, self.android_sdk.as_deref()) {
+            Ok(ndk) => self.android_ndk = ndk,
+            Err(unusable) => self.android_ndk_unusable = Some(unusable),
+        }
         if let Some(ndk) = &self.android_ndk {
-            let set = ["ANDROID_NDK_HOME", "ANDROID_NDK_ROOT", "NDK_HOME"]
-                .iter()
-                .any(|k| sys.env(k).is_some());
+            let set = NDK_VARIABLES.iter().any(|k| sys.env(k).is_some());
             if !set {
                 self.env.push((
                     "ANDROID_NDK_HOME".to_owned(),
@@ -219,19 +259,31 @@ pub fn find_android_sdk(sys: &dyn Sys) -> Option<PathBuf> {
         .find(|p| sys.is_dir(p))
 }
 
-/// The Android NDK: an explicit `ANDROID_NDK_HOME` (or `ANDROID_NDK_ROOT`, `NDK_HOME`), else the
-/// newest `<sdk>/ndk/<version>`, else the legacy `<sdk>/ndk-bundle`.
-#[must_use]
-pub fn find_android_ndk(sys: &dyn Sys, sdk: Option<&Path>) -> Option<PathBuf> {
-    for key in ["ANDROID_NDK_HOME", "ANDROID_NDK_ROOT", "NDK_HOME"] {
-        if let Some(v) = sys.env(key) {
-            let p = PathBuf::from(v);
-            if sys.is_dir(&p) {
-                return Some(p);
-            }
-        }
+/// The Android NDK: the directory the first variable of [`NDK_VARIABLES`] that is set names, else
+/// the newest `<sdk>/ndk/<version>`, else the legacy `<sdk>/ndk-bundle`.
+///
+/// # Errors
+///
+/// [`UnusableNdk`] when that variable is set to a path that is not a directory: the user chose an
+/// NDK, and building with another one would hide that it is not there.
+pub fn find_android_ndk(sys: &dyn Sys, sdk: Option<&Path>) -> Result<Option<PathBuf>, UnusableNdk> {
+    if let Some((variable, value)) = NDK_VARIABLES
+        .iter()
+        .find_map(|key| sys.env(key).map(|value| (*key, value)))
+    {
+        let path = PathBuf::from(value);
+        return if sys.is_dir(&path) {
+            Ok(Some(path))
+        } else {
+            Err(UnusableNdk { variable, path })
+        };
     }
-    let sdk = sdk?;
+    Ok(sdk.and_then(|sdk| newest_sdk_ndk(sys, sdk)))
+}
+
+/// The newest NDK of the SDK at `sdk`: `ndk/<version>`, else the legacy `ndk-bundle`.
+#[must_use]
+pub fn newest_sdk_ndk(sys: &dyn Sys, sdk: &Path) -> Option<PathBuf> {
     let ndk_dir = sdk.join("ndk");
     let mut versions: Vec<(Vec<u32>, String)> = sys
         .list_dir(&ndk_dir)
@@ -368,6 +420,66 @@ mod tests {
         let tc = Toolchain::detect(&sys);
         assert_eq!(tc.android_ndk.as_deref(), Some(Path::new("/custom/ndk")));
         assert!(tc.env.is_empty(), "{tc:?}");
+    }
+
+    #[test]
+    fn an_explicit_ndk_that_is_not_a_directory_stops_the_build_instead_of_another_ndk() {
+        let sys = FakeSys::linux()
+            .with_dir("/sdk")
+            .with_dir("/sdk/ndk/27.2.12479018")
+            .with_env("ANDROID_HOME", "/sdk")
+            .with_env("ANDROID_NDK_HOME", "/typo/ndk");
+        let tc = Toolchain::detect(&sys);
+        assert_eq!(
+            tc.android_ndk, None,
+            "the SDK's NDK is not used behind the variable"
+        );
+        assert_eq!(
+            tc.android_ndk_unusable,
+            Some(UnusableNdk {
+                variable: "ANDROID_NDK_HOME",
+                path: PathBuf::from("/typo/ndk"),
+            })
+        );
+        assert!(
+            tc.notes_for(Concern::Android).all(|n| !n.contains("NDK")),
+            "{tc:?}"
+        );
+        let text = tc.android_ndk_unusable.unwrap().error().to_string();
+        assert!(
+            text.starts_with(
+                "error[undra::C0003]: ANDROID_NDK_HOME is /typo/ndk, which is not a directory"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains("= note: ANDROID_NDK_HOME names the Android NDK"),
+            "{text}"
+        );
+        assert!(
+            text.contains("= help: point ANDROID_NDK_HOME at an installed NDK"),
+            "{text}"
+        );
+        assert!(text.contains("errors.html#C0003"), "{text}");
+
+        // The first variable that is set decides, even when a later one names a real NDK.
+        let root = FakeSys::linux()
+            .with_dir("/real/ndk")
+            .with_env("ANDROID_NDK_ROOT", "/gone")
+            .with_env("NDK_HOME", "/real/ndk");
+        assert_eq!(
+            find_android_ndk(&root, None),
+            Err(UnusableNdk {
+                variable: "ANDROID_NDK_ROOT",
+                path: PathBuf::from("/gone"),
+            })
+        );
+        // Unset, the SDK's newest NDK is used, as before.
+        let unset = FakeSys::linux().with_dir("/sdk/ndk/27.2.12479018");
+        assert_eq!(
+            find_android_ndk(&unset, Some(Path::new("/sdk"))),
+            Ok(Some(PathBuf::from("/sdk/ndk/27.2.12479018")))
+        );
     }
 
     #[test]

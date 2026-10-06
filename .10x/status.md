@@ -699,7 +699,19 @@ The 1.1 design (`.10x/specs/2026-10-05-bazel-first-design.md`, ADR-064, ADR-065,
 integration pull request after each piece had its own adversarial review (`.10x/reviews/2026-10-05-<slug>-review.md`)
 and its own record (`.10x/decisions/sde/<slug>.md`). The pieces were built in parallel worktrees and merged into
 `wt/undra-1-1` so the wave needed one Gate; their pull requests (#28, #29, #31, #32, #33, #35, #36, #37) were closed as
-superseded with their branches intact in the history of the integration commit.
+superseded; main takes squash merges, so their branches stay on origin, where each piece's commits remain reachable.
+
+Two follow-ups landed before the tag, in one pull request reviewed as a whole
+(`.10x/reviews/2026-10-06-user-lens-and-sse-review.md`): a review that used 1.1 as a 1.0 user would found that the
+Android build without `cargo-ndk` no longer exported what build scripts of C libraries read
+(`BINDGEN_EXTRA_CLANG_ARGS_<triple>`, `CLANG_PATH`, `ANDROID_ABI`, `ANDROID_PLATFORM`, a CMake toolchain file), that an
+`ANDROID_NDK_HOME` naming no directory was silently replaced by the SDK's NDK, and five doc claims that did not hold when
+followed (`.10x/decisions/sde/user-lens-fixes.md`); and the one hang the test fixes had left open was a real bug: CFNetwork
+loses a data task's completion when a suspend and resume around one chunk is followed at once by a suspend for the next
+as the body ends, and the Swift SSE adapter suspended around every chunk; it now suspends only a chunk whose line ends
+could take the queue to the mark (`.10x/decisions/sde/sse-end-race.md`; a constructed worst case still hangs rarely and
+is recorded there). The LLDB formatters fix (`wt/lldb-formatters-bt`, reviewed in
+`.10x/reviews/2026-10-06-lldb-formatters-bt-review.md`) landed inside the same pull request.
 
 | Piece | What it is |
 |---|---|

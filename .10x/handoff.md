@@ -63,8 +63,13 @@ the debugger path from a `rules_apple` app, the leaderboard recipe, React Native
 without an rc rehearsal (recorded with the reason in checkpoint 40); the Release smoke workflow on the tag is the check.
 Native Bazel mode (no Cargo or Xcode subprocess in the action) is 1.2 and needs its own ADR first. Follow-ups
 recorded in the reviews: `undra symbolicate` does not check an ELF `.debug` file's build id (L4 of the symbols
-review); the CLI does not look in `/usr/lib/llvm-*/bin`; the LLDB formatters crash on deep backtraces (a fix is in a
-separate pull request); the macOS debug host dylib's debug map points at the deleted scratch directory.
+review); the CLI does not look in `/usr/lib/llvm-*/bin`; the macOS debug host dylib's debug map points at the deleted
+scratch directory; `ndk_major` reads the NDK's directory name, so a renamed or symlinked NDK loses the r27 line. The
+LLDB formatters fix, the 1.0-user review's fixes (the Android build exports what C build scripts read again; an NDK
+variable naming no directory is a C0003) and the SSE end-of-body fix landed together before the tag (checkpoint 40's
+last paragraph). One known limit stays, recorded in `.10x/decisions/sde/sse-end-race.md`: the Swift SSE adapter still
+suspends the data task when a chunk could fill the queue, and CFNetwork can lose the body's end if that suspend lands
+as the FIN arrives; removing it means a different backpressure design for the Swift adapter (1.2 material, ADR first).
 
 **The release is verified (2026-10-04, status checkpoint 38).** After the founder removed the failed build on
 jitpack.io, JitPack built `v1.0.0` and the *Release smoke* workflow passed for 1.0.0 on clean runners: the installer,

@@ -124,6 +124,20 @@ impl Dist {
         Ok(dist)
     }
 
+    /// [`Dist::announced`] for `undra upgrade`, whose warning about the git URL says what the upgrade does with it
+    /// ([`upgrade_override_warnings`]): it moves pins in place and keeps the repository each dependency names.
+    ///
+    /// # Errors
+    ///
+    /// As [`Dist::from_sys`].
+    pub fn announced_for_upgrade(sys: &dyn Sys, ui: &Ui) -> Result<Dist> {
+        let dist = Dist::from_sys(sys)?;
+        for warning in upgrade_override_warnings(|key| sys.env(key)) {
+            ui.warn(&warning);
+        }
+        Ok(dist)
+    }
+
     /// Names the repository a project's core takes its `undra` crates from (`url`, from `core/Cargo.toml`) for the
     /// Swift package too, so the bindings a project generates stay on the source the project was made with, whatever
     /// the environment says. GitHub's repository, in any spelling (`.git`, `ssh`), stays [`REPO_URL`].
@@ -216,6 +230,47 @@ pub fn override_warnings(get: impl Fn(&str) -> Option<String>) -> Vec<String> {
         ))
     })
     .collect()
+}
+
+/// [`override_warnings`] for `undra bindgen` of a project whose core takes Undra from the git repository `core_repository`
+/// (`None` for a core that does not, or without a project): the Swift package then names that repository, not the git URL
+/// override ([`Dist::follow_repository`]), and the warning says so.
+#[must_use]
+pub fn bindgen_override_warnings(
+    get: impl Fn(&str) -> Option<String>,
+    core_repository: Option<&str>,
+) -> Vec<String> {
+    let git = get(ENV_GIT_URL);
+    override_warnings(get)
+        .into_iter()
+        .map(|warning| match (&git, core_repository) {
+            (Some(value), Some(core)) if warning.starts_with(ENV_GIT_URL) => format!(
+                "{ENV_GIT_URL} is set, but the Swift package this command writes names the repository core/Cargo.toml takes Undra from, `{}`, not `{}` (ADR-063)",
+                core.trim(),
+                value.trim()
+            ),
+            _ => warning,
+        })
+        .collect()
+}
+
+/// [`override_warnings`] as `undra upgrade` reads them. The release URL and the Maven repository are written as they say;
+/// the git URL is not: an upgrade moves the tag of an Undra dependency and keeps the repository the dependency names
+/// (`core/Cargo.toml` keeps its `git` URL, and the regenerated Swift package follows the core). The stand-in only makes a
+/// dependency on it count as Undra's, and replaces the Swift package URL of before ADR-063 (`undra-swift`).
+#[must_use]
+pub fn upgrade_override_warnings(get: impl Fn(&str) -> Option<String>) -> Vec<String> {
+    let git = get(ENV_GIT_URL);
+    override_warnings(get)
+        .into_iter()
+        .map(|warning| match &git {
+            Some(value) if warning.starts_with(ENV_GIT_URL) => format!(
+                "{ENV_GIT_URL} is set: `undra upgrade` keeps the repository each Undra dependency names (the `git` URL of core/Cargo.toml stays as it is, only its tag moves), counts a dependency on `{}` as Undra's, and writes `{0}` only in place of the old `undra-swift` package URL (ADR-063)",
+                value.trim()
+            ),
+            _ => warning,
+        })
+        .collect()
 }
 
 /// The version of a Kotlin module at a release (`v1.0.0` on JitPack).
@@ -370,6 +425,47 @@ mod tests {
             "{warnings:?}"
         );
         assert!(override_warnings(|_| None).is_empty());
+    }
+
+    #[test]
+    fn bindgen_says_the_swift_package_follows_the_core() {
+        let get =
+            |key: &str| (key == ENV_GIT_URL).then(|| "file:///tmp/remote/undra.git".to_owned());
+        let following = bindgen_override_warnings(get, Some(REPO_URL));
+        assert_eq!(following.len(), 1);
+        assert!(
+            following[0].contains("names the repository core/Cargo.toml takes Undra from, `https://github.com/shreypdev/undra`, not `file:///tmp/remote/undra.git`"),
+            "{following:?}"
+        );
+        // A core that names no git repository: the override is what the package names.
+        assert_eq!(bindgen_override_warnings(get, None), override_warnings(get));
+    }
+
+    #[test]
+    fn the_upgrade_says_it_keeps_the_repository_a_dependency_names() {
+        let map: HashMap<&str, &str> = [
+            (ENV_GIT_URL, "file:///tmp/remote/undra.git"),
+            (ENV_RELEASE_URL, "http://127.0.0.1:8123/releases"),
+        ]
+        .into_iter()
+        .collect();
+        let warnings = upgrade_override_warnings(|key| map.get(key).map(|v| (*v).to_owned()));
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+        assert!(
+            warnings[0]
+                .starts_with("UNDRA_DIST_GIT_URL is set: `undra upgrade` keeps the repository")
+                && warnings[0].contains("the `git` URL of core/Cargo.toml stays as it is")
+                && warnings[0].contains("`file:///tmp/remote/undra.git`")
+                && !warnings[0].contains("instead of"),
+            "{warnings:?}"
+        );
+        // The release URL is written into package.json as it says.
+        assert!(
+            warnings[1].starts_with("UNDRA_DIST_RELEASE_URL is set")
+                && warnings[1].contains("instead of"),
+            "{warnings:?}"
+        );
+        assert!(upgrade_override_warnings(|_| None).is_empty());
     }
 
     #[test]

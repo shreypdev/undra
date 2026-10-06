@@ -9,9 +9,11 @@
 //! 64-bit libraries (the build asks the linker for 16 KB pages itself, [`ndk::PAGE_SIZE_LINK_ARG`]; the
 //! check says so if a toolchain does not).
 //!
-//! **The NDK.** `ANDROID_NDK_HOME`, else `ANDROID_HOME/ndk/<version>` (the newest) is the NDK; for each
-//! ABI the CLI runs `cargo rustc --target <triple>` with the environment Cargo reads to link with it:
-//! `CARGO_TARGET_<TRIPLE>_LINKER`, `CC_<triple>`, `AR_<triple>` ([`ndk::environment`]). The API level of
+//! **The NDK.** `ANDROID_NDK_HOME` (a path that is no directory stops the build), else
+//! `ANDROID_HOME/ndk/<version>` (the newest) is the NDK; for each ABI the CLI runs
+//! `cargo rustc --target <triple>` with the environment Cargo reads to link with it:
+//! `CARGO_TARGET_<TRIPLE>_LINKER`, `CC_<triple>`, `AR_<triple>`, and for the build scripts of C libraries
+//! the sysroot for `bindgen`, the NDK's clang and a CMake toolchain ([`ndk::environment`]). The API level of
 //! the clang wrapper is `[android] min_sdk` of `undra.toml`, 26 when the project says nothing (what
 //! `undra init` writes).
 //!
@@ -31,7 +33,9 @@ use std::process::{Command, Stdio};
 use crate::binary::{elf_is_64, elf_min_load_alignment};
 use crate::cargo::{Build, Profile};
 use crate::error::{CliError, Code, Result};
-use crate::fsutil::{copy_file, create_dir_all, human_size, remove_dir_all, size_of};
+use crate::fsutil::{
+    copy_file, create_dir_all, human_size, remove_dir_all, size_of, write_if_changed,
+};
 use crate::session::Session;
 use crate::symbols::{Entry, Format, Symbols, image, sha256, slash_relative, tools, zip};
 use crate::toolchain::{Concern, ndk_major};
@@ -53,7 +57,8 @@ pub fn triple_of(abi: &str) -> &'static str {
 ///
 /// # Errors
 ///
-/// `C0003` without the NDK (or with one that lacks the clang of the project's API level), `C0011`
+/// `C0003` without the NDK (or with one that lacks the clang of the project's API level, or when
+/// `ANDROID_NDK_HOME` or another NDK variable names a path that is not a directory), `C0011`
 /// without the Rust targets, `C0004` when the build fails.
 pub fn build(
     session: &Session<'_>,
@@ -61,6 +66,9 @@ pub fn build(
     symbols: &Symbols<'_, '_>,
 ) -> Result<Vec<Artifact>> {
     let cfg = &session.project.config.android;
+    if let Some(unusable) = &session.toolchain.android_ndk_unusable {
+        return Err(unusable.error());
+    }
     let Some(ndk) = session.toolchain.android_ndk.clone() else {
         return Err(CliError::new(
             Code::MissingTool,
@@ -106,6 +114,16 @@ pub fn build(
         session
             .ui
             .detail(&format!("rust target {triple} (NDK API {})", cfg.min_sdk));
+        // The CMake toolchain of this ABI, for build scripts that use the `cmake` crate: the NDK's,
+        // with the ABI and the API level it cannot read from the environment ([`ndk::cmake_toolchain`]).
+        let cmake_toolchain = target_dir
+            .join("undra-ndk")
+            .join(format!("{triple}-{}", cfg.min_sdk))
+            .join("android.toolchain.cmake");
+        write_if_changed(
+            &cmake_toolchain,
+            &ndk::cmake_toolchain(&ndk, triple, cfg.min_sdk),
+        )?;
         let files = session.cargo().build_library(&Build {
             manifest: manifest.clone(),
             target_dir: target_dir.clone(),
@@ -113,7 +131,7 @@ pub fn build(
             profile,
             crate_type: "cdylib",
             features: vec!["jni".to_owned()],
-            env: ndk::environment(&ndk, os, triple, cfg.min_sdk)?,
+            env: ndk::environment(session.sys, &ndk, os, triple, cfg.min_sdk, &cmake_toolchain)?,
             lib_name: crate::shim::shim_lib_name(&session.project.root),
             // The image's identity (what a panic report names it by) and the 16 KB pages, in the
             // unstripped library and in the stripped copy alike.
@@ -146,6 +164,11 @@ pub fn build(
             // that ships is stripped here instead.
             let strip = strip_tool(session)?;
             strip_shipped(&strip, &dest, session)?;
+        }
+        if release {
+            // What ships, beside what Cargo made (which keeps its symbols): the size a later debug
+            // build's hint compares with ([`debug_size_hint`]).
+            write_if_changed(&shipped_size_file(built), &size_of(&dest).to_string())?;
         }
         let mut note = None;
         if let Ok(bytes) = std::fs::read(&dest) {
@@ -346,14 +369,28 @@ fn play_archive(
 /// The Play Console's native debug symbols archive, below `build/symbols/android`.
 pub const PLAY_ARCHIVE: &str = "native-debug-symbols.zip";
 
-/// The size of the release library an earlier `undra build --platform android --release` left in
-/// Cargo's target directory for `abi` under `profile`, if there is one (`shim` is the shim's library
-/// name).
+/// Where a release build records the size of the library it shipped for the Cargo output `built`:
+/// `<built>.shipped-size`, the byte count as text. The library in Cargo's target directory keeps
+/// its symbols (several times the size of the stripped copy in `jniLibs/`), so its own size is not
+/// what a release build weighs.
+fn shipped_size_file(built: &Path) -> PathBuf {
+    let mut name = built.as_os_str().to_owned();
+    name.push(".shipped-size");
+    PathBuf::from(name)
+}
+
+/// The size of the library an earlier `undra build --platform android --release` shipped for `abi`
+/// under `profile` (the stripped copy in `jniLibs/`, as [`shipped_size_file`] recorded it), if there
+/// is one (`shim` is the shim's library name).
 fn earlier_release_size(target_dir: &Path, profile: Profile, abi: &str, shim: &str) -> Option<u64> {
     let library = target_dir
         .join(triple_of(abi))
         .join(format!("{}/lib{shim}.so", profile.dir_name()));
-    std::fs::metadata(library).ok().map(|m| m.len())
+    std::fs::read_to_string(shipped_size_file(&library))
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
 }
 
 /// The hint printed after a debug Android build: what a debug core weighs and what packaging
@@ -361,7 +398,7 @@ fn earlier_release_size(target_dir: &Path, profile: Profile, abi: &str, shim: &s
 ///
 /// `debug` is the largest library of the build and `abi` its ABI; `target_dir` is where Cargo put
 /// an earlier release build of the shim `shim` with `profile` (the one `--release` builds), whose
-/// size makes the hint exact.
+/// shipped size (recorded beside it, [`shipped_size_file`]) makes the hint exact.
 #[must_use]
 pub fn debug_size_hint(
     target_dir: &Path,
@@ -374,7 +411,7 @@ pub fn debug_size_hint(
     let how = "undra build --platform android --release";
     match release {
         Some(release) => format!(
-            "this Android core is a debug build ({} per ABI, fine for the dev loop); a release build is {}, {}x smaller. Package with `{how}`",
+            "this Android core is a debug build ({} per ABI, fine for the dev loop); the last release build shipped {}, {}x smaller. Package with `{how}`",
             human_size(debug),
             human_size(release),
             debug / release
@@ -439,11 +476,22 @@ mod tests {
         );
         assert!(!none.contains('\n'), "one line");
 
-        // With the release library of an earlier build at hand: the real numbers.
+        // The unstripped library Cargo left is not what ships: without the recorded size, a rule of thumb.
         let target = crate::fsutil::unique_temp_dir("android-hint");
         let release = target.join("aarch64-linux-android/release-mobile");
         std::fs::create_dir_all(&release).unwrap();
-        std::fs::write(release.join("libshim.so"), vec![0_u8; 1_500_000]).unwrap();
+        std::fs::write(release.join("libshim.so"), vec![0_u8; 6_500_000]).unwrap();
+        let unstripped_only = debug_size_hint(
+            &target,
+            Profile::ReleaseMobile,
+            "shim",
+            42_400_000,
+            "arm64-v8a",
+        );
+        assert!(unstripped_only.contains("typically"), "{unstripped_only}");
+
+        // With the size the release build shipped (the stripped copy): the real numbers.
+        std::fs::write(shipped_size_file(&release.join("libshim.so")), "898000").unwrap();
         let known = debug_size_hint(
             &target,
             Profile::ReleaseMobile,
@@ -452,7 +500,7 @@ mod tests {
             "arm64-v8a",
         );
         assert!(
-            known.contains("a release build is 1.5 MB, 28x smaller"),
+            known.contains("the last release build shipped 898.0 KB, 47x smaller"),
             "{known}"
         );
         // Another ABI has no release library of its own.

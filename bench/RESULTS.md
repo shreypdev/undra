@@ -645,8 +645,8 @@ shows; the recommended window is 780 bytes whatever the number of players. (The 
 recipe's, the followed row and the version check included; re-measured after the review made it so, the best p50 and
 p99 were 375 ns and 459 ns, the same within the 42 ns tick of this host's clock.)
 
-What a caller sees. `cargo test -p undra-bench --test leaderboard --release -- --ignored --nocapture stall_report`
-applies a snapshot every ~9 ms (4 ms of work, then 5 ms of sleep) for 8 s per design while another thread makes a call
+What a caller sees. `UNDRA_STRESS_SECONDS=8 cargo test -p undra-bench --test leaderboard --release -- --ignored --nocapture stall_report`
+applies a snapshot every ~9 ms (4 ms of work, then 5 ms of sleep) for 8 s per design (5 s without the variable) while another thread makes a call
 that does nothing (`ping`: it only needs the core lock) in a loop, and records how long each call took. Best of four runs
 at a load average of 13 to 16 (a busy machine adds descheduling noise to the probe itself, so the worst call of a run is the noisiest number here):
 

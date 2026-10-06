@@ -34,8 +34,8 @@ its own once per display frame (ADR-031), exactly as on the web.
   run there), and `UndraJsi.cpp` and `UndraTurboModule.cpp` compile with `-Werror` against 0.86.3's headers
   (see "What was run on React Native 0.86" below). The package's peer range starts at 0.82, which has the
   APIs it uses (pure C++ TurboModules on both platforms), but nothing below 0.86 has been run.
-  An Android app on 0.86 keeps 0.86's own toolchain, not the 0.87 template's: Gradle 9.3.1, Kotlin 2.1.20,
-  compileSdk 36. Gradle 9.4.1 bundles Kotlin 2.3.0, which cannot read the classes of 0.86's Gradle plugin
+  An Android app on 0.86 keeps 0.86's own toolchain, not the 0.87 template's (Gradle 9.4.1, Kotlin Gradle
+  plugin 2.2.0): Gradle 9.3.1, Kotlin 2.1.20, compileSdk 36. Gradle 9.4.1 bundles Kotlin 2.3.0, which cannot read the classes of 0.86's Gradle plugin
   (`:gradle-plugin:settings-plugin:compileKotlin` fails with "Incompatible classes were found"); that is the
   app's build, not the module.
 * iOS: CocoaPods (`brew install cocoapods`), and the deployment target of your core (`[ios]
@@ -328,7 +328,7 @@ stand-in", never as a native column next to Swift and Kotlin.
 
 ## What is verified
 
-**What was run on React Native 0.86** (2026-10-05, `wt/rn-086`, a Mac shared with other agents' builds): a
+**What was run on React Native 0.86** (2026-10-05, `wt/rn-086`, a Mac under load from other builds): a
 scratch copy of `examples/playground` outside the tracked tree (`@undra/react-native` and `@undra/runtime`
 linked from the copy of this checkout, the playground's Metro and Babel config unchanged), with `react-native`
 pinned to `0.86.3` (the newest 0.86 patch), `@react-native/babel-preset`, `eslint-config`, `metro-config` and
@@ -342,7 +342,7 @@ pinned to `0.86.3` (the newest 0.86 patch), `@react-native/babel-preset`, `eslin
 | The playground's types | `npx tsc --noEmit` in the app | clean |
 | The iOS app | `pod install` (79 dependencies, React-Core 0.86.3), `xcodebuild` Release for the iPhone 17 Pro simulator (iOS 26.5), `ONLY_ACTIVE_ARCH=YES ARCHS=arm64`; the module's pod compiles | builds |
 | The on-device checks, iOS | `scripts/rn-device-checks.sh ios --no-build` | `UNDRA-RN CHECKS 24/24 passed` (RN01..RN21, then RN22..RN24) |
-| The Android app | Gradle 9.3.1, `:app:assembleRelease -PreactNativeArchitectures=arm64-v8a`, compileSdk 36, build-tools 36.0.0, NDK 27.2, Kotlin 2.1.20 | builds (with Gradle 9.4.1 and Kotlin 2.2.0 it does not: the toolchain note under Requirements) |
+| The Android app | Gradle 9.3.1, `:app:assembleRelease -PreactNativeArchitectures=arm64-v8a`, compileSdk 36, build-tools 36.0.0, NDK 27.2, Kotlin 2.1.20 | builds (with the 0.87 template's Gradle 9.4.1, which bundles Kotlin 2.3.0, it does not: the toolchain note under Requirements) |
 | The on-device checks, Android | `scripts/rn-device-checks.sh android --no-build` on the `undra` emulator (arm64, API 35) | `UNDRA-RN CHECKS 23/23 passed` (RN01..RN21, RN22, RN23); RN24 (the Home key) and RN25 (airplane mode) were left out because the emulator is shared |
 
 The contract scenarios (`npm run test:contract`) go through a stand-in of the module and do not load React
@@ -363,7 +363,7 @@ JavaScript reloads were not re-run after the table (the reload logic is the same
 host test's reload race passes on both shims). The rows below are the record from before it.
 
 Everything below was run on 2026-10-01 at `wt/react-native` with `main` merged in (the schema JSON, device
-bench, diagnostics, dev loop and parity pieces: the typed failure model, `snapshot()` and `restore()`), on a Mac (Apple clang, Xcode 26.6) shared with other agents' builds.
+bench, diagnostics, dev loop and parity pieces: the typed failure model, `snapshot()` and `restore()`), on a Mac (Apple clang, Xcode 26.6) under load from other builds.
 
 | What | Where | Result |
 |---|---|---|
