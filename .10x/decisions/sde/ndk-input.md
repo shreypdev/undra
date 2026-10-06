@@ -1,0 +1,40 @@
+# SDE: ndk-input: the Android build drives the NDK directly, and the NDK is a declared input under Bazel (ADR-065), 2026-10-05
+
+Branch `wt/ndk-input`, from `main` `58e373a`. The binding text is ADR-065.
+
+## What changed
+
+| Where | What |
+|---|---|
+| `crates/undra-cli/src/builds/ndk.rs` (new) | the NDK as Cargo sees it, computed without running anything: `environment(ndk, os, triple, api)` gives `CARGO_TARGET_<TRIPLE>_LINKER`, `CC_<triple>`, `CXX_<triple>`, `AR_<triple>`, `RANLIB_<triple>` and `ANDROID_NDK_HOME` for the NDK's `<triple><api>-clang` and `llvm-ar` under `toolchains/llvm/prebuilt/<host>/bin` (`darwin-x86_64` on Apple silicon too, `linux-x86_64`, `windows-x86_64` with `.cmd` and `.exe`; 32-bit ARM wrappers are `armv7a-`); `rustc_args(triple)` gives the GNU build id and, for 64-bit libraries, `-Wl,-z,max-page-size=16384`; `missing_tools` names what an incomplete NDK lacks. 8 unit tests. |
+| `builds/android.rs` | one `Cargo::build_library` (`cargo rustc --lib --crate-type cdylib --features jni --target <triple>`) per ABI with that environment, in place of `cargo ndk -t .. -o`; the library is taken from Cargo's own report and copied to `jniLibs/<abi>/lib<ns>.so`. The API level is `[android] min_sdk` of `undra.toml` (26 when it says nothing: what `undra init` writes). The 16 KB check, the build-id check, `llvm-strip`, the symbol twins and the Play archive are unchanged. `android_stage_dir` (the `cargo ndk -o` staging) is gone. An NDK without the clang of the API level is C0003 and says which file is missing. |
+| `undra doctor` | the `android.cargo-ndk` check, `MIN_CARGO_NDK`, the version parser and the machine fixture are gone; `android.ndk` (C0003: `ANDROID_NDK_HOME`, then `ANDROID_HOME/ndk/<version>`) stays; a test asserts no finding mentions cargo-ndk. |
+| texts | the generated CI workflow (`templates/ci/android.yml`) no longer installs cargo-ndk; error texts, `undra doctor --help`, `docs/ONBOARDING.md` (the cargo-ndk heading is gone), `scripts/native-size.sh` (checks the NDK, not cargo-ndk), `scripts/ci-local.rb`, the crate README, `bench/budgets.toml`'s comment. The upgrade fixture of the released 0.0.9 workflow keeps its cargo-ndk line (it is a past release's file). |
+| `bazel/` | `undra_core(ndk = <label>)`: the NDK's files are an input of the Android action, `run.sh` sets `ANDROID_NDK_HOME` to the directory of the label's `source.properties` and unsets the other NDK and SDK variables; the Android action no longer inherits `PATH` or the shell environment (`use_default_shell_env` and `inherit_path` are iOS only). **The Android target does not transition to an Android platform**: it runs in the host configuration with the host's Rust toolchain. A macro with `"android"` in `platforms` and no `ndk` fails with the fix. |
+| `undra.android_std` (new tag of the `undra` extension) | what the host Rust toolchain lacks for a cross-build is the standard library of the Android triples. `rules_rust` provides it only as a toolchain for an Android *platform* (the thing that stopped at "Unable to find a CC toolchain"), so the extension fetches `rust-std-<version>-<triple>.tar.xz` from `static.rust-lang.org` by checksum (`@undra_android_std`, `private/android_std.bzl`), host independent, and `run.sh` merges it into the sysroot like the wasm and iOS ones. The example drops the two Android triples from `rust.toolchain(extra_target_triples)` and declares the tag with the same two checksums. |
+| `examples/bazel` | `android_ndk_linux` and `android_ndk_macos`: `http_archive`s of NDK r27c (27.2.12479018, the version CI and the size gate use) with `android/ndk.BUILD` as their BUILD file; `//:mobile_android` selects by OS; `.bazelrc` drops `ANDROID_NDK_HOME` and `PATH` from `--config=android`; `android/use-installed-ndk.sh` prints the `--override_repository` flags that stand an installed NDK in for the archives. |
+| CI | new job `bazel-android` in `ci.yml` (in `complete`'s `needs`): `scripts/android-sdk-install.sh` (retries for dl.google.com) installs the SDK platform 35, build-tools and the NDK, then `bazel build //:mobile_android` (with the installed NDK) and `bazel build //android:hello --config=android`, `--repository_cache`. The `android` job's `cargo install cargo-ndk` and `cargo ndk build` are replaced by the same environment on plain `cargo build --target`; the cargo-ndk installs of `bench.yml`, `two-cores.yml`, `rn-devices.yml` and `launch-rehearsal.yml` are gone. `release-smoke.yml` keeps its (it smokes a published release; 1.0.x builds Android through cargo-ndk). |
+| site | `docs/bazel.html` (Platforms row, the NDK repository and `android_std` in the set-up snippet, the paragraphs on what is the machine's), `docs/cli.html`, `docs/getting-started.html`; `build-all.mjs` regenerated the search index and `llms-full.txt`; `check-links.mjs` 54 pages OK. |
+
+## Verified (macOS, Apple silicon, NDK 27.2.12479018, Rust 1.99.0, Bazel 8.8.1 through Bazelisk)
+
+* `cargo test -p undra-cli`: green (453 unit tests and every integration test binary), `UNDRA_TEST_ANDROID=1 cargo test -p undra-cli --test platforms android`: 2 pass
+  (the 16 KB library per ABI under the 1.2 MB budget, and the debug hint); `cargo fmt --check`; `cargo clippy -p undra-cli --all-targets -- -D warnings`.
+* `undra init claude-ndk-smoke --dir /tmp --platforms android --undra-path <worktree>`, then, with a `PATH` that has `cargo` and `rustc` and no `cargo-ndk`,
+  `undra build --platform android` and `--release`: both ABIs build; "16 KB aligned"; `llvm-readelf`: ELF64 AArch64 and X86-64, every LOAD segment aligned
+  0x4000, the same GNU build id in the shipped library and its unstripped twin; release sizes 898.5 KB and 961.2 KB (the record: 898,176 and 960,776 bytes, ceiling +5%).
+* `bazel build //:mobile_android $(android/use-installed-ndk.sh)` in `examples/bazel`: builds (darwin sandbox, no `--action_env`, no `extra_path`); output
+  AArch64 and X86-64, 0x4000 alignment, build ids. A temporary `release = True` target gives the same sizes (898.2 KB and 961.3 KB) and the `symbols` output
+  group (unstripped twins, `native-debug-symbols.zip`).
+* `bazel build //android:hello --config=android`: builds. `bazel test //...` in `examples/bazel`: 6 of 6 pass. `bazel test //tests/...` in `bazel/`: 3 of 3 pass.
+* Without `ndk`, `undra_core(platforms = ["android"])` fails at load with the fix in the message.
+
+## Not verified, and deviations
+
+* **The NDK archives are not pinned by sha256.** Google publishes SHA-1 only (`repository2-3.xml`: `android-ndk-r27c-linux.zip` 663,987,688 bytes, `android-ndk-r27c-darwin.zip`
+  836,128,272 bytes); a SHA-256 comes from downloading each once. `MODULE.bazel` has `sha256 = ""` and a TODO; Bazel prints the value on the first fetch. Until then the
+  `http_archive` form itself was not fetched here: the build was proven with the installed NDK through `use-installed-ndk.sh` (the same BUILD file, the same repository names), which is also what CI does.
+* The Linux run of the new job (`bazel-android`) and of the `android` job's new JNI step has not run; its commands were run on macOS (`ci-local` provisioning aside).
+* `rules_android` fetches one archive without a checksum when `//android:hello` is built (ADR-061's warning): acceptable for this job, which is why the target stays `manual`.
+* The deviation from ADR-065 text: none in what ships; item 3 says "host Rust toolchain", and the Android standard library had to come from somewhere, hence `undra.android_std`.
+* `bazel/MODULE.bazel.lock` and `examples/bazel/MODULE.bazel.lock` did not change (the extension is reproducible and the new repositories are lazy).
