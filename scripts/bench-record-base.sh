@@ -19,10 +19,11 @@
 # baseline is decided by rounds of the base's binary (recorded in the file) and the head's, in turn,
 # best against best (bench/tests/stress.rs, `interleave`).
 #
-# How: a throwaway worktree of <base-rev> gets THIS tree's bench/ directory (so harness changes
-# never read as regressions: only the core crates differ), builds into a target directory of its
-# own, and runs the budgets test and the stress test with UNDRA_BENCH_RECORD=<out.toml>: best of
-# three attempts per row. Both tests add their own tables to the one file.
+# How: a throwaway worktree of <base-rev> gets THIS tree's bench/ directory, and the one file the
+# harness compiles from outside it by path (so harness changes never read as regressions: only the
+# core crates differ), builds into a target directory of its own, and runs the budgets test and the
+# stress test with UNDRA_BENCH_RECORD=<out.toml>: best of three attempts per row. Both tests add
+# their own tables to the one file.
 #
 # The target directory must NOT be shared with the tree being measured: cargo keys a workspace
 # member's artifacts without its path, so a base build in the same directory overwrites the head's
@@ -77,6 +78,13 @@ git worktree add --detach -q "$WORK/tree" "$BASE_SHA"
 rm -rf "$WORK/tree/bench"
 cp -R "$ROOT/bench" "$WORK/tree/bench"
 rm -rf "$WORK/tree/bench/baselines" # the base never measures against a committed baseline
+# The harness compiles one file from outside bench/ by path: the leaderboard recipe's structure (plain Rust, not a
+# core crate; bench/common/leaderboard.rs). It is harness, so it comes from this tree too: a base that predates it,
+# or one whose copy has another API, would otherwise fail to build and leave the run with no baseline gate at all.
+for harness_file in examples/cookbook/core/src/standings.rs; do
+  mkdir -p "$WORK/tree/$(dirname "$harness_file")"
+  cp "$ROOT/$harness_file" "$WORK/tree/$harness_file"
+done
 rm -f "$OUT"
 
 cd "$WORK/tree"
