@@ -122,7 +122,7 @@ cd android && ./gradlew :app:assembleDebug    # or open android/ in Android Stud
 There is no `undra build` to run first: `android/app/build.gradle.kts` has an `undraBuild` task that runs
 `undra build --platform android`, `preBuild` depends on it, and Gradle skips it while the core's sources
 (`core/src/**`, the Cargo manifests) and `build/android/jniLibs` are unchanged. The variant decides the profile:
-`assembleRelease` and `bundleRelease` build a release core (about 1.5 MB per ABI), anything else a debug core (fast to
+`assembleRelease` and `bundleRelease` build a release core (about 1.7 MB per ABI), anything else a debug core (fast to
 build, right for the dev loop, but tens of megabytes per ABI: 42 MB for the playground, and the APK carries every
 byte of it). `-PundraRelease=true` or `false` overrides, `-PundraSkipBuild=true` (or `UNDRA_SKIP_BUILD=1`) skips
 the task when the core was built in an earlier step. Sources outside `core/` (a path dependency in a monorepo) go in

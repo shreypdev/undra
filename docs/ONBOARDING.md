@@ -246,7 +246,7 @@ Every suite is local; nothing needs the network after install (the Bazel suite f
 | OkHttp module (optional, ADR-060): JVM unit tests (the Http contract and the realtime contract on OkHttp's adapters; the realtime suite needs Node, else it is skipped, saying why) | `cd runtimes/kotlin/undra-runtime && ./gradlew :okhttp-adapters:test` | 142 results (71 per variant) |
 | OkHttp module: instrumented tests (a booted emulator or device; start `node contract-tests/servers/realtime-server.mjs --port 0` first and pass its port, as for `:android-adapters`) | `cd runtimes/kotlin/undra-runtime && ANDROID_SERIAL=<serial> ./gradlew :okhttp-adapters:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.undra.realtimePort=<port>` | 65 pass |
 | Playground Android app on the real adapters (offline queue surviving a killed process) | `bash examples/playground/android/smoke.sh` (needs a booted emulator; it switches airplane mode on and off) | `SMOKE PASSED` |
-| Swift runtime | `cd runtimes/swift/UndraRuntime && swift test` | 753 pass |
+| Swift runtime | `cd runtimes/swift/UndraRuntime && swift test` | 924 pass, 3 skip (each says what the machine lacks) |
 | Swift runtime over the real C ABI table (the fixture core) | `bash crates/undra-ffi/tests/swift/run.sh` | 6 pass |
 | wasm ABI (real module + real TS runtime) | `bash crates/undra-ffi/tests/wasm/run.sh` | 22 + 36 pass |
 | C host harness (through the fixture core's table, `undra_fixture_undra_api`; `two_cores.c` opens two copies of it side by side) | `bash crates/undra-ffi/tests/c/run.sh` (add `UNDRA_C_SANITIZE=1` for ASan) | `c smoke: ok`, `c lifetime: ok`, `c two cores: ok` |
