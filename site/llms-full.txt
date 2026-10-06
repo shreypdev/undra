@@ -65,7 +65,7 @@ Install only what your target platforms need. `undra doctor` checks all of it an
 | --- | --- |
 | Any core (everything in `crates/`) | Rust stable, plus the cross targets Undra ships to |
 | Web | Node 20+, and `binaryen` (for `wasm-opt`, optional: it makes the wasm core smaller) |
-| Android | JDK 17, Kotlin, Gradle, the Android SDK and NDK r27, `cargo-ndk` |
+| Android | JDK 17, Kotlin, Gradle, the Android SDK and NDK r27 (no `cargo-ndk`: Undra links with the NDK's clang itself) |
 | iOS (macOS only) | Full Xcode from the App Store, plus an iOS simulator runtime |
 
 ## 1. Install the toolchain
