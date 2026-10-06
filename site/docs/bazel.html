@@ -121,7 +121,7 @@ undra_ts_library(name = "hello_ts", bindings = ":bindings", package = "@acme/hel
     name = "mobile",
     namespace = "hello_core",
     platforms = ["ios", "android"],
-    keep_debug_objects = select({"//ios:dbg": True, "//conditions:default": False}),  # config_setting: -c dbg
+    keep_debug_objects = select({":dbg": True, "//conditions:default": False}),  # config_setting :dbg, -c dbg
 )
 
 # ios/BUILD.bazel

@@ -9,13 +9,6 @@ load("@undra_rules//undra:defs.bzl", "undra_swift_library")
 # `bazel test //...` never builds them (they need Xcode and the iOS core of //:mobile_ios).
 _TAGS = ["manual", "requires-darwin"]
 
-# `-c dbg`: the build a debugger steps through. //:mobile keeps the objects that hold the core's DWARF for it (keep_debug_objects).
-config_setting(
-    name = "dbg",
-    values = {"compilation_mode": "dbg"},
-    visibility = ["//:__pkg__"],
-)
-
 # The generated bindings, compiled for iOS (the macOS-only `//swift:hello` is compiled for the machine).
 undra_swift_library(
     name = "hello",

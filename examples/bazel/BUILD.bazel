@@ -59,7 +59,14 @@ undra_core(
     ],
     # `-c dbg` is a build to debug (//ios, "Debugging the core from a Bazel-built app"): the objects with the core's DWARF stay.
     keep_debug_objects = select({
-        "//ios:dbg": True,
+        ":dbg": True,
         "//conditions:default": False,
     }),
+)
+
+# `-c dbg`: the build a debugger steps through. It is here, not in //ios, so that the cores never need that package (and the
+# rules_xcodeproj it loads) to be analysed.
+config_setting(
+    name = "dbg",
+    values = {"compilation_mode": "dbg"},
 )

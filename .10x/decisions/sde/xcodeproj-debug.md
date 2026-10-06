@@ -24,7 +24,7 @@ graph` on main and on the branch, reviewer's correction; the lock also gained ex
 |---|---|
 | `examples/bazel/ios/` | `HelloApp.swift` (SwiftUI: loads the core on launch, calls `greeting`), `Info.plist`, `BUILD.bazel` (`hello` = `undra_swift_library` compiled for iOS, `core_simulator`/`core_device` genrules that take one slice out of the XCFramework directory, `core` = `cc_import` selecting by the simulator constraint, `app_lib`, `app` = `ios_application`, `xcodeproj`, `dbg` config_setting, `app_dsym`, `symbols_test`), `symbols_test.sh`, `.gitignore` (the generated `HelloApp.xcodeproj`) |
 | `examples/bazel/MODULE.bazel` | `bazel_dep(rules_xcodeproj 4.1.0)` in a section of its own at the end; the lock as 8.8.1 wrote it |
-| `examples/bazel/BUILD.bazel` | one attribute on `//:mobile`: `keep_debug_objects = select({"//ios:dbg": True, default False})` |
+| `examples/bazel/BUILD.bazel` | one attribute on `//:mobile`: `keep_debug_objects = select({":dbg": True, default False})`, and the `dbg` config_setting (`-c dbg`) |
 | `bazel/undra/core.bzl`, `run.sh` | `undra_core(keep_debug_objects)` (below); the iOS core target is compatible with an iOS target platform too |
 | `bazel/undra/bindings.bzl` | `core` of `undra_bindings` is built for the execution platform (`cfg = "exec"`) |
 | `site/docs/bazel.html`, `examples/bazel/README.md` | "Debugging the core from a Bazel-built app" |
