@@ -81,6 +81,23 @@ stale=$(cd "$copy" && git ls-files -- bazel examples/bazel ':!*.lock' | xargs gr
 stale=$(cd "$copy" && git ls-files -- '*package.json' '*package-lock.json' | grep -v '/tests/fixtures/' |
   xargs grep -l "\"@undra/runtime\": \"^$old\"" || true)
 [ -z "$stale" ] || fail "still naming ^$old: $stale"
+# The release every example project is on, and what the Bazel example commits from its pin (the example's bindings_check
+# test fails when they differ from what `undra_bindings` generates at that pin). Every tracked example undra.toml, so a
+# project missing from the script's list fails here.
+pins=$(cd "$copy" && git ls-files -- 'examples/*undra.toml')
+[ -n "$pins" ] || fail "no example undra.toml is tracked"
+for f in $pins; do
+  pinned=$(awk '/^\[/ { s = $0 } s == "[undra]" && /^version = "/ { gsub(/^version = "|"$/, ""); print; exit }' "$copy/$f")
+  [ "$pinned" = "$new" ] || fail "$f: [undra] version is '$pinned', not $new"
+done
+grep -qF "from: \"$new\")" "$copy/examples/bazel/committed/swift/Package.swift" || fail "the committed Swift package does not ask for $new"
+grep -qF "undra:runtime:v$new\")" "$copy/examples/bazel/committed/kotlin/build.gradle.kts" ||
+  fail "the committed Kotlin module does not ask for runtime v$new"
+[ "$(grep -c "\"@undra/runtime\": \"^$new\"" "$copy/examples/bazel/committed/ts/package.json")" -eq 2 ] ||
+  fail "the committed TypeScript package does not name ^$new twice"
+stale=$(cd "$copy" && git ls-files -- examples/bazel/committed examples/bazel/undra.toml | xargs grep -lE "(\^|v|from: \"|version = \")$old([^0-9A-Za-z.-]|$)" || true)
+[ -z "$stale" ] || fail "the Bazel example's pin and committed bindings still name $old: $stale"
+pass "the examples' [undra] pins and the Bazel example's committed bindings say $new"
 pass "the workspace, Cargo.lock, the three packages, their locks, every runtime range and the runtimes' Hello versions say $new"
 
 # The copy has no tags, so $old was never released: the migration notes filed under it now arrive with $new.

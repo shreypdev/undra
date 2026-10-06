@@ -5,6 +5,7 @@ package(default_visibility = ["//visibility:public"])
 exports_files([
     "android.bzl",
     "bindings.bzl",
+    "bindings_test.bzl",
     "cli.bzl",
     "core.bzl",
     "defs.bzl",
@@ -32,6 +33,12 @@ bzl_library(
 )
 
 bzl_library(
+    name = "bindings_test",
+    srcs = ["bindings_test.bzl"],
+    deps = ["@bazel_lib//lib:write_source_files"],
+)
+
+bzl_library(
     name = "kotlin",
     srcs = ["kotlin.bzl"],
 )
@@ -51,6 +58,7 @@ bzl_library(
     srcs = ["defs.bzl"],
     deps = [
         ":bindings",
+        ":bindings_test",
         ":cli",
         ":core",
         ":kotlin",

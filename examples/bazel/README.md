@@ -9,7 +9,8 @@ examples/bazel/
   scripts/          at-minimums.sh: one Bazel command with every ruleset at the lowest version undra_rules declares
   undra.toml        the project file `undra build` and `undra bindgen` read; [core] namespace = "hello_core"
   Cargo.toml, core/ the core: a store, a typed error and a function
-  BUILD.bazel       undra_core, undra_bindings, undra_ts_library
+  BUILD.bazel       undra_core, undra_bindings, undra_bindings_test, undra_ts_library
+  committed/        the bindings, committed too: the Swift, Kotlin and TypeScript trees `undra_bindings` produces
   kotlin/           the JVM test (JNI against libhello_core) and the ktlint test of the generated Kotlin
   ts/               the Node test (hello_core.wasm through the compiled bindings)
   swift/            the Swift test (macOS): the core in process
@@ -34,6 +35,8 @@ bazel build //android:hello --config=android   # the bindings as an Android libr
 | `//ts:hello_test` | the same through the TypeScript bindings (type-checked by `tsc` against the compiled runtime) and `core_web` under Node |
 | `//swift:hello_test` | the same in Swift, with the XCFramework's host twin linked (macOS only; skipped on Linux) |
 | `//kotlin:lint_test` | ktlint 1.8 reports nothing on the generated Kotlin, and 90 findings once the exclusions `undra bindgen` writes are taken away; the root `.editorconfig` section the Bazel guide gives for `lint_exclusions = "none"` is enough on its own |
+| `//:bindings_check` | `committed/` is what the core's schema generates, byte for byte (`undra bindgen --check`'s comparison); when it is not, the failure says `bazel run //:bindings_check.update`, which rewrites it |
+| `//kotlin:lint_test` | ktlint 1.8 reports nothing on the generated Kotlin, and 90 findings once the exclusions `undra bindgen` writes are taken away |
 | `//consumer:summary_test` | a Kotlin library an app writes over the generated store compiles and runs, the core loaded by `-Dundra.native.hello_core.path=$(rootpath //:core_host)` |
 | `//consumer:runtime_test` | a Node test that imports `@undra/runtime` beside the bindings resolves both |
 
@@ -64,3 +67,7 @@ SDK and builds (by hand: CI does not run it, since `rules_android` then download
   "Ruleset versions" section of the Bazel guide (`site/docs/bazel.html`).
 * The lock files are committed as Bazel 8.8.1 (`.bazelversion`) writes them. Bazel 9.x records other registry files in them, so run 9.x
   with `--lockfile_mode=off`, as CI does, and the tree stays clean.
+* `committed/` names the Undra release `undra.toml` pins (`[undra] version`): `from: "<v>"` in its Swift package, `runtime:v<v>` in its
+  Gradle module and `^<v>` twice in its package.json. `scripts/bump-version.sh` moves the pin and those four lines together, so
+  `//:bindings_check` stays green on a release's version pull request. Nothing reads `committed/` but that test;
+  `bazel run //:bindings_check.update` regenerates it.
