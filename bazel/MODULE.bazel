@@ -5,7 +5,8 @@ module(
     version = "1.0.0",
 )
 
-# Each version below is the LOWEST the rules are tested with, on Bazel 8.8.1 and the newest 9.x (CI: the Bazel example jobs): Bazel's
+# Each version below is the LOWEST the rules are tested with, on Bazel 8.8.1 and the newest 9.x (CI: the Bazel example jobs, through
+# examples/bazel/scripts/at-minimums.sh, which runs the example at these versions; the example itself pins recent ones): Bazel's
 # module resolution picks the highest version anyone in the graph asks for, so an application that wants a newer ruleset keeps it.
 # Why each is where it is (what a lower one does) is in the "Ruleset versions" section of site/docs/bazel.html.
 bazel_dep(name = "bazel_skylib", version = "1.8.2")

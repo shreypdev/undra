@@ -1848,7 +1848,7 @@ Undra's build is a command line, and a Bazel repository can call it as one: the 
 
 ## Set up
 
-The rules support Bazel 8.8 and 9.x, tested in CI (8.8.1, the lowest, and 9.2.0). Pin Bazel in `.bazelversion` and put the rules and the toolchain in `MODULE.bazel`. The core is an ordinary Cargo crate that depends on `undra`; `undra.toml` stays the project file.
+The rules support Bazel 8.8 and 9.x, tested in CI on 8.8.1, the lowest, and 9.2.0, the newest 9.x release, each with the rulesets at their minimums and at recent versions ([Ruleset versions](https://shreypdev.github.io/undra/docs/bazel.html#ruleset-versions)). Pin Bazel in `.bazelversion` and put the rules and the toolchain in `MODULE.bazel`. The core is an ordinary Cargo crate that depends on `undra`; `undra.toml` stays the project file.
 
 If you use `undra_ts_library`, add `common --repo_env=DO_NOT_TRACK=1` to your `.bazelrc`. The TypeScript rules it loads (`aspect_rules_js`) report which rulesets and versions your build uses to Aspect unless that variable is set, and only your repository can set it: a module cannot do it for you. The other rules never load them.
 
@@ -1868,7 +1868,7 @@ The C linker, and for iOS and Android Xcode, the NDK and `cargo-ndk`, are the ma
 
 ## Ruleset versions
 
-`undra_rules` declares the lowest version of each ruleset it needs, not the newest, and tests exactly those on Bazel 8.8.1 and 9.2.0. Bazel resolves to the highest version anyone in your graph asks for, so a newer `rules_swift` of your own wins and the rules run on it; a lower one is raised to the minimum. The ones that set a floor:
+`undra_rules` declares the lowest version of each ruleset it needs, not the newest. Bazel resolves to the highest version anyone in your graph asks for, so a newer `rules_swift` of your own wins and the rules run on it; a lower one is raised to the minimum. CI tests both ends on Bazel 8.8.1 and 9.2.0: the example workspace at recent versions (`rules_rust` 0.74.0, `rules_kotlin` 2.4.20, `rules_swift` 4.1.2, `rules_apple` 5.2.0, `aspect_rules_ts` 3.10.1, `aspect_rules_js` 3.5.1), and the same targets with every ruleset at the minimum below, a run that fails if anything in the graph raises one. A minimum is the lowest that works on both Bazel versions: `rules_swift` 3.3 still builds on Bazel 8.8, for instance, and the floor is Bazel 9's. The ones that set a floor:
 
 | Ruleset | Minimum | Why not lower |
 | --- | --- | --- |

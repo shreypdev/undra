@@ -5,7 +5,8 @@ the Kotlin, TypeScript and (on macOS) Swift code that uses them against the real
 
 ```
 examples/bazel/
-  MODULE.bazel      undra_rules (bazel/, by path), rules_rust 1.99.0 pinned by checksum, rules_kotlin, rules_swift, aspect_rules_ts/js, all at their minimums
+  MODULE.bazel      undra_rules (bazel/, by path), rules_rust 1.99.0 pinned by checksum, rules_kotlin, rules_swift, aspect_rules_ts/js, at recent versions
+  scripts/          at-minimums.sh: one Bazel command with every ruleset at the lowest version undra_rules declares
   undra.toml        the project file `undra build` and `undra bindgen` read; [core] namespace = "hello_core"
   Cargo.toml, core/ the core: a store, a typed error and a function
   BUILD.bazel       undra_core, undra_bindings, undra_ts_library
@@ -19,7 +20,8 @@ examples/bazel/
 ```sh
 cd examples/bazel
 bazel test //...                      # needs Bazelisk; .bazelversion pins Bazel 8.8.1, the lowest supported
-USE_BAZEL_VERSION=9.2.0 bazel test //...   # the newest 9.x CI tests: Bazel 8.8 and 9.x are supported
+USE_BAZEL_VERSION=9.2.0 bazel test //... --lockfile_mode=off   # the newest 9.x, which CI tests too
+scripts/at-minimums.sh test //...     # every ruleset at undra_rules's minimum (any Bazel command; USE_BAZEL_VERSION works)
 bazel build //:core_web               # bazel-bin/core_web/hello_core.wasm: 112.7 KB gzipped (2026-10-02), budget 120 KB
 bazel build //:bindings               # the Swift, Kotlin and TypeScript trees, as outputs
 bazel build //:mobile_ios             # macOS: the XCFramework (manual target)
@@ -54,7 +56,11 @@ SDK and builds (by hand: CI does not run it, since `rules_android` then download
 * `.bazelrc` sets `DO_NOT_TRACK=1`: `aspect_rules_js` and `aspect_rules_ts` depend on a telemetry module that reports the rulesets a
   build uses to Aspect.
 * `MODULE.bazel.lock` is committed. `.bazelversion` is a link to `bazel/.bazelversion`: one pin for the rules and the example.
-* The rulesets are at the lowest versions `undra_rules` declares (`bazel/MODULE.bazel`), on purpose: this workspace is what shows they build and
-  test on Bazel 8.8.1 and 9.2.0 (the lowest and the newest 9.x CI runs). Bazel resolves to the highest version anyone asks for, so an app on a newer
-  ruleset keeps it. Why each minimum is where it is: the "Ruleset versions" section of the Bazel guide (`site/docs/bazel.html`). The lock file
-  is written by whichever Bazel last ran, and the two Bazel versions record different registry files in it; commit the one `.bazelversion` wrote.
+* The rulesets are at recent versions, the ones most applications run; `undra_rules` (`bazel/MODULE.bazel`) declares the lowest it needs,
+  and Bazel resolves to the highest version anyone asks for, so an app keeps its own. CI runs this workspace at both ends, on Bazel
+  8.8.1 and 9.2.0 (the lowest and the newest 9.x): as written, and through `scripts/at-minimums.sh`, which rewrites each `bazel_dep` of
+  `MODULE.bazel` to the rules' minimum for one command and puts the file back. It adds `--check_direct_dependencies=error`, so a
+  minimum something else in the graph raises fails the run, and `--lockfile_mode=off`. Why each minimum is where it is: the
+  "Ruleset versions" section of the Bazel guide (`site/docs/bazel.html`).
+* The lock files are committed as Bazel 8.8.1 (`.bazelversion`) writes them. Bazel 9.x records other registry files in them, so run 9.x
+  with `--lockfile_mode=off`, as CI does, and the tree stays clean.
