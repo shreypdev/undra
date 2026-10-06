@@ -1912,7 +1912,7 @@ undra.toml
 lint_exclusions = "none"       # "beside" (the default) writes the four files above; "none" writes none of them
 ```
 
-With `none` the four files are not generated and not in the manifest. Switching an existing project to it makes `undra bindgen --check` name the old files as stale until you run `undra bindgen` once, which removes them. Under Bazel the setting flows through the `undra.toml` you give `undra_bindings(config = ..)`: the rule has no list of these files, so nothing else changes. Any other value is `error[undra::C0002]`, naming the line. Then put the same exclusions in the root configurations. The examples use `generated/`, the default of `[paths] generated`; use your path.
+With `none` the four files are not generated and not in the manifest. Switching an existing project to it makes `undra bindgen --check` name the old files as stale until you run `undra bindgen` once, which removes them. Anything that names one of them goes with it: an `import` of `eslint.config.undra.mjs` in your `eslint.config.js`, or a `--config generated/swift/.swiftlint.yml` in a SwiftLint command, would then fail, so replace it with the root lines below in the same change. Under Bazel the setting flows through the `undra.toml` you give `undra_bindings(config = ..)`: the rule has no list of these files, so nothing else changes. Any other value is `error[undra::C0002]`, naming the line. Then put the same exclusions in the root configurations. The examples use `generated/`, the default of `[paths] generated`; use your path.
 
 **SwiftLint**, in the root `.swiftlint.yml`:
 
@@ -1923,12 +1923,12 @@ excluded:
   - generated
 ```
 
-**ktlint**, in the root `.editorconfig` (the form the generated file's own comment gives):
+**ktlint**, in the root `.editorconfig`. A section with a slash is anchored to the directory of its `.editorconfig`, so write the bindings' path from there: `[**/generated/**]` misses a `generated/` right beside the file.
 
 .editorconfig
 
 ```ini
-[**/generated/**]
+[generated/**]
 ktlint_standard = disabled
 ktlint_experimental = disabled
 ```
