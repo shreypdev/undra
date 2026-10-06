@@ -84,6 +84,22 @@ check covers. `source scripts/env.sh`; Bazel through Bazelisk with `--repository
   `runtimes/rn/@undra/react-native`.
 * **The Gate** on `4d29d6e` (run 37419177491): green (Site's deploy skipped, as on every pull request).
 
+## Round two: the Bazel-integration reviewer's findings (same head, fixed after `b58743d`)
+
+| # | Sev | Finding | Status |
+|---|---|---|---|
+| R1 | High | **`extra_path` reached every platform.** The macro passed it to all four cores and the rule wrote a `path=` line for each, while the docstring, the guide and the README said the Android core has no machine input (that reviewer's logging `cc` on an `extra_path` directory ran 29 times inside the "hermetic" Android action). | Fixed: the macro passes `extra_path` to the iOS core alone and the rule writes `path=` (and `inherit_path=1`) only for `platform = "ios"`, so a direct use of the rule is guarded too. The rule is exported as `undra_core_rule` for the tests; `examples/bazel/tests` analyses a host, a web, an Android (stand-in NDK and standard library, nothing fetched) and an iOS core with `extra_path` set and asserts, on the parameter file each action is given, that only the iOS one carries it (4 of 4 pass; the iOS one is macOS's, incompatible elsewhere so `//...` skips it). The docstring says the scope; the 1.1.0 migration note says an `extra_path` that named `cargo-ndk`'s directory for an Android core is ignored and that core needs `ndk`. The example gains `bazel_skylib` as a direct dependency (already in its graph; the lock is unchanged). |
+| R2 | Medium | **`at-minimums.sh` could leave MODULE.bazel empty** when its `$TMPDIR` backup went missing mid-run (`cat "$backup" > "$module"` truncates first). | Fixed: the original is held in memory and written back on exit, so nothing that happens to a file during the command loses it; a copy sits beside the module (`MODULE.bazel.at-minimums~`, git-ignored) for the one case memory does not survive, a killed script, and the next run puts it back first, saying so. `scripts/at-minimums.test.sh` (a stand-in `bazel` that records what it was given and deletes the backup): the module is intact after the deletion, a failing command's status passes through, a leftover backup is restored before the command; it is a step of the Linux example job. A first version of the rewrite read every line of the module as a `bazel_dep` (caught by the Android-at-minimums step, which then exited early); fixed before the step was re-run. |
+| R3 | Medium | **A `-c dbg` core's DWARF names sources under the stage directory, which kept the objects only**, so a breakpoint stopped at file and line with no source for LLDB or Xcode to show. | Fixed (`e8629a7`): the kept directory holds `app/` (the project's sources, less `build/`) and `undra/` (the Undra crates', 15 MB) as well; the vendored crates' sources are 295 MB unpacked (measured) and are not kept, which the docstring and the guide say (a frame inside one shows file and line only). Verified on the rebuilt app binary: `source list -n hello_core::greeting` prints lines 139 to 151 of `/private/tmp/undra-bazel-<key>/app/core/src/lib.rs`. The guide and the README say where the source is, how LLDB names the directory, and the `target.source-map` line for a copy elsewhere. |
+| R4 | Low | **The release filter kept the `deps/` copies too** (`*/release*/libundra_core_*.a` matched `release-mobile/deps/..`): four archives where two suffice. | Fixed (`e8629a7`): the archives at `<triple>/<profile>/` exactly (depth three, no deeper); `stage_lock_test` builds two profiles with `deps/` copies and expects four archives and no copy. |
+| R5 | Low | **The README listed two of the three flags; the guide claimed every target runs at every minimum** while `//ios` is left out and the Android core and library ran only as written on 8.8.1. | Fixed (`cdbb0da`, `2c87b1e`): the README's note lists `--deleted_packages=ios` and what each job runs at the minimums; the guide says every target but `//ios` (whose `rules_xcodeproj` sets floors of its own); `bazel-android` builds `//:mobile_android` and `//android:hello` at the minimums and on 9.2.0, both verified here on both Bazels. |
+| R6 | Low | **`bazel-android` did not prove the installed NDK was used**: a silently broken override would download the archive and stay green. | Fixed (`2c87b1e`): after the build the job checks that an NDK repository of the output base (`external/*android_ndk_linux`) links into the installed NDK (`readlink -f` of its `source.properties` under the NDK's real path) and fails otherwise; the same check run here resolves `+_repo_rules+android_ndk_macos` into `$ANDROID_HOME/ndk/27.2.12479018`. |
+| R7 | Low | ADR-061's amendment said "Four things change" and listed five, and "five exclusion files" where there are four plus the in-file annotation. | Fixed (`8b8e4f7`). |
+| R8 | Low | `extensions.bzl`'s `source` tag: `urls`, `integrity`, `strip_prefix` undocumented. | Fixed (`fb4cbb5`). |
+| R9 | Low | The debugging section told the reader to take full backtraces without the `.lldbinit`, which the LLDB fix landing with 1.1 makes false. | Fixed (`6114356`): a full `bt` works with it sourced for a 1.1 core; the 1.0 behaviour stays in parentheses. |
+
+That reviewer's L1, L5 and L7 are F1, F2 and F4 above. The RN devices failure (RN20) is read below.
+
 ## Not verified
 
 * The Linux jobs (the hosted runner is the gate; the branch's Gate run `37419177491` was green on `4d29d6e` before these fixes;
@@ -93,5 +109,13 @@ check covers. `source scripts/env.sh`; Bazel through Bazelisk with `--repository
 * The RN devices workflow (not a required check) failed on this branch's head in its Android job at RN20, "a stalled flood ends
   with WsError.Closed(1008 ..), got closed (1000): end after 6000": the WebSocket flood check on the emulator, whose outcome
   depends on which side closes first. Nothing in 1.1 touches `runtimes/rn`, the WebSocket adapter or that check (the
-  workflow's only change is the `cargo-ndk` line), and the same workflow passed on `main` on 2026-10-05. Left to the
-  tests-and-flakiness lens; it is not this pull request's to fix and not in the Gate.
+  workflow's only change is the `cargo-ndk` line), and the same workflow passed on `main` on 2026-10-05. Not this pull
+  request's to fix and not in the Gate. The cause, read in `examples/playground/rn/src/checks.ts` (RN20) and
+  `contract-tests/servers/realtime-server.mjs` (`/ws/flood`): the server sends its 6,000 messages as fast as the socket
+  drains and then closes with 1000; the React Native adapter closes with 1008 when more than 4,096 received messages wait
+  for the core. The check sleeps 1.5 s, then reads 16 at a time. The 1008 needs more than 4,096 messages waiting at one
+  moment, which happens only if more than that arrive during the 1.5 s nobody reads; on an emulator that delivers them
+  slower (a loaded runner), the reads keep the queue short from then on, the server finishes and closes with 1000 "end
+  after 6000", which is what the run printed. A speed budget, not a hang detector. The fix is in the check, not the
+  adapter: read nothing until the connection has ended by itself (the server's 1000 or the adapter's 1008), or have the
+  server hold the close until asked; not changed here, as it needs the emulator to prove.
