@@ -8,20 +8,22 @@ local_path_override(
     path = "../../bazel",
 )
 
-# The ruleset versions are the minimums undra_rules declares (bazel/MODULE.bazel), not the newest: this workspace is what proves they
-# build and test on Bazel 8.8.1 and the newest 9.x. An application on a newer ruleset keeps it, because Bazel resolves to the highest.
+# The ruleset versions are recent ones known to work, what most applications run. undra_rules (bazel/MODULE.bazel) declares the
+# lowest it needs instead, and Bazel resolves to the highest anyone asks for, so these win here. CI runs this workspace at both
+# ends, on Bazel 8.8.1 and the newest 9.x: as written, and through scripts/at-minimums.sh, which pins every bazel_dep below to the
+# rules' minimum for one run. A bazel_dep added here needs a minimum in bazel/MODULE.bazel (the script refuses one without).
 # apple_support first: its C++ toolchain (Xcode's clang) must come before the default one for rules_swift to find Apple targets.
-bazel_dep(name = "apple_support", version = "1.24.2")
+bazel_dep(name = "apple_support", version = "2.8.4")
 bazel_dep(name = "platforms", version = "1.1.0")
-bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "rules_cc", version = "0.2.20")
 bazel_dep(name = "rules_java", version = "9.3.0")
-bazel_dep(name = "rules_kotlin", version = "2.3.0")
-bazel_dep(name = "rules_rust", version = "0.70.0")
+bazel_dep(name = "rules_kotlin", version = "2.4.20")
+bazel_dep(name = "rules_rust", version = "0.74.0")
 bazel_dep(name = "rules_shell", version = "0.6.1")
-bazel_dep(name = "rules_swift", version = "3.4.0")
-bazel_dep(name = "rules_apple", version = "4.1.0")
-bazel_dep(name = "aspect_rules_js", version = "2.0.0")
-bazel_dep(name = "aspect_rules_ts", version = "3.10.0")
+bazel_dep(name = "rules_swift", version = "4.1.2")
+bazel_dep(name = "rules_apple", version = "5.2.0")
+bazel_dep(name = "aspect_rules_js", version = "3.5.1")
+bazel_dep(name = "aspect_rules_ts", version = "3.10.1")
 bazel_dep(name = "rules_nodejs", version = "6.7.5")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
