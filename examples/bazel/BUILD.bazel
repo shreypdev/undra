@@ -57,4 +57,9 @@ undra_core(
         "ios",
         "android",
     ],
+    # `-c dbg` is a build to debug (//ios, "Debugging the core from a Bazel-built app"): the objects with the core's DWARF stay.
+    keep_debug_objects = select({
+        "//ios:dbg": True,
+        "//conditions:default": False,
+    }),
 )

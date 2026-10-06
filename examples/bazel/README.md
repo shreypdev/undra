@@ -14,6 +14,8 @@ examples/bazel/
   swift/            the Swift test (macOS): the core in process
   consumer/         what an app team adds on top: its own Kotlin library over the store, a Node test importing the runtime
   android/          the bindings as an Android library (manual: --config=android, the Android SDK)
+  ios/              a SwiftUI app (rules_apple) over the bindings and the iOS core, its Xcode project (rules_xcodeproj) and the dSYM
+                    check: debugging into Rust from a Bazel-built app (macOS, manual targets)
 ```
 
 ```sh
@@ -23,6 +25,7 @@ bazel build //:core_web               # bazel-bin/core_web/hello_core.wasm: 112.
 bazel build //:bindings               # the Swift, Kotlin and TypeScript trees, as outputs
 bazel build //:mobile_ios             # macOS: the XCFramework (manual target)
 bazel build //android:hello --config=android   # the bindings as an Android library (ANDROID_HOME)
+bazel run //ios:xcodeproj             # macOS: ios/HelloApp.xcodeproj, the app's Xcode project (manual target)
 ```
 
 | Target | What it proves |
@@ -33,6 +36,28 @@ bazel build //android:hello --config=android   # the bindings as an Android libr
 | `//kotlin:lint_test` | ktlint 1.8 reports nothing on the generated Kotlin, and 90 findings once the exclusions `undra bindgen` writes are taken away |
 | `//consumer:summary_test` | a Kotlin library an app writes over the generated store compiles and runs, the core loaded by `-Dundra.native.hello_core.path=$(rootpath //:core_host)` |
 | `//consumer:runtime_test` | a Node test that imports `@undra/runtime` beside the bindings resolves both |
+| `//ios:symbols_test` | macOS, manual: the dSYM of `//ios:app` resolves `hello_core::greeting` to `lib.rs` (`--ios_multi_cpus=sim_arm64 -c dbg --apple_generate_dsym`) |
+
+## Debugging the core from a Bazel-built app
+
+`//ios:app` is a `rules_apple` `ios_application` (SwiftUI) that loads the iOS core and calls `greeting` on launch; `//ios:xcodeproj`
+is its Xcode project from `rules_xcodeproj`. Verified on the iOS simulator (iPhone 17, iOS 26.5, Xcode 26.6) with LLDB from the command
+line: a breakpoint on `hello_core::greeting` stops in the Rust frame at `lib.rs:145`, with the generated dispatcher under it and the
+Swift frames (`greeting(name:ctx:)`, `HelloApp.start()`) above the transport. A physical device was not tried.
+
+```sh
+bazel run //ios:xcodeproj             # writes ios/HelloApp.xcodeproj (git-ignored)
+xcodebuild -project ios/HelloApp.xcodeproj -scheme app -configuration Debug \
+  -destination 'platform=iOS Simulator,id=<udid>' -derivedDataPath /tmp/hello-dd build     # or open it in Xcode and Run
+xcrun simctl install booted "$(find /tmp/hello-dd/Build/Products -name app.app | head -1)"
+xcrun simctl launch --wait-for-debugger booted dev.undra.bazel.hello.app                    # prints the pid
+# from the Bazel execution root (rules_xcodeproj's: $(bazel info output_base)/../rules_xcodeproj.noindex/build_output_base/execroot/_main)
+xcrun lldb -b -o "process attach -p <pid>" -o "breakpoint set --name hello_core::greeting" -o continue -o "bt -c 60" -o detach
+```
+
+What makes the Rust frames resolve is `keep_debug_objects` of `//:mobile` (set when the build is `-c dbg`, which the generated project
+uses): a prelinked iOS slice carries a debug map, not DWARF, and the map names objects below `/tmp/undra-bazel-<key>/target`, which the
+action otherwise removes. The full steps, output and caveats are in `site/docs/bazel.html` ("Debugging the core from a Bazel-built app").
 
 ## What is hermetic, and what is not
 
@@ -50,6 +75,7 @@ SDK and builds (by hand: CI does not run it, since `rules_android` then download
 
 * The Undra crates are not on crates.io yet, so the core names the `undra` crate by version (`scripts/bump-version.sh` keeps it at the checkout's) and the rules (and `.cargo/config.toml`, for a plain
   `cargo test` here) stand the checkout in for the registry with `[patch.crates-io]`.
+* `MODULE.bazel` ends with `rules_xcodeproj` (4.1.0), used only by `//ios:xcodeproj`.
 * `.bazelrc` sets `DO_NOT_TRACK=1`: `aspect_rules_js` and `aspect_rules_ts` depend on a telemetry module that reports the rulesets a
   build uses to Aspect.
 * `MODULE.bazel.lock` is committed. `.bazelversion` is a link to `bazel/.bazelversion`: one pin for the rules and the example.

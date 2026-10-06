@@ -1,0 +1,105 @@
+load("@rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_cc//cc:cc_import.bzl", "cc_import")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcodeproj")
+load("@undra_rules//undra:defs.bzl", "undra_swift_library")
+
+# A SwiftUI app over the generated bindings and the iOS core, and the Xcode project that debugs it. macOS only, and `manual`:
+# `bazel test //...` never builds them (they need Xcode and the iOS core of //:mobile_ios).
+_TAGS = ["manual", "requires-darwin"]
+
+# `-c dbg`: the build a debugger steps through. //:mobile keeps the objects that hold the core's DWARF for it (keep_debug_objects).
+config_setting(
+    name = "dbg",
+    values = {"compilation_mode": "dbg"},
+    visibility = ["//:__pkg__"],
+)
+
+# The generated bindings, compiled for iOS (the macOS-only `//swift:hello` is compiled for the machine).
+undra_swift_library(
+    name = "hello",
+    bindings = "//:bindings",
+    ffi_module = "HelloCoreFFI",
+    module_name = "HelloCore",
+    tags = _TAGS,
+)
+
+# The core of the app: one slice of the XCFramework `//:mobile_ios` builds, picked by the platform the app is built for.
+# (`apple_static_xcframework_import` takes the files of an XCFramework, and `undra_core` declares it as one directory.)
+_SLICES = {
+    "device": "ios-arm64",
+    "simulator": "ios-arm64-simulator",
+}
+
+[
+    genrule(
+        name = "core_" + kind,
+        srcs = ["//:mobile_ios"],
+        outs = ["libhello_core_{}.a".format(kind)],
+        cmd = "cp $(location //:mobile_ios)/HelloCore.xcframework/{}/libhello_core.a $@".format(slice),
+        tags = _TAGS,
+    )
+    for kind, slice in _SLICES.items()
+]
+
+cc_import(
+    name = "core",
+    static_library = select({
+        "@apple_support//constraints:simulator": ":core_simulator",
+        "//conditions:default": ":core_device",
+    }),
+    tags = _TAGS,
+)
+
+swift_library(
+    name = "app_lib",
+    srcs = ["HelloApp.swift"],
+    module_name = "HelloApp",
+    tags = _TAGS,
+    deps = [
+        ":core",
+        ":hello",
+        "@undra//swift:runtime",
+    ],
+)
+
+ios_application(
+    name = "app",
+    bundle_id = "dev.undra.bazel.hello.app",
+    families = ["iphone"],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "17.0",
+    tags = _TAGS,
+    visibility = ["//visibility:public"],  # the Xcode project's generator reads it
+    deps = [":app_lib"],
+)
+
+# `bazel run //ios:xcodeproj` writes ios/HelloApp.xcodeproj. Xcode builds the app through Bazel (`-c dbg`, which keeps the core's
+# DWARF: `keep_debug_objects` of //:mobile) and runs it on the simulator.
+xcodeproj(
+    name = "xcodeproj",
+    project_name = "HelloApp",
+    tags = _TAGS,
+    top_level_targets = [
+        top_level_target(":app", target_environments = ["simulator"]),
+    ],
+)
+
+# The dSYM of the app: with `-c dbg --apple_generate_dsym` it holds the DWARF of the Rust core too (the dSYM follows the core's
+# debug map to the objects `keep_debug_objects` leaves). `bazel test //ios:symbols_test --ios_multi_cpus=sim_arm64 -c dbg
+# --apple_generate_dsym` checks that it does.
+filegroup(
+    name = "app_dsym",
+    srcs = [":app"],
+    output_group = "dsyms",
+    tags = _TAGS,
+)
+
+sh_test(
+    name = "symbols_test",
+    srcs = ["symbols_test.sh"],
+    args = ["$(rootpaths :app_dsym)"],  # the files of the dSYM, as arguments
+    data = [":app_dsym"],
+    tags = _TAGS,
+)
