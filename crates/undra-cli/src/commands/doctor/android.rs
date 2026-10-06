@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use crate::adb;
 use crate::sys::Os;
-use crate::toolchain::ndk_major;
+use crate::toolchain::{NDK_VARIABLES, UnusableNdk, ndk_major, newest_sdk_ndk};
 
 use super::finding::{Check, Finding, State};
 use super::rust::target;
@@ -141,6 +141,9 @@ pub fn check(cx: &Context<'_>) -> Vec<Finding> {
     out.extend(sdk_findings(cx, sdk.as_deref()));
     out.extend(adb_findings(cx, sdk.as_deref()));
     out.push(ndk(cx, sdk.as_deref()));
+    if let Some(unusable) = &cx.toolchain.android_ndk_unusable {
+        out.push(unusable_ndk_home(cx, unusable, sdk.as_deref()));
+    }
     if let Some(ndk) = &cx.toolchain.android_ndk {
         out.push(ndk_home(cx, ndk));
         out.push(lldb(cx, ndk, sdk.as_deref()));
@@ -369,11 +372,38 @@ fn ndk(cx: &Context<'_>, sdk: Option<&Path>) -> Finding {
                 ndk.display().to_string(),
             ),
         },
-        None => NDK.missing(
-            "no Android NDK found (ANDROID_NDK_HOME is not set and the SDK has no ndk/ directory)",
-            &[&install],
-        ),
+        None => match &cx.toolchain.android_ndk_unusable {
+            Some(unusable) => NDK.missing(
+                format!(
+                    "no Android NDK: {} is {}, which is not a directory (`undra build` stops on it rather than use another NDK)",
+                    unusable.variable,
+                    unusable.path.display()
+                ),
+                &[&unusable_fix(cx, unusable, sdk).unwrap_or(install)],
+            ),
+            None => NDK.missing(
+                "no Android NDK found (ANDROID_NDK_HOME is not set and the SDK has no ndk/ directory)",
+                &[&install],
+            ),
+        },
     }
+}
+
+/// The NDK variable set to a path that is not a directory: a failure, which `undra build --platform
+/// android` stops on too ([`UnusableNdk::error`]). The fix points the variable at the SDK's newest NDK
+/// when there is one, else unsets it.
+fn unusable_ndk_home(cx: &Context<'_>, unusable: &UnusableNdk, sdk: Option<&Path>) -> Finding {
+    let variable = unusable.variable;
+    let fix = unusable_fix(cx, unusable, sdk).unwrap_or_else(|| format!("unset {variable}"));
+    NDK_HOME.fail(
+        State::Missing,
+        Some(unusable.path.display().to_string()),
+        format!(
+            "{variable} is {}, which is not a directory: `undra build --platform android` stops on it (C0003) rather than use an NDK the variable did not choose",
+            unusable.path.display()
+        ),
+        &[&fix],
+    )
 }
 
 /// The NDK's LLDB, which `ndk-lldb` and Android Studio's native debugger use to step into the core.
@@ -400,7 +430,7 @@ fn lldb(cx: &Context<'_>, ndk: &Path, sdk: Option<&Path>) -> Finding {
 }
 
 fn ndk_home(cx: &Context<'_>, ndk: &Path) -> Finding {
-    let set = ["ANDROID_NDK_HOME", "ANDROID_NDK_ROOT", "NDK_HOME"]
+    let set = NDK_VARIABLES
         .iter()
         .find_map(|key| cx.sys.env(key).map(|v| ((*key).to_owned(), v)));
     match set {
@@ -415,6 +445,16 @@ fn ndk_home(cx: &Context<'_>, ndk: &Path) -> Finding {
             &[&format!("export ANDROID_NDK_HOME={}", quoted_path(&ndk.to_string_lossy()))],
         ),
     }
+}
+
+/// The command that points an unusable NDK variable at the SDK's newest NDK, when the SDK has one.
+fn unusable_fix(cx: &Context<'_>, unusable: &UnusableNdk, sdk: Option<&Path>) -> Option<String> {
+    let found = newest_sdk_ndk(cx.sys, sdk?)?;
+    Some(format!(
+        "export {}={}",
+        unusable.variable,
+        quoted_path(&found.to_string_lossy())
+    ))
 }
 
 /// The JDK check: Gradle and the Android Gradle plugin need one, 17 or newer.
@@ -738,6 +778,58 @@ mod tests {
             good_machine().with_env("ANDROID_NDK_HOME", &format!("{SDK_DIR}/ndk/27.2.12479018"));
         let f = by_id(&scan(&set, &["android"]), "android.ndk-home").clone();
         assert_eq!(f.status, Status::Ok);
+    }
+
+    #[test]
+    fn an_ndk_variable_that_names_no_directory_is_a_problem_not_ok() {
+        let typo = good_machine().with_env("ANDROID_NDK_HOME", "/typo/ndk");
+        let report = scan(&typo, &["android"]);
+        let home = by_id(&report, "android.ndk-home").clone();
+        assert_eq!(
+            (home.status, home.state),
+            (Status::Fail, State::Missing),
+            "{home:?}"
+        );
+        assert!(
+            home.message
+                .starts_with("ANDROID_NDK_HOME is /typo/ndk, which is not a directory"),
+            "{home:?}"
+        );
+        assert_eq!(home.observed.as_deref(), Some("/typo/ndk"));
+        // The fix points it at the NDK the SDK has.
+        assert_eq!(
+            home.fix,
+            [format!(
+                "export ANDROID_NDK_HOME={SDK_DIR}/ndk/27.2.12479018"
+            )]
+        );
+        // The NDK itself is not reported as found at the SDK's directory.
+        let ndk = by_id(&report, "android.ndk").clone();
+        assert_eq!(
+            (ndk.status, ndk.state),
+            (Status::Fail, State::Missing),
+            "{ndk:?}"
+        );
+        assert!(
+            ndk.message.contains("ANDROID_NDK_HOME is /typo/ndk"),
+            "{ndk:?}"
+        );
+        assert_eq!(
+            ndk.fix, home.fix,
+            "the NDK is there: the variable is the fix"
+        );
+        assert!(!report.passed());
+
+        // Without an NDK in the SDK, the fix unsets the variable.
+        let nothing = good_machine_without_ndk().with_env("ANDROID_NDK_ROOT", "/gone");
+        let home = by_id(&scan(&nothing, &["android"]), "android.ndk-home").clone();
+        assert_eq!(home.status, Status::Fail);
+        assert_eq!(home.fix, ["unset ANDROID_NDK_ROOT"]);
+        let ndk = by_id(&scan(&nothing, &["android"]), "android.ndk").clone();
+        assert!(
+            ndk.fix[0].contains("ndk;27.2.12479018"),
+            "no NDK at all: install one: {ndk:?}"
+        );
     }
 
     #[test]

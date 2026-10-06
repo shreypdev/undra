@@ -9,8 +9,9 @@
 //! 64-bit libraries (the build asks the linker for 16 KB pages itself, [`ndk::PAGE_SIZE_LINK_ARG`]; the
 //! check says so if a toolchain does not).
 //!
-//! **The NDK.** `ANDROID_NDK_HOME`, else `ANDROID_HOME/ndk/<version>` (the newest) is the NDK; for each
-//! ABI the CLI runs `cargo rustc --target <triple>` with the environment Cargo reads to link with it:
+//! **The NDK.** `ANDROID_NDK_HOME` (a path that is no directory stops the build), else
+//! `ANDROID_HOME/ndk/<version>` (the newest) is the NDK; for each ABI the CLI runs
+//! `cargo rustc --target <triple>` with the environment Cargo reads to link with it:
 //! `CARGO_TARGET_<TRIPLE>_LINKER`, `CC_<triple>`, `AR_<triple>`, and for the build scripts of C libraries
 //! the sysroot for `bindgen`, the NDK's clang and a CMake toolchain ([`ndk::environment`]). The API level of
 //! the clang wrapper is `[android] min_sdk` of `undra.toml`, 26 when the project says nothing (what
@@ -56,7 +57,8 @@ pub fn triple_of(abi: &str) -> &'static str {
 ///
 /// # Errors
 ///
-/// `C0003` without the NDK (or with one that lacks the clang of the project's API level), `C0011`
+/// `C0003` without the NDK (or with one that lacks the clang of the project's API level, or when
+/// `ANDROID_NDK_HOME` or another NDK variable names a path that is not a directory), `C0011`
 /// without the Rust targets, `C0004` when the build fails.
 pub fn build(
     session: &Session<'_>,
@@ -64,6 +66,9 @@ pub fn build(
     symbols: &Symbols<'_, '_>,
 ) -> Result<Vec<Artifact>> {
     let cfg = &session.project.config.android;
+    if let Some(unusable) = &session.toolchain.android_ndk_unusable {
+        return Err(unusable.error());
+    }
     let Some(ndk) = session.toolchain.android_ndk.clone() else {
         return Err(CliError::new(
             Code::MissingTool,
