@@ -10,6 +10,9 @@
 # who built the release is the trust you already place in github.com/shreypdev/undra over TLS.
 # Read it before you run it.
 #
+# It prints the line that puts $UNDRA_HOME/bin on your PATH and writes no startup file of yours,
+# unless UNDRA_MODIFY_PATH=1 asks it to add that one line (see --help).
+#
 # The whole script is one function that runs on the last line, so a download that is cut off
 # part-way runs nothing.
 set -eu
@@ -33,6 +36,12 @@ main() {
       *) usage >&2; die "unknown argument: $1" ;;
     esac
   done
+  # Checked before anything is downloaded, so a typo does not cost an install.
+  modify_path=${UNDRA_MODIFY_PATH:-0}
+  case "$modify_path" in
+    0 | 1) ;;
+    *) die "UNDRA_MODIFY_PATH must be 1 (add the PATH line to your shell's startup file) or 0, got: $modify_path" ;;
+  esac
 
   need curl
   need tar
@@ -119,6 +128,7 @@ main() {
   else
     die "$bin_dir/undra was installed but did not start: $shown"
   fi
+  shadow_note
   path_hint
   say "Uninstall: rm $bin_dir/undra"
 }
@@ -138,6 +148,9 @@ unless the checksum matches.
 Environment:
   UNDRA_VERSION            version to install, for example 1.0.0 or v1.0.0 (default: the latest release)
   UNDRA_HOME               install root (default: ~/.undra); the binary goes to $UNDRA_HOME/bin
+  UNDRA_MODIFY_PATH        1: add the line that puts $UNDRA_HOME/bin on PATH to your shell's startup
+                           file (~/.zshrc; ~/.bashrc, or ~/.bash_profile on macOS; fish's
+                           conf.d/undra.fish), once, on a line of its own (default: 0, print it only)
   UNDRA_INSTALL_BASE_URL   where releases are served, laid out as GitHub does:
                            <url>/v<version>/undra-v<version>-<target>.tar.gz and checksums.txt
                            (default: https://github.com/shreypdev/undra/releases/download)
@@ -225,17 +238,102 @@ detect_target() {
   esac
 }
 
+# Names an `undra` that a shell finds before the one just installed: it would keep answering
+# `undra --version` with its own version, and nothing else would say why.
+shadow_note() {
+  other=$(command -v undra 2>/dev/null) || return 0
+  case "$other" in
+    /*) ;;
+    *) return 0 ;; # not a file (an alias or a function of this shell)
+  esac
+  [ -f "$other" ] || return 0
+  # A symlink to the installed file (or a directory symlinked to $bin_dir) is the same undra.
+  [ "$(real_path "$other")" != "$(real_path "$bin_dir/undra")" ] || return 0
+  other_dir=${other%/*}
+  say ""
+  say "Note: \`undra\` in a shell runs another undra on your PATH, not the one just installed:"
+  say ""
+  say "  $other ($(version_of "$other"))"
+  say ""
+  say "Remove it:"
+  say ""
+  case "$other" in
+    */.cargo/bin/undra | "${CARGO_HOME:-/nonexistent}/bin/undra") say "  cargo uninstall undra-cli" ;;
+    *) say "  rm $other" ;;
+  esac
+  say ""
+  case ":${PATH:-}:" in
+    *":$bin_dir:"*) say "or put $bin_dir before $other_dir on your PATH." ;;
+    *) say "or put $bin_dir before $other_dir on your PATH, as the PATH line below does." ;;
+  esac
+}
+
+# The first line that `<file> --version` prints, or "version unknown" when it fails, prints
+# nothing or has not finished within 10 seconds (an old build that waits must not hang the
+# install). Its stdin is /dev/null: under `curl | sh` the shell's stdin is this script.
+version_of() {
+  "$1" --version </dev/null >"$tmp/other-version" 2>/dev/null &
+  version_pid=$!
+  # The guard's output goes nowhere, so a caller reading this script's output does not wait for it.
+  (sleep 10; kill "$version_pid" 2>/dev/null) </dev/null >/dev/null 2>&1 &
+  guard_pid=$!
+  version_line=""
+  if wait "$version_pid"; then
+    version_line=$(head -n 1 "$tmp/other-version")
+  fi
+  kill "$guard_pid" 2>/dev/null || true
+  printf '%s\n' "${version_line:-version unknown}"
+}
+
+# <absolute path> with every symlink on the way resolved (POSIX has no realpath).
+real_path() {
+  resolved=$1
+  hops=0
+  while [ -L "$resolved" ] && [ "$hops" -lt 40 ]; do
+    link=$(readlink "$resolved") || break
+    case "$link" in
+      /*) resolved=$link ;;
+      *) resolved=${resolved%/*}/$link ;;
+    esac
+    hops=$((hops + 1))
+  done
+  parent=${resolved%/*}
+  if parent=$(cd -P "${parent:-/}" 2>/dev/null && pwd -P); then
+    printf '%s/%s\n' "${parent%/}" "${resolved##*/}"
+  else
+    printf '%s\n' "$resolved"
+  fi
+}
+
 # Says what to add to PATH, in the user's shell's syntax, unless it is already there. Nothing is
-# written to any startup file.
+# written to any startup file unless UNDRA_MODIFY_PATH=1 asks for it (add_path_line).
 path_hint() {
   case ":${PATH:-}:" in
-    *":$bin_dir:"*) return 0 ;;
+    *":$bin_dir:"*)
+      [ "$modify_path" = 0 ] || say "$bin_dir is already on your PATH; no startup file was changed."
+      return 0
+      ;;
   esac
   shown=$bin_dir
   # shellcheck disable=SC2016 # the literal text $HOME is what the user's shell should see
   [ "$bin_dir" != "${HOME:-}/.undra/bin" ] || shown='$HOME/.undra/bin'
+  export_line="export PATH=\"$shown:\$PATH\""
   shell_name=${SHELL:-}
   shell_name=${shell_name##*/}
+  # The startup file, relative to the home directory.
+  case "$shell_name" in
+    zsh) rc=.zshrc ;;
+    bash)
+      rc=.bashrc
+      [ "$(uname -s)" != Darwin ] || rc=.bash_profile
+      ;;
+    fish) rc=.config/fish/conf.d/undra.fish ;;
+    *) rc="" ;;
+  esac
+  if [ "$modify_path" = 1 ]; then
+    add_path_line
+    return 0
+  fi
   say ""
   say "$bin_dir is not on your PATH yet. Add it:"
   say ""
@@ -243,19 +341,85 @@ path_hint() {
     fish)
       say "  fish_add_path \"$shown\""
       ;;
-    zsh)
-      say "  echo 'export PATH=\"$shown:\$PATH\"' >> ~/.zshrc && exec zsh"
-      ;;
-    bash)
-      rc='~/.bashrc'
-      [ "$(uname -s)" != Darwin ] || rc='~/.bash_profile'
-      say "  echo 'export PATH=\"$shown:\$PATH\"' >> $rc && exec bash"
+    zsh | bash)
+      # printf, not echo: the leading \n ends a last line that has no newline of its own, which
+      # the export would otherwise join (and the shell would then fail to read the file).
+      say "  printf '\\nexport PATH=\"$(printf_text "$shown"):\$PATH\"\\n' >> ~/$rc && exec $shell_name"
       ;;
     *)
-      say "  export PATH=\"$shown:\$PATH\"    # and put that line in your shell's startup file"
+      say "  $export_line    # and put that line in your shell's startup file"
       ;;
   esac
   say ""
+}
+
+# <text> as it must appear inside printf's single-quoted format: % and \ doubled, ' closed and
+# reopened around an escaped one.
+printf_text() {
+  printf '%s' "$1" | sed -e 's/[\\%]/&&/g' -e "s/'/'\\\\''/g"
+}
+
+# UNDRA_MODIFY_PATH=1: appends the PATH line to the shell's startup file, on a line of its own,
+# unless a line there already puts $bin_dir on PATH. Called by path_hint, which sets rc.
+add_path_line() {
+  if [ -z "$rc" ] || [ -z "${HOME:-}" ]; then
+    say ""
+    say "UNDRA_MODIFY_PATH=1, but this installer knows no startup file for the shell '${shell_name:-unknown}' (\$SHELL), so nothing was written. Put this line in your shell's startup file:"
+    say ""
+    say "  $export_line"
+    say ""
+    return 0
+  fi
+  need tail
+  file=$HOME/$rc
+  line=$export_line
+  [ "$shell_name" != fish ] || line="fish_add_path \"$shown\""
+  if [ -f "$file" ] && has_path_line "$file"; then
+    say ""
+    say "$file already puts $bin_dir on PATH; nothing was written. A new shell reads it: exec $shell_name"
+    say ""
+    return 0
+  fi
+  [ "$shell_name" != fish ] || mkdir -p "${file%/*}" || die "undra is installed, but ${file%/*} could not be created; add this line to $file yourself: $line"
+  # A file whose last byte is not a newline gets one first, so the line is not joined to its
+  # last line.
+  newline=""
+  if [ -s "$file" ] && [ -n "$(tail -c 1 "$file")" ]; then
+    newline='
+'
+  fi
+  printf '%s%s\n' "$newline" "$line" >>"$file" || die "undra is installed, but $file could not be written; add this line to it yourself: $line"
+  say ""
+  say "Added this line to $file:"
+  say ""
+  say "  $line"
+  say ""
+  say "A new shell picks it up: exec $shell_name"
+  say ""
+}
+
+# Whether a line of <file>, comments aside, already names $bin_dir in a PATH setting or in
+# fish_add_path, spelt in full or from the home directory with $HOME, ${HOME} or ~.
+has_path_line() {
+  with_var=""
+  with_braces=""
+  with_tilde=""
+  case "$bin_dir" in
+    "$HOME"/*)
+      from_home=${bin_dir#"$HOME"/}
+      # shellcheck disable=SC2016,SC2088 # the literal text $HOME, ${HOME} or ~ is what a startup file holds
+      with_var='$HOME/'$from_home with_braces='${HOME}/'$from_home with_tilde='~/'$from_home
+      ;;
+  esac
+  UNDRA_N1=$bin_dir UNDRA_N2=$with_var UNDRA_N3=$with_braces UNDRA_N4=$with_tilde awk '
+    /^[[:space:]]*#/ { next }
+    /PATH|fish_add_path/ {
+      for (k = 1; k <= 4; k++) {
+        name = ENVIRON["UNDRA_N" k]
+        if (name != "" && index($0, name)) found = 1
+      }
+    }
+    END { exit !found }' "$1"
 }
 
 main "$@"
