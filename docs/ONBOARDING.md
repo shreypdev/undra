@@ -453,15 +453,37 @@ size -m build/ios/<Ns>Core.xcframework/ios-arm64/lib<ns>.a                # the 
 A debug build (`undra build`, or the Xcode Debug configuration, the Gradle `debug` variant) keeps full DWARF: nothing is
 stripped, and the iOS prelink uses `-all_load`. `undra doctor` checks the pieces below (`rust.lldb-formatters`,
 `android.lldb`, and for the web it prints the extension's link). `crates/undra-cli/tests/debugging.rs` runs LLDB in batch
-mode against the playground core, sets `breakpoint set -f lab.rs -l <the line of explode>`, and asserts the stop, on the
-host dylib and in an iOS simulator process linked with the prelinked core.
+mode against the playground core with the `.lldbinit` sourced, sets `breakpoint set -f lab.rs -l <the line of explode>`,
+and asserts the stop and then a `bt` of the full depth (down to the host's `main`, LLDB alive), on the host dylib and in
+an iOS simulator process linked with the prelinked core; and it debugs a small Swift program (an object of a reference
+cycle as an argument) through the same `.lldbinit`.
 
 * **Xcode.** Step into Rust from a Swift call, or set a breakpoint by file and line in the console
   (`breakpoint set -f todos.rs -l 42`; in the editor once the `.rs` file is opened). `undra init` writes a `.lldbinit`
   that loads the toolchain's Rust formatters (`$(rustc --print sysroot)/lib/rustlib/etc/lldb_lookup.py`, and
   `lldb_commands` where a toolchain has one), so a Rust `String` reads as its text instead of a struct. LLDB reads a
   project's `.lldbinit` only from its working directory and only when allowed: `echo 'settings set
-  target.load-cwd-lldbinit true' >> ~/.lldbinit`.
+  target.load-cwd-lldbinit true' >> ~/.lldbinit`. Three things Xcode 26.6's LLDB did with the Rust 1.99 formatters on
+  a full `bt` through the core (2026-10-05, `.10x/decisions/sde/lldb-formatters-bt.md`), and what holds now:
+  * **A tuple variant named after the type it carries kills LLDB.** When the variant and its payload type share a
+    name and a byte size in one compilation unit (`Pool(native::Pool)` in the core's `Blocking`), LLDB takes the one
+    for the other: the variant contains itself, the record layout recurses until the stack is gone, and LLDB exits
+    with SIGILL (code 132) as soon as a value holding it is shown, by `frame variable` or by a `bt` once the formatters
+    inspect the pointee of every `&T` argument. The core's variant is `Blocking::Threads` now and the test above scans
+    the core crates for the pattern. In app code, rename the variant or the type; a type of another crate
+    (`String(String)`) is parsed first and is not confused.
+  * **The struct summary followed every pointer field.** The 1.99 formatters print a struct's fields and, through a
+    pointer field, the pointee's, so a `&Runtime` argument walked the object graph round its `Weak<Runtime>` until
+    Python aborted LLDB (code 134). The `.lldbinit` re-registers the struct and enum summaries with pointers skipped: a
+    pointer argument prints as its address (`self=0x...`), as LLDB prints it without formatters, and a value keeps its
+    summary.
+  * **The formatters printed Swift values too.** They match types by shape, not by language: in a Swift frame an
+    array read `{[0]:{}, [1]:{}, ...}`, and a Swift object (a class, so no pointer to skip) was walked round its
+    reference cycles until Python aborted LLDB (code 134), at the first stop in such a frame or on a `bt` from the
+    core down to the app. The `.lldbinit` makes their type recognizers decline Swift and Objective-C types, which
+    keep LLDB's own formatting.
+
+  A project made by an earlier `undra init` takes the file from a fresh one (`undra upgrade` does not rewrite it).
 * **Android Studio.** The "Dual (Java + Native)" debugger with the debug APK. The generated Gradle module sets
   `keepDebugSymbols` for the debug variant's `lib<ns>.so` (an app made by `undra adopt` gets the line from the hint a
   debug `undra build` prints); the library comes unstripped from a debug build. For a release reproduction add
