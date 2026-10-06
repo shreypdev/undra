@@ -71,6 +71,14 @@ last paragraph). One known limit stays, recorded in `.10x/decisions/sde/sse-end-
 suspends the data task when a chunk could fill the queue, and CFNetwork can lose the body's end if that suspend lands
 as the FIN arrives; removing it means a different backpressure design for the Swift adapter (1.2 material, ADR first).
 
+**The installer after 1.1.0 (2026-10-06).** The first install of 1.1.0 on a second machine showed two things, both in
+`site/install.sh` and both fixed without a tag (the site serves the script from main; the tarballs do not carry it):
+the printed PATH advice appended with `echo >>` and corrupted a `.zshrc` whose last byte was not a newline (now a
+`printf '\n...\n'` line, and `UNDRA_MODIFY_PATH=1` writes it safely itself), and an older `~/.cargo/bin/undra` kept
+answering `undra --version` (the installer now names what `undra` resolves to and how to remove it). The installer
+harness (`packaging/test-install.sh`) runs in CI on every push now, not only in the release workflow
+(`.10x/decisions/sde/install-path.md`, `.10x/reviews/2026-10-06-install-path-review.md`).
+
 **The release is verified (2026-10-04, status checkpoint 38).** After the founder removed the failed build on
 jitpack.io, JitPack built `v1.0.0` and the *Release smoke* workflow passed for 1.0.0 on clean runners: the installer,
 cargo, web, iOS and Android. Nothing about the Android channel is open any more; the paragraph below is how it got

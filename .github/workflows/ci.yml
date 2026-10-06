@@ -77,6 +77,10 @@ jobs:
           cargo build -p undra-cli
           target/debug/undra bindgen -C examples/cookbook --check --docs
           target/debug/undra bindgen -C examples/fieldbook --check --docs
+      # The release workflow runs this on the release's own tarballs; here it runs on every change, with the CLI
+      # just built, so the installer's PATH lines and its note about an older undra are checked before they ship.
+      - name: The curl installer against a release served from this machine (checksums, refusals, the PATH line, an older undra on PATH)
+        run: UNDRA_BIN=target/debug/undra bash packaging/test-install.sh
       - name: The real-time recipe and Fieldbook's presence over the opt-in ports (ADR-047)
         run: |
           cargo test -p cookbook --features realtime
