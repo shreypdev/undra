@@ -334,8 +334,17 @@ case "$MODE" in
       *) die "unknown platform '$PLATFORM'" ;;
     esac
     if [ -n "$OUT_SYMBOLS" ]; then
-      mkdir -p "$(abs "$OUT_SYMBOLS")"
-      [ -d "$BUILD_DIR/symbols" ] && cp -R "$BUILD_DIR"/symbols/. "$(abs "$OUT_SYMBOLS")/"
+      # The layout of `undra build --release`, restricted to the symbol files: build/symbols/ (the manifest and the files it
+      # names) as symbols/, and the symbols of the host library, which the CLI keeps next to it, as host/ (the manifest names
+      # them as ../host/<library>.dSYM or .debug, relative to symbols/). `undra symbolicate --symbols <this>/symbols` reads it.
+      mkdir -p "$(abs "$OUT_SYMBOLS")/symbols"
+      if [ -d "$BUILD_DIR/symbols" ]; then cp -R "$BUILD_DIR"/symbols/. "$(abs "$OUT_SYMBOLS")/symbols/"; fi
+      if [ "$PLATFORM" = host ]; then
+        mkdir -p "$(abs "$OUT_SYMBOLS")/host"
+        for twin in "$BUILD_DIR"/host/*.dSYM "$BUILD_DIR"/host/*.debug; do
+          if [ -e "$twin" ]; then cp -R "$twin" "$(abs "$OUT_SYMBOLS")/host/"; fi
+        done
+      fi
     fi
     ;;
   bindgen)

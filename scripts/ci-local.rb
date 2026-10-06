@@ -60,7 +60,8 @@ module CiLocal
     [%r{\Atwo-cores/ios\z}, /\AThe newest stable Xcode\z/, "provisioning: sudo xcode-select; this machine's Xcode is used (DEVELOPER_DIR from scripts/env.sh)"],
     [%r{\Asite/build\z}, /\AInstall binaryen\z/, "provisioning: apt on the runner (checked: wasm-opt is on PATH)"],
     [%r{\Abench/size\z}, /\AInstall binaryen version_133\z/, "provisioning: the Linux tarball of binaryen version_133 (the Size gate checks wasm-opt reports 133)"],
-    [%r{\Aci/bazel-(example(-macos)?|android)\z}, /\AInstall Bazelisk\z/, "provisioning: `brew install bazelisk` once (checked: bazel is on PATH); the job's own pin is .bazelversion"]
+    [%r{\Aci/bazel-(example(-macos)?|android)\z}, /\AInstall Bazelisk\z/, "provisioning: `brew install bazelisk` once (checked: bazel is on PATH); the job's own pin is .bazelversion"],
+    [%r{\Aci/bazel-example\z}, /\Allvm-symbolizer for the symbols test\z/, "provisioning: apt on the runner; on macOS the symbols test reads the dSYM with atos"]
   ].freeze
 
   # Lines of a step's script that are runner provisioning and are dropped (the rest of the step runs). Accepting the

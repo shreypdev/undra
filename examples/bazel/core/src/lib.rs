@@ -145,6 +145,15 @@ pub fn greeting(name: String) -> String {
     format!("Hello, {name}, from the bazel-hello core")
 }
 
+/// Panics with `reason`, on purpose: the crash that `//symbols:symbolicate_test` makes the Bazel-built core have, so a panic
+/// report of that exact build can be resolved with its symbol files. It is test-only: nothing in the app calls it, and no
+/// consumer under `kotlin/`, `swift/`, `ts/` or `consumer/` does either. The boundary turns the panic into a typed error and
+/// the core reports it to the app's `onPanic` (ADR-046).
+#[undra::api]
+pub fn crash_for_symbols_test(reason: String) -> u32 {
+    panic!("{reason}")
+}
+
 #[cfg(test)]
 mod tests {
     use undra::runtime::testing::TestRuntime;
@@ -160,6 +169,12 @@ mod tests {
             method_id: undra::meta::ids::method_id("Todos", "new"),
         };
         assert_eq!(core.call_sync(target, 1, &[]).status, ReplyStatus::Ok);
+    }
+
+    #[test]
+    #[should_panic(expected = "on purpose")]
+    fn the_test_only_crash_panics_with_its_reason() {
+        crash_for_symbols_test("on purpose".to_owned());
     }
 
     #[test]

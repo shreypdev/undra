@@ -254,8 +254,18 @@ def undra_core(
       Android platform, no C++ toolchain for one. The standard library of the Android targets is the application's
       `undra.android_std(..)` (a checksum-pinned `rust-std`), and the API level of the linker is `[android] min_sdk` of undra.toml.
 
-    Each target also has an output group `symbols`: the symbol files `undra build --release` writes (a crash report's
-    addresses resolve to file and line with them; `undra symbolicate` reads them).
+    Each release target (`release = True`, and `web`, which always is) also has an output group `symbols`, a directory
+    `<target>.symbols` laid out as `undra build --release` lays out `build/`, restricted to the symbol files: `symbols/` is
+    `build/symbols/` (`manifest.json`, `android/..`, `web/..`) and, for `host`, `host/` holds the library's symbols
+    (`lib<namespace>.dylib.dSYM`, `.so.debug` on Linux), which the CLI keeps next to the library and the manifest names as
+    `../host/..`. A crash report's addresses resolve to file and line with them: `undra symbolicate --symbols
+    <target>.symbols/symbols report.json`. iOS writes no symbol file of its own (its group holds the manifest): the Rust
+    frames are in the app's own dSYM (ADR-046). A debug target has no `symbols` group, and a `filegroup` of it is empty.
+
+    ```starlark
+    undra_core(name = "core_release", namespace = "hello_core", srcs = [...], platforms = ["host"], release = True)
+    filegroup(name = "core_release_symbols", srcs = [":core_release_host"], output_group = "symbols")  # the directory
+    ```
 
     Args:
         name: the filegroup of every platform's build.

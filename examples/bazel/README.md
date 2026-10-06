@@ -9,12 +9,13 @@ examples/bazel/
   scripts/          at-minimums.sh: one Bazel command with every ruleset at the lowest version undra_rules declares
   undra.toml        the project file `undra build` and `undra bindgen` read; [core] namespace = "hello_core"
   Cargo.toml, core/ the core: a store, a typed error and a function
-  BUILD.bazel       undra_core, undra_bindings, undra_bindings_test, undra_ts_library
+  BUILD.bazel       undra_core, undra_bindings, undra_bindings_test, undra_ts_library, the release core and its symbol files
   committed/        the bindings, committed too: the Swift, Kotlin and TypeScript trees `undra_bindings` produces
   kotlin/           the JVM test (JNI against libhello_core) and the ktlint test of the generated Kotlin
   ts/               the Node test (hello_core.wasm through the compiled bindings)
   swift/            the Swift test (macOS): the core in process
   consumer/         what an app team adds on top: its own Kotlin library over the store, a Node test importing the runtime
+  symbols/          the crash report of the release core, resolved with its symbol files (SymbolicateTest.kt)
   android/          the bindings as an Android library (manual: --config=android, the Android SDK), the NDK repositories' BUILD file and the script that uses an installed NDK instead of the archive
 ```
 
@@ -23,7 +24,7 @@ cd examples/bazel
 bazel test //...                      # needs Bazelisk; .bazelversion pins Bazel 8.8.1, the lowest supported
 USE_BAZEL_VERSION=9.2.0 bazel test //... --lockfile_mode=off   # the newest 9.x, which CI tests too
 scripts/at-minimums.sh test //...     # every ruleset at undra_rules's minimum (any Bazel command; USE_BAZEL_VERSION works)
-bazel build //:core_web               # bazel-bin/core_web/hello_core.wasm: 112.7 KB gzipped (2026-10-02), budget 120 KB
+bazel build //:core_web               # bazel-bin/core_web/hello_core.wasm: 113.6 KB gzipped (2026-10-05, with the test-only crash function), budget 120 KB
 bazel build //:bindings               # the Swift, Kotlin and TypeScript trees, as outputs
 bazel build //:mobile_ios             # macOS: the XCFramework (manual target)
 bazel build //:mobile_android         # jniLibs/<abi>/libhello_core.so, linked with the NDK, a declared input (manual target; downloads it)
@@ -39,8 +40,24 @@ bazel build //android:hello --config=android   # the bindings as an Android libr
 | `//kotlin:lint_test` | ktlint 1.8 reports nothing on the generated Kotlin, and 90 findings once the exclusions `undra bindgen` writes are taken away; the root `.editorconfig` section the Bazel guide gives for `lint_exclusions = "none"` is enough on its own |
 | `//:bindings_check` | `committed/` is what the core's schema generates, byte for byte (`undra bindgen --check`'s comparison); when it is not, the failure says `bazel run //:bindings_check.update`, which rewrites it |
 | `//kotlin:lint_test` | ktlint 1.8 reports nothing on the generated Kotlin, and 90 findings once the exclusions `undra bindgen` writes are taken away |
+| `//symbols:symbolicate_test` | a crash report of the Bazel-built release core, resolved by `undra symbolicate` with the `symbols` output group of that build: a frame names `core/src/lib.rs` and the line of the `panic!` (below) |
 | `//consumer:summary_test` | a Kotlin library an app writes over the generated store compiles and runs, the core loaded by `-Dundra.native.hello_core.path=$(rootpath //:core_host)` |
 | `//consumer:runtime_test` | a Node test that imports `@undra/runtime` beside the bindings resolves both |
+
+## Symbol files and a crash report
+
+`//:core_release_host` is the release build of the host core (stripped, as it ships) and `//:core_release_symbols` is its `symbols`
+output group: `symbols/manifest.json` and the host library's dSYM (`.so.debug` on Linux) under `host/`, the layout of
+`undra build --release` (guide: `site/docs/bazel.html#symbols`). `//:core_web_symbols` is the web core's. The test
+`//symbols:symbolicate_test` loads the release core in a JVM through the generated Kotlin, makes it panic with
+`crash_for_symbols_test` (a function of this core that exists for that and that no consumer calls), takes the `UndraPanicReport` the
+`onPanic` handler receives and runs `undra symbolicate` on it. The tool that reads the symbols is the machine's: `atos` on macOS,
+`llvm-symbolizer` on Linux (`apt install llvm`).
+
+```sh
+bazel build //:core_release_symbols
+bazel run @undra//:cli -- symbolicate --symbols "$PWD/bazel-bin/core_release_host.symbols/symbols" "$PWD/report.json"
+```
 
 ## What is hermetic, and what is not
 
