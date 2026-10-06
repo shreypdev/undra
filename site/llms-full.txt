@@ -247,6 +247,22 @@ undra build --platform ios,android,web --release
 
 Sizes are printed at the end next to the design's budgets. On the reference build the hello-world web core is 113.1 KB gzipped (budget 120 KB, gated in CI) and the arm64-v8a Android `.so` is 898.2 KB (budget 1.2 MB per ABI, gated in CI). To trade speed for size, or size for speed, set `opt_level` in `undra.toml`: [Operating in production](https://shreypdev.github.io/undra/docs/production.html#size) has the numbers for each setting.
 
+### A release core under a debug app
+
+While you work on screens, the core rarely changes, and a debug core is much slower than the one you ship. Build the app in Debug and the core in release: the app keeps its breakpoints and its dev bar, the core runs at its real speed.
+
+| Where | How |
+| --- | --- |
+| Android | `./gradlew :app:installDebug -PundraRelease=true` (the `undraBuild` task reads the property; without it a debug variant builds a debug core) |
+| iOS | in the **Build the Undra core** Run Script phase, change `--configuration $CONFIGURATION` to `--configuration Release`; the app's own configuration stays Debug |
+| Web | nothing to do: the web core is always optimized |
+| React Native | `undra build --platform rn --release` |
+| Bazel | `undra_core(release = True)` on the core target the app links |
+
+Rust-level debugging of the core itself wants a debug core again; `undra dev` serves either kind to every running app.
+
+**Building with Bazel?** The rules (`undra_core`, `undra_bindings`, `undra_bindings_test` and the Swift, Kotlin and TypeScript libraries over the bindings) run this same build inside Bazel actions, hermetic and offline: see [the Bazel guide](https://shreypdev.github.io/undra/docs/bazel.html).
+
 ## Prefer to explore first?
 
 Try it in your browser first: the [live playground](https://shreypdev.github.io/undra/playground/) is the real Rust core running as WebAssembly. The [playground source](https://github.com/shreypdev/undra/tree/main/examples/playground) is the same thing, fully built: a to-do list, a counter, a 10,000-row keyed list and remote queries with an offline switch, on Chrome, an iPhone simulator and an Android emulator. It uses only public APIs, and proof screenshots are committed in its `.proof/` folder.
@@ -1830,6 +1846,39 @@ The [two-core test apps](https://github.com/shreypdev/undra/tree/main/examples/t
 
 ---
 
+Source: https://shreypdev.github.io/undra/docs/hosts.html
+
+# One core, several hosts
+
+The same core runs under a SwiftUI app, a Jetpack Compose app, a React Native app and a web app at the same time. Each host links what it needs; the logic, the state and the data layer exist once.
+
+## What each host links
+
+| Host | The core | The bindings | The runtime |
+| --- | --- | --- | --- |
+| iOS, SwiftUI | the XCFramework (`undra build --platform ios`) | `generated/swift`: `@Observable` classes | the Swift package |
+| Android, Jetpack Compose | `jniLibs/<abi>/` (`undra build --platform android`) | `generated/kotlin`: `StateFlow` | the Kotlin modules |
+| Web, React | the WebAssembly module, on the main thread or in a [Web Worker](https://shreypdev.github.io/undra/docs/web.html) | `generated/ts`: hooks (`useSignal`, `useLazyList`) | `@undra/runtime` |
+| React Native | the native library, reached over JSI (`undra build --platform rn`) | `generated/ts`, the same package as the web | `@undra/react-native` over `@undra/runtime` |
+
+One `undra.toml` lists the platforms; `undra build` makes every artifact and `undra bindgen` the three bindings trees. A change to the core changes all four hosts in one commit, and `undra schema diff` shows what that change means for each of them.
+
+## Web and React Native share the TypeScript
+
+The TypeScript bindings are one package. Under a browser it reaches the WebAssembly core through `@undra/runtime`; under React Native the same package reaches the native core through `@undra/react-native`. A hook written for the web app is the hook the React Native app uses; the store code behind it is the same Rust. What differs is only the transport, chosen by the host at start.
+
+A web team's state management goes with it: the mirror is the store. Where a React app selected from a global store, it reads a signal; where it dispatched, it calls a method on the core. See [how updates reach the screen](https://shreypdev.github.io/undra/docs/updates.html) and [the worker and crash recovery](https://shreypdev.github.io/undra/docs/web.html) for the web side, and [the React Native build](https://shreypdev.github.io/undra/docs/cli.html#undra-build) for the other.
+
+## Moving a React Native app to native
+
+A team that moves screens from React Native to SwiftUI or Compose keeps the core. The native screens bind to the Swift or Kotlin classes of the same stores the React Native screens were using; both read one state during the move, so a screen can switch over on its own, and nothing is written twice on the way. [`undra adopt`](https://shreypdev.github.io/undra/docs/cli.html#undra-adopt) adds the core to an app that already exists without touching its project files.
+
+## One core or several
+
+Several hosts is not the same question as [several cores](https://shreypdev.github.io/undra/docs/several-cores.html). One core carries an app across every host; a second core is for code that ships on its own, a vendor's SDK or another team's module.
+
+---
+
 Source: https://shreypdev.github.io/undra/docs/bazel.html
 
 # Bazel
@@ -2786,6 +2835,8 @@ Builds the core for each platform and puts the result where the app shells look 
 | `--configuration <name>` | an Xcode build configuration, as the generated build phase passes it (`$CONFIGURATION`): a name that contains `Release` builds release, any other debug; after an iOS build it writes the stamp Xcode uses to tell which configuration the XCFramework is for |
 
 **Not a manual step.** In a project made by `undra init` the app builds run `undra build` for you, each only when the core changed: Gradle's `undraBuild` task (`preBuild` depends on it; a release variant builds a release core), Xcode's *Build the Undra core* Run Script phase (before Compile Sources, with input and output file lists) and the `undra()` Vite plugin from `@undra/runtime/vite` (on start, and under `vite dev` on every change of `core/src`, followed by a reload). They find `undra` on `PATH`, or in `~/.undra/bin` and the other usual places, and say how to install it when it is missing (`error[undra::C0003]`).
+
+Under Bazel, `undra_core` runs this build inside an action, one target per platform, with the same profiles: [the Bazel guide](https://shreypdev.github.io/undra/docs/bazel.html).
 
 `--release` turns on LTO and one codegen unit. The web build is always optimized. On iOS and Android the release build is also tuned for size (the `release-mobile` profile of the generated crate: `opt-level = "s"`, and a panic still unwinds so the core can contain it), and the host build keeps `opt-level = 3`. `opt_level` in `[ios]` or `[android]` of `undra.toml` chooses the smallest library (`"z"`, calls about 1.5x slower) or the fastest (`"3"`) instead; the [production page](https://shreypdev.github.io/undra/docs/production.html#size) has the numbers. Sizes are printed at the end next to the design's budgets. A debug Android core is tens of megabytes per ABI, so package with `--release`. The library is your core plus the Undra C ABI, built from a small crate generated under `target/undra/`; you never write that crate.
 
@@ -4987,15 +5038,25 @@ Roadmap
 
 # What is shipped, and what comes next.
 
-Shipped is what is on `main`. Next, Later and Exploring come only from what the repository records as planned or open: plans, not promises. This page follows the project's working record, [.10x/status.md](https://github.com/shreypdev/undra/blob/main/.10x/status.md), and changes with it. Last updated 3 Oct 2026.
+Shipped is what is on `main`. Next, Later and Exploring come only from what the repository records as planned or open: plans, not promises. This page follows the project's working record, [.10x/status.md](https://github.com/shreypdev/undra/blob/main/.10x/status.md), and changes with it. Last updated 6 Oct 2026.
 
 Shipped
 
-## In 1.0
+## In 1.0 and 1.1
 
 on main
 
 What you can build on today, grouped. Each line has its page in the docs and its decision record in the repository.
+
+### Bazel-first (1.1)
+
+- **Bazel 8.8 and 9.x, tested**Both in CI, with the rulesets at their lowest and their newest versions.
+- **Committed bindings, guarded (ADR-064)**undra_bindings_test fails on drift and names the one command that updates.
+- **The NDK as a declared input (ADR-065)**No cargo-ndk anywhere; Android built in CI; the action is cacheable.
+- **Lint exclusions by choice**Beside the trees, or none, for a repository that lints everything.
+- **Symbol files and the debugger**undra symbolicate on a Bazel build; a breakpoint in a Rust frame from a rules_apple app.
+- **A leaderboard of 100,000 rows**The high-frequency recipe: ingest off the lock, publish a window, measured.
+- **React Native 0.86**Verified on the simulator and the emulator, the module unchanged.
 
 ### Core and bindings
 
