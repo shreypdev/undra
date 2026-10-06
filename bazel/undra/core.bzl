@@ -1,5 +1,6 @@
 """`undra_core`: the core of an Undra app, built for each platform it ships to (ADR-061)."""
 
+load("//undra/private:android_std.bzl", "VERSION_FILE")
 load("//undra/private:actions.bzl", "RUNNER_ATTRS", "below", "short_dirname", "stage_manifest", "vendor_params", "write_params")
 
 # The Bazel platforms (undra/platforms) each target platform of `undra build` selects the Rust toolchain for. A platform
@@ -143,6 +144,10 @@ def _undra_core_impl(ctx):
             fail("{}: the Rust standard library of the Android targets is not declared: add `undra.android_std(version = .., sha256s = ..)` to MODULE.bazel and `use_repo(undra, \"undra_android_std\")`".format(ctx.label))
         for root in sorted(sysroots_of_std):
             lines.append("sysroot=" + root)
+        versions = [f for f in ctx.files.android_std if f.basename == VERSION_FILE]
+        if len(versions) != 1:
+            fail("{}: `android_std` has no `{}` (it is `@undra_android_std//:std`)".format(ctx.label, VERSION_FILE))
+        lines.append("std_version=" + versions[0].path)
         android_inputs.append(ctx.attr.android_std[DefaultInfo].files)
     if ctx.attr.wasm_opt:
         tool = [f for f in ctx.files.wasm_opt if f.basename == "wasm-opt"]

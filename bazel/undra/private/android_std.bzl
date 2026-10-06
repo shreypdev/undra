@@ -3,7 +3,9 @@
 An Android core is a Cargo cross-build run by `undra build`: Cargo needs `rust-std` for each Android triple beside the host's
 compiler, and the NDK (a declared input of `undra_core`, ADR-065) links it. The library is host independent, so one pin serves
 every machine Bazel runs on. It comes from the same place `rules_rust` fetches it, `static.rust-lang.org`, and must be the
-release of the application's `rust.toolchain(versions = [..])`: rustc refuses a standard library another release built.
+release of the application's `rust.toolchain(versions = [..])`: rustc refuses a standard library another release built (E0514,
+whose own advice, `cargo clean`, would not help). The repository records its `version` in `UNDRA_ANDROID_STD_VERSION` and the
+action compares it with `rustc -V` before it builds (`private/run.sh`), so a mismatch names the tag in MODULE.bazel.
 
 Declared in the application's MODULE.bazel:
 
@@ -19,6 +21,9 @@ Why not `rust.toolchain(extra_target_triples = ["aarch64-linux-android", ..])`: 
 Bazel resolves only with a C++ toolchain for that platform (`rules_android_ndk`), and the core is built in the host configuration.
 """
 
+# The file that records the release the checksums are of; `undra_core` hands it to the action, which compares it with the toolchain's rustc.
+VERSION_FILE = "UNDRA_ANDROID_STD_VERSION"
+
 def _impl(rctx):
     version = rctx.attr.version
     lines = [
@@ -27,6 +32,7 @@ def _impl(rctx):
         "",
     ]
     names = []
+    rctx.file(VERSION_FILE, version + "\n")
     for triple, sha256 in sorted(rctx.attr.sha256s.items()):
         rctx.download_and_extract(
             url = "https://static.rust-lang.org/dist/rust-std-{v}-{t}.tar.xz".format(v = version, t = triple),
@@ -45,7 +51,7 @@ filegroup(
 filegroup(
     name = "std",
     srcs = [{}],
-)""".format(", ".join(['":{}"'.format(n) for n in names])))
+)""".format(", ".join(['":{}"'.format(n) for n in names] + ['"{}"'.format(VERSION_FILE)])))
     rctx.file("BUILD.bazel", "\n".join(lines) + "\n")
 
 undra_android_std = repository_rule(

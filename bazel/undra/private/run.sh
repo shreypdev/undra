@@ -50,6 +50,7 @@ BINDGEN_DOCS=0
 EXTRA_PATH=""
 NDK=""
 INHERIT_PATH=0
+STD_VERSION_FILE=""
 ORIG_PATH="${PATH:-}"
 EXTRA_ENV=""
 while IFS= read -r line || [ -n "$line" ]; do
@@ -89,6 +90,7 @@ $value" ;;
     path) case "$value" in /*) EXTRA_PATH="$EXTRA_PATH:$value" ;; *) EXTRA_PATH="$EXTRA_PATH:$EXECROOT/$value" ;; esac ;;
     ndk) NDK="$value" ;;
     inherit_path) INHERIT_PATH="$value" ;;
+    std_version) STD_VERSION_FILE="$value" ;;
     env) EXTRA_ENV="$EXTRA_ENV
 $value" ;;
     '') ;;
@@ -187,6 +189,15 @@ exec "$REAL_RUSTC" --sysroot "$SYSROOT" "\$@"
 EOF
 chmod +x "$WORK/bin/rustc"
 ln -s "$(abs "$CARGO")" "$WORK/bin/cargo"
+
+# The Android standard library is pinned by `undra.android_std(version = ..)` in MODULE.bazel, and rustc rejects one that another
+# release built (E0514, "found crate `core` compiled by an incompatible version of rustc", whose advice is `cargo clean`). Compare
+# the two here, where the message can name the tag.
+if [ -n "$STD_VERSION_FILE" ]; then
+  want="$(tr -d ' \t\r\n' < "$(abs "$STD_VERSION_FILE")")"
+  have="$("$WORK/bin/rustc" -V | cut -d' ' -f2)"
+  [ "$want" = "$have" ] || die "undra.android_std(version = \"$want\") in MODULE.bazel is not the Rust toolchain's release, $have (rustc -V): rustc would refuse the standard library (E0514). Set \`version\` and \`sha256s\` of undra.android_std to the \`rust-std-$have-<triple>.tar.xz\` checksums (static.rust-lang.org/dist/rust-std-$have-<triple>.tar.xz.sha256), or the toolchain's \`versions\` in rust.toolchain(..) to $want"
+fi
 
 # --- Cargo, offline ----------------------------------------------------------------------------------------------
 export CARGO_HOME="$WORK/cargo-home"
