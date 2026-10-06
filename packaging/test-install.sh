@@ -404,7 +404,20 @@ done
 h=$(next_home); mkdir -p "$h"; printf '# %s\n' "$export_line" >"$h/.zshrc"
 run_install sh "${install_env[@]}" SHELL=/bin/zsh UNDRA_MODIFY_PATH=1
 expect_file "$h/.zshrc" '# %s\n%s\n' "$export_line" "$export_line"
-pass "UNDRA_MODIFY_PATH=1: a file that already sets the PATH entry is left as it is, and the run says so"
+# Another directory whose name begins with ours is not ours; a subdirectory is not either.
+for other in '~/.undra/bin-old' '$HOME/.undra/bin2' '$HOME/.undra/bin/sub'; do
+  h=$(next_home); mkdir -p "$h"; printf 'export PATH="%s:$PATH"\n' "$other" >"$h/.zshrc"
+  run_install sh "${install_env[@]}" SHELL=/bin/zsh UNDRA_MODIFY_PATH=1
+  expect_file "$h/.zshrc" 'export PATH="%s:$PATH"\n%s\n' "$other" "$export_line"
+done
+# zsh's path array, and a trailing slash, name the same directory.
+for existing in 'path=(~/.undra/bin $path)' 'export PATH="$HOME/.undra/bin/:$PATH"'; do
+  h=$(next_home); mkdir -p "$h"; printf '%s\n' "$existing" >"$h/.zshrc"
+  run_install sh "${install_env[@]}" SHELL=/bin/zsh UNDRA_MODIFY_PATH=1
+  expect_file "$h/.zshrc" '%s\n' "$existing"
+  case "$OUT" in *"nothing was written"*) ;; *) fail "'$existing' was not taken for the PATH line" ;; esac
+done
+pass "UNDRA_MODIFY_PATH=1: a file that already sets the PATH entry is left as it is, and the run says so; bin-old, bin2 and bin/sub are other directories"
 
 # c. A missing startup file is created holding the one line (bash's is per platform).
 run_install sh "${install_env[@]}" SHELL=/bin/bash UNDRA_MODIFY_PATH=1
@@ -449,6 +462,18 @@ for runner in sh bash; do
 done
 pass "unset: nothing is written; the printed line, run, puts the export on a line of its own"
 
+# g. UNDRA_HOME elsewhere: the written line names that directory in full, not $HOME/.undra/bin,
+#    and a second run finds it.
+h=$(next_home)
+run_install sh "${install_env[@]}" SHELL=/bin/zsh UNDRA_MODIFY_PATH=1 UNDRA_HOME="$h/tools/undra"
+[ "$STATUS" = 0 ] || fail "UNDRA_MODIFY_PATH=1 with UNDRA_HOME failed ($STATUS)"
+expect_installed "$h/tools/undra"
+expect_file "$h/.zshrc" 'export PATH="%s/tools/undra/bin:$PATH"\n' "$h"
+run_install sh "${install_env[@]}" SHELL=/bin/zsh UNDRA_MODIFY_PATH=1 UNDRA_HOME="$h/tools/undra" HOME="$h"
+expect_file "$h/.zshrc" 'export PATH="%s/tools/undra/bin:$PATH"\n' "$h"
+case "$OUT" in *"nothing was written"*) ;; *) fail "the UNDRA_HOME line written by the first run was not found by the second" ;; esac
+pass "UNDRA_MODIFY_PATH=1: a custom UNDRA_HOME is written in full, once"
+
 # 11. An older undra found first on PATH is named, with its version and how to remove it, before
 #     the PATH line; one that is the installed file, or comes after it, is not.
 stale=$tmp/stale-bin
@@ -482,5 +507,50 @@ run_install sh "${install_env[@]}" PATH="$linked:$run_path"
 [ "$STATUS" = 0 ] || fail "install with a symlink to it on PATH failed ($STATUS)"
 case "$OUT" in *"another undra"*) fail "a symlink to the installed file was named as another undra" ;; esac
 pass "an undra whose --version fails is 'version unknown'; a symlink to the installed file is not another undra"
+
+# 12. The 10 s guard on `--version`. The installer finds `sleep` on PATH, so a fake one stands in:
+#     one that records its pid and sleeps for real shows the guard's sleep is killed once the
+#     version is in (not left for the rest of its 10 s); one that returns at once fires the guard
+#     without the wait, so an undra that hangs is "version unknown", is killed, and no shell says
+#     "Terminated" (dash does, when wait reports the kill).
+fake_sleep=$tmp/fake-sleep
+mkdir -p "$fake_sleep"
+printf '#!/bin/sh\necho $$ >"%s/sleep.pid"\nexec /bin/sleep "$@"\n' "$tmp" >"$fake_sleep/sleep"; chmod +x "$fake_sleep/sleep"
+gone() { # <pid>: no longer a process, within a second
+  local i
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    kill -0 "$1" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  return 1
+}
+# This older undra answers once the guard's sleep has recorded its pid (within 2 s), so the sleep
+# is known to be running when the guard is told to stop. No pid file means the sleep was killed
+# before its shell got that far, which is gone too.
+waiting=$tmp/waiting-bin
+mkdir -p "$waiting"
+printf '#!/bin/sh\ni=0\nwhile [ ! -f "%s/sleep.pid" ] && [ $i -lt 200 ]; do /bin/sleep 0.01; i=$((i + 1)); done\necho "undra 0.1.0"\n' "$tmp" >"$waiting/undra"; chmod +x "$waiting/undra"
+rm -f "$tmp/sleep.pid"
+run_install sh "${install_env[@]}" PATH="$waiting:$fake_sleep:$run_path"
+case "$OUT" in *"  $waiting/undra (undra 0.1.0)"*) ;; *) fail "with the fake sleep on PATH the older undra is not named" ;; esac
+if [ -f "$tmp/sleep.pid" ]; then
+  gone "$(cat "$tmp/sleep.pid")" || { kill "$(cat "$tmp/sleep.pid")" 2>/dev/null; fail "the guard's sleep was left running after the version was in"; }
+fi
+instant_sleep=$tmp/instant-sleep
+mkdir -p "$instant_sleep"
+printf '#!/bin/sh\nexit 0\n' >"$instant_sleep/sleep"; chmod +x "$instant_sleep/sleep"
+hung=$tmp/hung-bin
+mkdir -p "$hung"
+printf '#!/bin/sh\necho $$ >"%s/hung.pid"\nexec /bin/sleep 600\n' "$tmp" >"$hung/undra"; chmod +x "$hung/undra"
+for sh_path in $shells; do
+  rm -f "$tmp/hung.pid"
+  run_install "$sh_path" "${install_env[@]}" PATH="$hung:$instant_sleep:$run_path"
+  [ "$STATUS" = 0 ] || fail "install with a hanging undra on PATH failed under $sh_path ($STATUS)"
+  case "$OUT" in *"  $hung/undra (version unknown)"*) ;; *) fail "under $sh_path a hanging undra is not 'version unknown'" ;; esac
+  case "$OUT" in *Terminated* | *Killed*) fail "under $sh_path the guard's kill was reported to the user: $OUT" ;; esac
+  [ -f "$tmp/hung.pid" ] || fail "the hanging undra did not run"
+  gone "$(cat "$tmp/hung.pid")" || { kill "$(cat "$tmp/hung.pid")" 2>/dev/null; fail "under $sh_path the hanging undra was left running"; }
+done
+pass "the --version guard: its sleep is killed once the version is in; a hanging undra is 'version unknown', killed, and no 'Terminated' is printed (${shells# })"
 
 echo "curl installer: all checks passed"
