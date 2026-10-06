@@ -61,12 +61,19 @@ normalises is lost, because the CLI normalises nothing.
 
 ## Findings
 
-* The committed example is `examples/bazel/committed/`, not `generated/`: its package.json, build.gradle.kts and Package.swift
-  name the release `undra.toml` pins (`[undra] version = "0.1"`, so `^0.1.0`, `v0.1.0`, `from: "0.1.0"`), and
-  `scripts/bump-version.sh` rewrites the runtime range of every `examples/*/generated/ts/package.json`: a bump would have moved
-  that file off what the build generates and failed the test. Outside the glob, a bump leaves it alone. (Every build of the
-  example prints the warning that the project is on Undra 0.1.0 while the CLI is 1.0.0: the example's pin is behind; not
-  changed here.)
+* The committed trees embed the release `undra.toml` pins (`[undra] version`, ADR-063: the full version): `from: "<v>"` in
+  `swift/Package.swift`, `runtime:v<v>` in `kotlin/build.gradle.kts`, `^<v>` twice in `ts/package.json` (nothing else in the 41
+  files names it). That couples them to every version bump. The example's pin was stale (`"0.1"`: every build printed that the
+  project is on Undra 0.1.0 while the CLI is 1.0.0), so it is now `"1.0.0"` and the committed trees say `1.0.0`. The coupling
+  is owned by `scripts/bump-version.sh`: new kinds `undra_pin` (`[undra] version` of every `examples/*/undra.toml` and
+  `examples/two-cores/*/undra.toml`, seven files, which also ends the stale-pin message everywhere), `swift_release` and
+  `kotlin_release` (the two committed lines), and `examples/bazel/committed/ts/package.json` joins `range_files`.
+  `scripts/bump-version.test.sh` asserts every tracked example `undra.toml` and the committed files say the new version and
+  that none still names the old one. Verified end to end: in a scratch copy of the repository, `bump-version.sh 9.8.7-test.1`,
+  then `bazel test //:bindings_check` passed with no update, and `bazel run //:bindings_check.update` left `git status` empty:
+  the committed trees equal what the build generates at the bumped version. `docs/RELEASING.md` step 4 says so in one clause.
+  The directory is still `committed/` (not `generated/`), which keeps it out of the `examples/*/generated/` glob; it is listed
+  by name.
 * A `committed` that does not exist fails at analysis (`write_source_file`'s `fail_with_message_test` calls `fail`), which stops
   a `bazel test //...` of the package until the update has been run once. That is `bazel_lib`'s behaviour and the reason
   `bazel run <name>.update` still works: it is a different target. The message says so.

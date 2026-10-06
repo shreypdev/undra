@@ -20,7 +20,7 @@ generated = "generated"
 build = "build"
 
 [undra]
-version = "0.1"
+version = "1.0.0"
 
 [bindings]
 swift_module = "HelloCore"

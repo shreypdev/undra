@@ -19,5 +19,5 @@ kotlin {
 }
 
 dependencies {
-    api("com.github.shreypdev.undra:runtime:v0.1.0")
+    api("com.github.shreypdev.undra:runtime:v1.0.0")
 }

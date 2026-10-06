@@ -55,6 +55,7 @@ SDK and builds (by hand: CI does not run it, since `rules_android` then download
 * `.bazelrc` sets `DO_NOT_TRACK=1`: `aspect_rules_js` and `aspect_rules_ts` depend on a telemetry module that reports the rulesets a
   build uses to Aspect.
 * `MODULE.bazel.lock` is committed. `.bazelversion` is a link to `bazel/.bazelversion`: one pin for the rules and the example.
-* `committed/` is not called `generated/` on purpose: its files name the Undra release `undra.toml` pins (`[undra] version`), not the
-  workspace's, and `scripts/bump-version.sh` rewrites the runtime range of every `examples/*/generated/ts/package.json`. Nothing
-  reads `committed/` but `//:bindings_check`; `bazel run //:bindings_check.update` regenerates it.
+* `committed/` names the Undra release `undra.toml` pins (`[undra] version`): `from: "<v>"` in its Swift package, `runtime:v<v>` in its
+  Gradle module and `^<v>` twice in its package.json. `scripts/bump-version.sh` moves the pin and those four lines together, so
+  `//:bindings_check` stays green on a release's version pull request. Nothing reads `committed/` but that test;
+  `bazel run //:bindings_check.update` regenerates it.

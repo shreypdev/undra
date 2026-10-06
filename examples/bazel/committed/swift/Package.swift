@@ -6,7 +6,7 @@ let package = Package(
     name: "HelloCore",
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [.library(name: "HelloCore", targets: ["HelloCore"])],
-    dependencies: [.package(url: "https://github.com/shreypdev/undra", from: "0.1.0")],
+    dependencies: [.package(url: "https://github.com/shreypdev/undra", from: "1.0.0")],
     targets: [
         // Declares the core's entry point; the core itself is linked into the app.
         .target(name: "HelloCoreFFI", path: "Sources/HelloCoreFFI"),

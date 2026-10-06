@@ -30,6 +30,12 @@ Sets the version of the release (for example 1.0.0, or 1.0.0-rc.1) in:
                                                    name it (a fixed list, range_files): the peer range
                                                    of the testkit and the React Native host, and of
                                                    every generated package the repository keeps
+  examples/*/undra.toml, examples/two-cores/*/    [undra] version: the release each example project is on
+  examples/bazel/committed/                        the Bazel example's committed bindings, generated from that
+                                                   pin: the Swift package's `from:`, the Kotlin module's
+                                                   `runtime:v<version>` (its package.json range is one of
+                                                   range_files); the example's `bindings_check` test fails
+                                                   when they differ from what the build generates
   runtimes/ts/@undra/runtime/src/version.ts        RUNTIME_VERSION, and the Kotlin runtime's
   runtimes/kotlin/.../dev/undra/runtime/UndraLog.kt  UNDRA_RUNTIME_VERSION: what each sends in its Hello
   crates/undra-cli/src/migrations.rs               the migration notes filed under the outgoing version
@@ -140,6 +146,19 @@ rewrite_bazel_dep() { # every `bazel_dep(name = "undra_rules", version = "<v>")`
 rewrite_bazel_runtime() { # the @undra/runtime package the rules build: the version in its package.json and of its target
   sed -E 's/^(        "  \\"version\\": \\")[^"\\]*(\\",",)$/\1'"$version"'\2/; s/^(    version = ")[^"]*(",)$/\1'"$version"'\2/' "$1"
 }
+rewrite_undra_pin() { # `[undra] version = "<v>"` of an example project's undra.toml: the release the project is on (ADR-063)
+  awk -v v="$version" '
+    /^\[/ { section = $0 }
+    section == "[undra]" && /^version = "/ { sub(/"[^"]*"/, "\"" v "\"") }
+    { print }
+  ' "$1"
+}
+rewrite_swift_release() { # a generated Package.swift: `.package(url: "https://github.com/shreypdev/undra", from: "<v>")`
+  sed -E 's#(\.package\(url: "https://github\.com/shreypdev/undra", from: ")[^"]*"#\1'"$version"'"#' "$1"
+}
+rewrite_kotlin_release() { # a generated build.gradle.kts: `api("com.github.shreypdev.undra:runtime:v<v>")`
+  sed -E 's#(com\.github\.shreypdev\.undra:runtime:v)[^"]*"#\1'"$version"'"#' "$1"
+}
 rewrite_bazel_requirement() { # the Bazel example core's `undra = "<v>"`. The whole version, not "1.0": a requirement matches a
   # release candidate only when it names one, and the rules stand this checkout in for the registry.
   sed -E 's/^(undra = ")[^"]*(")$/\1'"$version"'\2/' "$1"
@@ -166,7 +185,15 @@ range_files() {
     crates/undra-cli/tests/golden/*/ts/package.json \
     examples/*/generated/ts/package.json \
     examples/two-cores/*/generated/ts/package.json \
+    examples/bazel/committed/ts/package.json \
     examples/playground/rn/package-lock.json
+}
+
+# The `undra.toml` of every example project: `[undra] version` is the release it is on. A fixed list, as range_files is.
+pin_files() {
+  printf '%s\n' \
+    examples/*/undra.toml \
+    examples/two-cores/*/undra.toml
 }
 
 files_and_kinds() {
@@ -191,6 +218,13 @@ files_and_kinds() {
   for file in $(range_files); do
     printf 'runtime_range %s\n' "$file"
   done
+  # The release every example project is on, and the files the Bazel example commits that name it (generated from that pin
+  # by `undra_bindings`; `bazel test //:bindings_check` in examples/bazel fails when they differ from what it generates).
+  for file in $(pin_files); do
+    printf 'undra_pin %s\n' "$file"
+  done
+  printf 'swift_release examples/bazel/committed/swift/Package.swift\n'
+  printf 'kotlin_release examples/bazel/committed/kotlin/build.gradle.kts\n'
 }
 
 # The whole plan is made before the first file is written. (It used to be read from a process
