@@ -73,3 +73,12 @@ and its parser test. Negative check: the scan fails on `main`'s `blocking.rs`.
   built from this `main`).
 * The LLDB defect (same-named, same-sized types in one CU conflated) is worth a report to llvm-project with the `Blocking`
   DWARF from `dwarfdump --name Pool -p`; not filed here.
+
+## After review (2026-10-06)
+
+The review (`.10x/reviews/2026-10-06-lldb-formatters-bt-review.md`) ran the `bt` in a real `undra init` iOS app: with
+the two fixes above, `bt -c 60` from the core still ended LLDB (exit 134) in the app's Swift frames, where the Rust
+struct summary walked a Swift object's reference cycles (a Swift class is no pointer to skip). The template has a
+third `script` line: the recognizers decline Swift and Objective-C types; a test debugs a small Swift program with a
+reference cycle through the template. The variant scan also reads the crates `undra` brings (`undra-ports`,
+`undra-query`, `undra-testkit`), not only those of `undra-ffi`.
