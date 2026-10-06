@@ -27,8 +27,11 @@ assertion: the byte always arrives, the test only failed when the machine was sl
   100,000 cached `LazyList` reads under 5 s.
 
 Every call site of the shared `eventually` and `waitUntil` was checked: all are positive waits ("until X happens"). The
-`Task.sleep`s that remain are negative waits (assert that something did not happen after a pause), which a slow machine can only
-make pass, never fail, or a stimulus the test then waits on by condition.
+`Task.sleep`s that remain were taken to be negative waits (assert that something did not happen after a pause), which a slow
+machine can only make pass, or a stimulus the test then waits on by condition. Correction (`tests-fix.md`, 2026-10-06): that was
+not true of all of them. Three were positive waits in disguise, a fixed second assumed to be long enough for a flood's server to
+stall (`RealtimeReviewTests`, the WebSocket and SSE floods, and `URLSessionWebSocketAdapterTests`' stalled reader), and failed under
+load; and the trickle test judged its trials by when the test heard of the answer, not by what the binding saw.
 
 ## Fix
 
@@ -40,7 +43,11 @@ make pass, never fail, or a stimulus the test then waits on by condition.
   after every byte, so it measures the time since the last step, never the length of the whole body. It still ends a real hang
   (closes the stream, so `reading.value` returns and the assertions fail instead of hanging the suite).
 * The four elapsed-time ceilings are gone; what they stood beside is still asserted (the answer arrives, the server sees the
-  close, no read of a cached row asks the core for anything; the read cost budget is a benchmark in `bench/`, R9).
+  close, no read of a cached row asks the core for anything). Correction (`tests-fix.md`, 2026-10-06): this record said the read
+  cost budget is a benchmark in `bench/`; it is not, no row of `bench/` measures the Swift `LazyList` read path, and two of the
+  removed ceilings had left a property unproven. `tests-fix.md` puts it back without a clock: the lone message's answer is the
+  burst timer's, whose length is asserted, and a cached read is counted (no call, no queued request, no decode, no cache change,
+  no observation fired).
 
 * Found by the load run: `SseSessionDelegateTests.testATaskLevelDelegateAnswersTheStreamsTrustAndAuthentication` asserted the exact
   challenge list `[trust, basic]`, but whether the authenticated retry reuses the connection (or handshakes again, a second trust

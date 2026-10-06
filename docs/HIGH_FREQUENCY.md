@@ -108,6 +108,11 @@ Two more rules for producers inside the core:
 * A transaction that touches several stores arrives as several change-sets; a frame can fall between
   them. Keep state that must change together in one store.
 
+A big structure fed by a snapshot and a stream (a ranking of 100,000 players) is ingested on `spawn_blocking`
+into a structure you own and only a small window of it is published, in one transaction, which holds the core lock
+for 375 ns where applying the snapshot inside a call holds it for 2.56 ms: see the
+[live leaderboard recipe](https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html) (`bench/RESULTS.md`, finding 9).
+
 A view over a churning list costs the change too. A `Computed<Vec<T>>` that filters or sorts the
 board is recomputed, re-sent and re-decoded whole on every write of any row (at 10,000 rows, 177 µs and
 353 KB per change in the core, 1.1 ms to apply in a browser); a `DerivedList<T>`

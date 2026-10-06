@@ -7,6 +7,7 @@
 
 pub mod fixtures;
 pub mod host;
+pub mod leaderboard;
 pub mod ports;
 pub mod query_rows;
 pub mod stress;

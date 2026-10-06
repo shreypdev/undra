@@ -56,6 +56,16 @@ findings not taken on are U2 (Xcode 27, needs the reporter's crash log) and U6 (
 
 **After checkpoint 35 (status checkpoint 36):** the single Gate check (#16), no Homebrew tap (#17), no em-dash in any tracked file with a CI check (#18) and the launch polish (#19) are on `main` (`3797ae7`). Rules that came out of them: one required check, `All green`, the Gate's last job; no em-dash (U+2014) in anything tracked, in a commit message or in a pull request (a plain hyphen is fine); a script that lists files and rewrites them makes its whole plan first; a test that follows one handle waits for the other on its own condition.
 
+**Undra 1.1 (2026-10-06, status checkpoint 40).** The Bazel-first integration landed as one pull request after
+per-piece adversarial reviews: Bazel 8.8 and 9.x with ruleset minimums, `undra_bindings_test` for committed bindings
+(ADR-064), the NDK as a declared input and no `cargo-ndk` (ADR-065), lint exclusions by choice, complete symbol files,
+the debugger path from a `rules_apple` app, the leaderboard recipe, React Native 0.86, the docs. `1.1.0` was tagged
+without an rc rehearsal (recorded with the reason in checkpoint 40); the Release smoke workflow on the tag is the check.
+Native Bazel mode (no Cargo or Xcode subprocess in the action) is 1.2 and needs its own ADR first. Follow-ups
+recorded in the reviews: `undra symbolicate` does not check an ELF `.debug` file's build id (L4 of the symbols
+review); the CLI does not look in `/usr/lib/llvm-*/bin`; the LLDB formatters crash on deep backtraces (a fix is in a
+separate pull request); the macOS debug host dylib's debug map points at the deleted scratch directory.
+
 **The release is verified (2026-10-04, status checkpoint 38).** After the founder removed the failed build on
 jitpack.io, JitPack built `v1.0.0` and the *Release smoke* workflow passed for 1.0.0 on clean runners: the installer,
 cargo, web, iOS and Android. Nothing about the Android channel is open any more; the paragraph below is how it got

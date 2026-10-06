@@ -176,6 +176,9 @@ Already have an app? `undra adopt ../MyApp` adds a core to an existing iOS, Andr
 directory and the exact steps to wire it in, without editing your project files
 ([how it works](https://shreypdev.github.io/undra/docs/cli.html#undra-adopt)).
 
+In a Bazel monorepo? The rules in [`bazel/`](bazel/) build the core and generate the bindings inside the graph, with
+committed bindings guarded by a test and the NDK as a declared input: [the Bazel guide](https://shreypdev.github.io/undra/docs/bazel.html).
+
 A new project depends on the release of the `undra` that created it, all from this repository (ADR-063): the crates
 by its git tag, the Swift package at its root (`.package(url: "https://github.com/shreypdev/undra", from: "1.0.0")`),
 the Kotlin runtime from JitPack (`com.github.shreypdev.undra:runtime:v1.0.0`) and `@undra/runtime` as the GitHub

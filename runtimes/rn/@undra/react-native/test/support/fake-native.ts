@@ -90,6 +90,11 @@ export class FakeNative implements UndraNativeModule {
     return this.#depth > 0;
   }
 
+  /** Whether a drain posted by a record from a core thread has yet to run (what a test waits on before it reads the result). */
+  get drainPosted(): boolean {
+    return this.#drainPending;
+  }
+
   #drain(): void {
     this.#drainPending = false;
     if (this.#draining || this.#depth > 0) return;

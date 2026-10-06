@@ -1,59 +1,222 @@
 {
   "note": "The docs sidebar and the previous/next pager, written into every docs page by site/scripts/sync-docs-nav.mjs. Also the order of the docs in the search index and llms-full.txt. A page with \"external\": true is a link only (rustdoc, built in CI), not a page of the docs: no pager, no search entry. `also` lists pages outside docs/ that wear the sidebar without being in it (the generated reference pages); paths are relative to docs/.",
-  "overview": { "file": "index.html", "title": "Overview" },
-  "also": ["../reference/swift.html", "../reference/kotlin.html", "../reference/typescript.html"],
+  "overview": {
+    "file": "index.html",
+    "title": "Overview"
+  },
+  "also": [
+    "../reference/swift.html",
+    "../reference/kotlin.html",
+    "../reference/typescript.html"
+  ],
   "groups": [
-    { "title": "Start", "pages": [{ "file": "getting-started.html", "title": "Getting started" }] },
-    { "title": "Core", "pages": [
-      { "file": "concepts.html", "title": "Core concepts" },
-      { "file": "queries.html", "title": "Queries & mutations" },
-      { "file": "ports.html", "title": "Ports & adapters" },
-      { "file": "objects.html", "title": "Objects and identity" },
-      { "file": "callbacks.html", "title": "Host callbacks" },
-      { "file": "types.html", "title": "Newtypes, generics and decimals" },
-      { "file": "generics.html", "title": "Generic functions, objects and stores" }
-    ] },
-    { "title": "Data and live data", "pages": [
-      { "file": "paging.html", "title": "Paging and lazy lists" },
-      { "file": "polling.html", "title": "Polling" },
-      { "file": "realtime.html", "title": "WebSocket & server-sent events" },
-      { "file": "db.html", "title": "Local database" }
-    ] },
-    { "title": "Test, ship, operate", "pages": [
-      { "file": "testing.html", "title": "Testing your app" },
-      { "file": "updates.html", "title": "Shipping an update" },
-      { "file": "reviewing-generated-code.html", "title": "Reviewing generated code" },
-      { "file": "web.html", "title": "Workers & crash recovery" },
-      { "file": "production.html", "title": "Operating in production" },
-      { "file": "several-cores.html", "title": "One core or several" },
-      { "file": "bazel.html", "title": "Bazel" }
-    ] },
-    { "title": "Cookbook", "pages": [
-      { "file": "cookbook/index.html", "title": "All recipes", "pager": "Cookbook, all recipes" },
-      { "file": "cookbook/auth.html", "title": "Auth" },
-      { "file": "cookbook/pagination.html", "title": "Pagination" },
-      { "file": "cookbook/forms.html", "title": "Forms" },
-      { "file": "cookbook/upload.html", "title": "File upload" },
-      { "file": "cookbook/realtime.html", "title": "Real-time" },
-      { "file": "cookbook/offline.html", "title": "Offline-first" },
-      { "file": "cookbook/network-stack.html", "title": "Your network stack" }
-    ] },
-    { "title": "Adopting Undra", "pages": [
-      { "file": "cookbook/from-kmp.html", "title": "From Kotlin Multiplatform", "pager": "Cookbook, from Kotlin Multiplatform" },
-      { "file": "cookbook/from-uniffi.html", "title": "From UniFFI", "pager": "Cookbook, from UniFFI" },
-      { "file": "cookbook/ios-15-16.html", "title": "iOS 15 and 16", "pager": "Cookbook, iOS 15 and 16" },
-      { "file": "sample.html", "title": "Sample app" }
-    ] },
-    { "title": "Reference", "pages": [
-      { "file": "cli.html", "title": "The CLI" },
-      { "file": "architecture.html", "title": "Architecture" },
-      { "file": "errors.html", "title": "Error codes" },
-      { "file": "../reference/rust/undra/index.html", "title": "Rust API", "external": true }
-    ] },
-    { "title": "API overview", "pages": [
-      { "file": "api-swift.html", "title": "Swift", "pager": "API overview, Swift" },
-      { "file": "api-kotlin.html", "title": "Kotlin", "pager": "API overview, Kotlin" },
-      { "file": "api-typescript.html", "title": "TypeScript", "pager": "API overview, TypeScript" }
-    ] }
+    {
+      "title": "Start",
+      "pages": [
+        {
+          "file": "getting-started.html",
+          "title": "Getting started"
+        }
+      ]
+    },
+    {
+      "title": "Core",
+      "pages": [
+        {
+          "file": "concepts.html",
+          "title": "Core concepts"
+        },
+        {
+          "file": "queries.html",
+          "title": "Queries & mutations"
+        },
+        {
+          "file": "ports.html",
+          "title": "Ports & adapters"
+        },
+        {
+          "file": "objects.html",
+          "title": "Objects and identity"
+        },
+        {
+          "file": "callbacks.html",
+          "title": "Host callbacks"
+        },
+        {
+          "file": "types.html",
+          "title": "Newtypes, generics and decimals"
+        },
+        {
+          "file": "generics.html",
+          "title": "Generic functions, objects and stores"
+        }
+      ]
+    },
+    {
+      "title": "Data and live data",
+      "pages": [
+        {
+          "file": "paging.html",
+          "title": "Paging and lazy lists"
+        },
+        {
+          "file": "polling.html",
+          "title": "Polling"
+        },
+        {
+          "file": "realtime.html",
+          "title": "WebSocket & server-sent events"
+        },
+        {
+          "file": "db.html",
+          "title": "Local database"
+        }
+      ]
+    },
+    {
+      "title": "Test, ship, operate",
+      "pages": [
+        {
+          "file": "testing.html",
+          "title": "Testing your app"
+        },
+        {
+          "file": "updates.html",
+          "title": "Shipping an update"
+        },
+        {
+          "file": "reviewing-generated-code.html",
+          "title": "Reviewing generated code"
+        },
+        {
+          "file": "web.html",
+          "title": "Workers & crash recovery"
+        },
+        {
+          "file": "production.html",
+          "title": "Operating in production"
+        },
+        {
+          "file": "several-cores.html",
+          "title": "One core or several"
+        },
+        {
+          "file": "hosts.html",
+          "title": "One core, several hosts"
+        },
+        {
+          "file": "bazel.html",
+          "title": "Bazel"
+        }
+      ]
+    },
+    {
+      "title": "Cookbook",
+      "pages": [
+        {
+          "file": "cookbook/index.html",
+          "title": "All recipes",
+          "pager": "Cookbook, all recipes"
+        },
+        {
+          "file": "cookbook/auth.html",
+          "title": "Auth"
+        },
+        {
+          "file": "cookbook/pagination.html",
+          "title": "Pagination"
+        },
+        {
+          "file": "cookbook/forms.html",
+          "title": "Forms"
+        },
+        {
+          "file": "cookbook/upload.html",
+          "title": "File upload"
+        },
+        {
+          "file": "cookbook/realtime.html",
+          "title": "Real-time"
+        },
+        {
+          "file": "cookbook/leaderboard.html",
+          "title": "Live leaderboard"
+        },
+        {
+          "file": "cookbook/offline.html",
+          "title": "Offline-first"
+        },
+        {
+          "file": "cookbook/network-stack.html",
+          "title": "Your network stack"
+        }
+      ]
+    },
+    {
+      "title": "Adopting Undra",
+      "pages": [
+        {
+          "file": "cookbook/from-kmp.html",
+          "title": "From Kotlin Multiplatform",
+          "pager": "Cookbook, from Kotlin Multiplatform"
+        },
+        {
+          "file": "cookbook/from-uniffi.html",
+          "title": "From UniFFI",
+          "pager": "Cookbook, from UniFFI"
+        },
+        {
+          "file": "cookbook/ios-15-16.html",
+          "title": "iOS 15 and 16",
+          "pager": "Cookbook, iOS 15 and 16"
+        },
+        {
+          "file": "sample.html",
+          "title": "Sample app"
+        }
+      ]
+    },
+    {
+      "title": "Reference",
+      "pages": [
+        {
+          "file": "cli.html",
+          "title": "The CLI"
+        },
+        {
+          "file": "architecture.html",
+          "title": "Architecture"
+        },
+        {
+          "file": "errors.html",
+          "title": "Error codes"
+        },
+        {
+          "file": "../reference/rust/undra/index.html",
+          "title": "Rust API",
+          "external": true
+        }
+      ]
+    },
+    {
+      "title": "API overview",
+      "pages": [
+        {
+          "file": "api-swift.html",
+          "title": "Swift",
+          "pager": "API overview, Swift"
+        },
+        {
+          "file": "api-kotlin.html",
+          "title": "Kotlin",
+          "pager": "API overview, Kotlin"
+        },
+        {
+          "file": "api-typescript.html",
+          "title": "TypeScript",
+          "pager": "API overview, TypeScript"
+        }
+      ]
+    }
   ]
 }

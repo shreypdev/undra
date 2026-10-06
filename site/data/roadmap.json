@@ -1,102 +1,267 @@
 {
-  "updated": "2026-10-03",
+  "updated": "2026-10-06",
   "source": "https://github.com/shreypdev/undra/blob/main/.10x/status.md",
   "note": "Rendered by site/scripts/build-roadmap.mjs into site/roadmap/index.html, and the items with \"teaser\": true into the landing page's \"What is still open\". Shipped is what is on main. Next, Later and Exploring come only from what the repository records as planned or open; each item's `source` names the record (it is not rendered). Status chips use one scale, defined once in assets/base.css (.st-shipped, .st-next, .st-later, .st-exploring, .st-no).",
   "sections": [
     {
       "id": "shipped",
       "status": "Shipped",
-      "title": "In 1.0",
+      "title": "In 1.0 and 1.1",
       "when": "on main",
       "intro": "What you can build on today, grouped. Each line has its page in the docs and its decision record in the repository.",
       "groups": [
         {
+          "title": "Bazel-first (1.1)",
+          "items": [
+            {
+              "title": "Bazel 8.8 and 9.x, tested",
+              "text": "Both in CI, with the rulesets at their lowest and their newest versions."
+            },
+            {
+              "title": "Committed bindings, guarded (ADR-064)",
+              "text": "undra_bindings_test fails on drift and names the one command that updates."
+            },
+            {
+              "title": "The NDK as a declared input (ADR-065)",
+              "text": "No cargo-ndk anywhere; Android built in CI; the action is cacheable."
+            },
+            {
+              "title": "Lint exclusions by choice",
+              "text": "Beside the trees, or none, for a repository that lints everything."
+            },
+            {
+              "title": "Symbol files and the debugger",
+              "text": "undra symbolicate on a Bazel build; a breakpoint in a Rust frame from a rules_apple app."
+            },
+            {
+              "title": "A leaderboard of 100,000 rows",
+              "text": "The high-frequency recipe: ingest off the lock, publish a window, measured."
+            },
+            {
+              "title": "React Native 0.86",
+              "text": "Verified on the simulator and the emulator, the module unchanged."
+            }
+          ]
+        },
+        {
           "title": "Core and bindings",
           "items": [
-            { "title": "Records, enums and typed errors", "text": "From one schema, written as each language writes them." },
-            { "title": "Stores, signals and computeds", "text": "Reactive state in the core; one change-set per transaction." },
-            { "title": "Keyed and derived lists (ADR-039)", "text": "A filtered view of 10,000 rows sends 158 bytes for one edit, not 353 KB." },
-            { "title": "Objects and host callbacks (ADR-040, ADR-041)", "text": "Classes cross as themselves; the core calls back through typed interfaces." },
-            { "title": "Newtypes, Decimal, generic types (ADR-042)", "text": "Read as native types on every platform." },
-            { "title": "Generic functions, objects and stores (ADR-058)", "text": "Declared instantiations arrive as overloads and ordinary classes." },
-            { "title": "One error channel (ADR-032)", "text": "Calls fail with a typed error; generated Swift never traps." },
-            { "title": "Several cores in one app (ADR-044)", "text": "Each core is self-contained, storage included." }
+            {
+              "title": "Records, enums and typed errors",
+              "text": "From one schema, written as each language writes them."
+            },
+            {
+              "title": "Stores, signals and computeds",
+              "text": "Reactive state in the core; one change-set per transaction."
+            },
+            {
+              "title": "Keyed and derived lists (ADR-039)",
+              "text": "A filtered view of 10,000 rows sends 158 bytes for one edit, not 353 KB."
+            },
+            {
+              "title": "Objects and host callbacks (ADR-040, ADR-041)",
+              "text": "Classes cross as themselves; the core calls back through typed interfaces."
+            },
+            {
+              "title": "Newtypes, Decimal, generic types (ADR-042)",
+              "text": "Read as native types on every platform."
+            },
+            {
+              "title": "Generic functions, objects and stores (ADR-058)",
+              "text": "Declared instantiations arrive as overloads and ordinary classes."
+            },
+            {
+              "title": "One error channel (ADR-032)",
+              "text": "Calls fail with a typed error; generated Swift never traps."
+            },
+            {
+              "title": "Several cores in one app (ADR-044)",
+              "text": "Each core is self-contained, storage included."
+            }
           ]
         },
         {
           "title": "Platforms",
           "items": [
-            { "title": "SwiftUI, Compose and React", "text": "Plus Vue, Svelte and Solid adapters for the web runtime." },
-            { "title": "React Native (ADR-038)", "text": "A TurboModule over the C ABI under the same TypeScript mirror." },
-            { "title": "iOS 15 and 16 (ADR-045)", "text": "ObservableObject stores below iOS 17; proven by compilation and a probe on iOS 26.5." },
-            { "title": "No manual build step", "text": "A Gradle task, an Xcode build phase and a Vite plugin run undra build." },
-            { "title": "Bazel rules (ADR-061)", "text": "undra_core and undra_bindings, hermetic and offline; JVM, Node and Swift tested." },
-            { "title": "Everything from GitHub at one tag (ADR-063)", "text": "The crates, the Swift package, the Kotlin modules (JitPack) and the npm runtimes; no account needed." }
+            {
+              "title": "SwiftUI, Compose and React",
+              "text": "Plus Vue, Svelte and Solid adapters for the web runtime."
+            },
+            {
+              "title": "React Native (ADR-038)",
+              "text": "A TurboModule over the C ABI under the same TypeScript mirror."
+            },
+            {
+              "title": "iOS 15 and 16 (ADR-045)",
+              "text": "ObservableObject stores below iOS 17; proven by compilation and a probe on iOS 26.5."
+            },
+            {
+              "title": "No manual build step",
+              "text": "A Gradle task, an Xcode build phase and a Vite plugin run undra build."
+            },
+            {
+              "title": "Bazel rules (ADR-061)",
+              "text": "undra_core and undra_bindings, hermetic and offline; JVM, Node and Swift tested."
+            },
+            {
+              "title": "Everything from GitHub at one tag (ADR-063)",
+              "text": "The crates, the Swift package, the Kotlin modules (JitPack) and the npm runtimes; no account needed."
+            }
           ]
         },
         {
           "title": "Data",
           "items": [
-            { "title": "Queries and mutations", "text": "Staleness, dedup, retry and optimistic updates with rollback." },
-            { "title": "Offline queue and persistence", "text": "Queued writes replay on reconnect and survive a restart." },
-            { "title": "Paged and lazy lists, polling (ADR-043)", "text": "A lazy list pages 10,000 rows on demand; polling pauses with the app." },
-            { "title": "Migrations and typed storage (ADR-037, ADR-049)", "text": "A changed schema still restores what the last version stored." },
-            { "title": "Snapshot, restore and web recovery", "text": "A crashed web core restarts from its last snapshot." }
+            {
+              "title": "Queries and mutations",
+              "text": "Staleness, dedup, retry and optimistic updates with rollback."
+            },
+            {
+              "title": "Offline queue and persistence",
+              "text": "Queued writes replay on reconnect and survive a restart."
+            },
+            {
+              "title": "Paged and lazy lists, polling (ADR-043)",
+              "text": "A lazy list pages 10,000 rows on demand; polling pauses with the app."
+            },
+            {
+              "title": "Migrations and typed storage (ADR-037, ADR-049)",
+              "text": "A changed schema still restores what the last version stored."
+            },
+            {
+              "title": "Snapshot, restore and web recovery",
+              "text": "A crashed web core restarts from its last snapshot."
+            }
           ]
         },
         {
           "title": "Ports",
           "items": [
-            { "title": "Ten ports, with adapters and fakes", "text": "Http, Kv, SecureStore, Fs, Clock, Rng, Log, Timer, Connectivity, Lifecycle." },
-            { "title": "WebSocket, SSE and Db (ADR-047, ADR-048)", "text": "Streams with backpressure, and SQL over SQLite, each with a deterministic fake." },
-            { "title": "Your own network stack (ADR-060)", "text": "OkHttp, URLSession and fetch as the app configured them." },
-            { "title": "Android adapters", "text": "Backed by the platform, installed with one call." }
+            {
+              "title": "Ten ports, with adapters and fakes",
+              "text": "Http, Kv, SecureStore, Fs, Clock, Rng, Log, Timer, Connectivity, Lifecycle."
+            },
+            {
+              "title": "WebSocket, SSE and Db (ADR-047, ADR-048)",
+              "text": "Streams with backpressure, and SQL over SQLite, each with a deterministic fake."
+            },
+            {
+              "title": "Your own network stack (ADR-060)",
+              "text": "OkHttp, URLSession and fetch as the app configured them."
+            },
+            {
+              "title": "Android adapters",
+              "text": "Backed by the platform, installed with one call."
+            }
           ]
         },
         {
           "title": "Dev loop and tooling",
           "items": [
-            { "title": "State-preserving reload (ADR-053, ADR-059)", "text": "undra dev rebuilds on save and keeps the state and query handles." },
-            { "title": "Devtools (ADR-054)", "text": "Live stores, a change-set timeline with time travel, port and query logs." },
-            { "title": "undra schema diff (ADR-062)", "text": "Each API change marked breaking or additive, for review and CI." },
-            { "title": "init, doctor and upgrade", "text": "A project with CI, every missing tool with its fix, pins moved in one step." },
-            { "title": "Teaching diagnostics", "text": "Every macro error says what, why and how to fix it." },
-            { "title": "Reconnect everywhere (ADR-051)", "text": "Apps on all three platforms reconnect to undra dev by themselves." }
+            {
+              "title": "State-preserving reload (ADR-053, ADR-059)",
+              "text": "undra dev rebuilds on save and keeps the state and query handles."
+            },
+            {
+              "title": "Devtools (ADR-054)",
+              "text": "Live stores, a change-set timeline with time travel, port and query logs."
+            },
+            {
+              "title": "undra schema diff (ADR-062)",
+              "text": "Each API change marked breaking or additive, for review and CI."
+            },
+            {
+              "title": "init, doctor and upgrade",
+              "text": "A project with CI, every missing tool with its fix, pins moved in one step."
+            },
+            {
+              "title": "Teaching diagnostics",
+              "text": "Every macro error says what, why and how to fix it."
+            },
+            {
+              "title": "Reconnect everywhere (ADR-051)",
+              "text": "Apps on all three platforms reconnect to undra dev by themselves."
+            }
           ]
         },
         {
           "title": "Testing",
           "items": [
-            { "title": "A testing kit for apps (ADR-055)", "text": "Previews on the real core; recorded sessions replay in tests." },
-            { "title": "The contract grid", "text": "The same scenarios against the real core on Swift, Kotlin and TypeScript, every cell passing." },
-            { "title": "Adversarial reviews", "text": "Every core crate and every feature, reviewed by someone who did not write it." }
+            {
+              "title": "A testing kit for apps (ADR-055)",
+              "text": "Previews on the real core; recorded sessions replay in tests."
+            },
+            {
+              "title": "The contract grid",
+              "text": "The same scenarios against the real core on Swift, Kotlin and TypeScript, every cell passing."
+            },
+            {
+              "title": "Adversarial reviews",
+              "text": "Every core crate and every feature, reviewed by someone who did not write it."
+            }
           ]
         },
         {
           "title": "Size and speed",
           "items": [
-            { "title": "The JavaScript runtime at 16 KB (ADR-057)", "text": "What a page loads up front went from 22.1 KB to 15.8 KB gzipped." },
-            { "title": "The web core under 120 KB (ADR-052)", "text": "The hello-world wasm, measured and gated in CI." },
-            { "title": "Native size profile and gates (ADR-052)", "text": "Release builds tuned for size; opt_level chooses smaller or faster." },
-            { "title": "The web call path (ADR-056)", "text": "A generated TypeScript call went from 3.2–3.5 µs to 0.47–0.68 µs." },
-            { "title": "Frame-coalesced delivery (ADR-031)", "text": "Each mirror applies what arrived once per frame." },
-            { "title": "Harsh-conditions benchmarks", "text": "Firehose, churn, fan-out, backpressure and a soak, with CI gates." }
+            {
+              "title": "The JavaScript runtime at 16 KB (ADR-057)",
+              "text": "What a page loads up front went from 22.1 KB to 15.8 KB gzipped."
+            },
+            {
+              "title": "The web core under 120 KB (ADR-052)",
+              "text": "The hello-world wasm, measured and gated in CI."
+            },
+            {
+              "title": "Native size profile and gates (ADR-052)",
+              "text": "Release builds tuned for size; opt_level chooses smaller or faster."
+            },
+            {
+              "title": "The web call path (ADR-056)",
+              "text": "A generated TypeScript call went from 3.2–3.5 µs to 0.47–0.68 µs."
+            },
+            {
+              "title": "Frame-coalesced delivery (ADR-031)",
+              "text": "Each mirror applies what arrived once per frame."
+            },
+            {
+              "title": "Harsh-conditions benchmarks",
+              "text": "Firehose, churn, fan-out, backpressure and a soak, with CI gates."
+            }
           ]
         },
         {
           "title": "Production",
           "items": [
-            { "title": "Panic reports and symbols (ADR-046)", "text": "A contained panic reaches the app with frames undra symbolicate reads." },
-            { "title": "Background runs (ADR-046)", "text": "The offline queue drains under the OS's deadline." },
-            { "title": "A runtime ends when its owner lets go (ADR-034)", "text": "Off-core writes are refused; a panicking computed poisons only itself." }
+            {
+              "title": "Panic reports and symbols (ADR-046)",
+              "text": "A contained panic reaches the app with frames undra symbolicate reads."
+            },
+            {
+              "title": "Background runs (ADR-046)",
+              "text": "The offline queue drains under the OS's deadline."
+            },
+            {
+              "title": "A runtime ends when its owner lets go (ADR-034)",
+              "text": "Off-core writes are refused; a panicking computed poisons only itself."
+            }
           ]
         },
         {
           "title": "Docs and samples",
           "items": [
-            { "title": "Cookbook and migration guides", "text": "Recipes, and the way over from Kotlin Multiplatform and UniFFI." },
-            { "title": "Fieldbook", "text": "A production-shaped sample beyond the playground." },
-            { "title": "API reference", "text": "Swift, Kotlin and TypeScript from the generated code; Rust from rustdoc." }
+            {
+              "title": "Cookbook and migration guides",
+              "text": "Recipes, and the way over from Kotlin Multiplatform and UniFFI."
+            },
+            {
+              "title": "Fieldbook",
+              "text": "A production-shaped sample beyond the playground."
+            },
+            {
+              "title": "API reference",
+              "text": "Swift, Kotlin and TypeScript from the generated code; Rust from rustdoc."
+            }
           ]
         }
       ]
@@ -108,18 +273,68 @@
       "when": "recorded as open",
       "intro": "Each of these is recorded as open in the repository, with the work done around it. A plan, not a promise; the order may change.",
       "items": [
-        { "title": "Benchmarks on physical phones", "text": "Every device row so far is from a simulator, an emulator or headless Chromium. Real-phone rows next, then budgets for them and a CI job.", "teaser": true, "source": ".10x/status.md checkpoint 34, the open list; bench/RESULTS.md, Pending hardware" },
-        { "title": "Maven Central and the npm registry", "text": "The conventional registries, after launch, beside GitHub: the Kotlin runtime on Maven Central and the npm packages on the registry. undra upgrade moves a project over. crates.io follows, under a registry-safe prefix.", "teaser": true, "source": ".10x/adrs/ADR-063-launch-distribution-from-github.md (registries later, additive); .10x/specs/2026-09-30-launch-v2-design.md §2 Next (crates.io, Maven Central)" },
-        { "title": "Homebrew (brew install undra)", "text": "Through homebrew-core, once the repository is 30 days old and notable (75 stars, or 30 forks or watchers). There is no tap at launch: the installer and cargo are the two ways to get the CLI.", "source": ".10x/adrs/ADR-063-launch-distribution-from-github.md, Amendment: no Homebrew tap at launch (2026-10-03)" },
-        { "title": "Android modules tested in CI", "text": "undra-compose, android-adapters and android-work pass locally and on the emulator; an emulator job in CI runs them.", "source": ".10x/status.md checkpoint 34 (on hold until the founder says go); .10x/handoff.md" },
-        { "title": "Android under Bazel, verified", "text": "The rules declare Android; a build and a test run prove it.", "source": ".10x/status.md checkpoint 34, the open list; .10x/reviews/2026-10-02-bazel-review.md" },
-        { "title": "Byte-reproducible undra build", "text": "Today the same core built in two directories differs, because cargo hashes the absolute path into crate names.", "source": ".10x/status.md checkpoint 34, the open list" },
-        { "title": "The examples on schema diff", "text": "Commit each example's schema.json, so the repository reviews its own API changes the way it asks apps to.", "source": ".10x/status.md checkpoint 34, the open list (R10); ADR-062" },
-        { "title": "Cancelled port calls reach the platform", "text": "A cancelled call is abandoned in the core today while the platform's request runs on. Its own decision record first.", "source": ".10x/specs/2026-10-01-v1x-default-choice-design.md Amendment C item 6; .10x/specs/2026-10-01-v1x-gaps.md PO-5; docs/SPEC.md §5" },
-        { "title": "Your network stack, proved further", "text": "Certificate pinning through OkHttp end to end, a build against OkHttp 5, and the iOS WebSocket adapter refusing a background session as the SSE adapter does.", "source": ".10x/status.md checkpoint 34, the open list; .10x/reviews/2026-10-02-okhttp-adapters-review.md" },
-        { "title": "Smaller Android libraries", "text": "Relocation packing saves about 3%, once a load test on API 23 passes.", "source": ".10x/status.md checkpoint 34, the open list; .10x/reviews/2026-10-02-android-size-review.md" },
-        { "title": "Windows CLI", "text": "Release binaries and docs for the undra command on Windows.", "source": ".10x/specs/2026-09-30-launch-v2-design.md §2 Next" },
-        { "title": "A custom domain", "text": "A home for the site and docs that is the project's own.", "source": ".10x/specs/2026-09-30-launch-v2-design.md §2 Next" }
+        {
+          "title": "Benchmarks on physical phones",
+          "text": "Every device row so far is from a simulator, an emulator or headless Chromium. Real-phone rows next, then budgets for them and a CI job.",
+          "teaser": true,
+          "source": ".10x/status.md checkpoint 34, the open list; bench/RESULTS.md, Pending hardware"
+        },
+        {
+          "title": "Maven Central and the npm registry",
+          "text": "The conventional registries, after launch, beside GitHub: the Kotlin runtime on Maven Central and the npm packages on the registry. undra upgrade moves a project over. crates.io follows, under a registry-safe prefix.",
+          "teaser": true,
+          "source": ".10x/adrs/ADR-063-launch-distribution-from-github.md (registries later, additive); .10x/specs/2026-09-30-launch-v2-design.md §2 Next (crates.io, Maven Central)"
+        },
+        {
+          "title": "Homebrew (brew install undra)",
+          "text": "Through homebrew-core, once the repository is 30 days old and notable (75 stars, or 30 forks or watchers). There is no tap at launch: the installer and cargo are the two ways to get the CLI.",
+          "source": ".10x/adrs/ADR-063-launch-distribution-from-github.md, Amendment: no Homebrew tap at launch (2026-10-03)"
+        },
+        {
+          "title": "Android modules tested in CI",
+          "text": "undra-compose, android-adapters and android-work pass locally and on the emulator; an emulator job in CI runs them.",
+          "source": ".10x/status.md checkpoint 34 (on hold until the founder says go); .10x/handoff.md"
+        },
+        {
+          "title": "Android under Bazel, verified",
+          "text": "The rules declare Android; a build and a test run prove it.",
+          "source": ".10x/status.md checkpoint 34, the open list; .10x/reviews/2026-10-02-bazel-review.md"
+        },
+        {
+          "title": "Byte-reproducible undra build",
+          "text": "Today the same core built in two directories differs, because cargo hashes the absolute path into crate names.",
+          "source": ".10x/status.md checkpoint 34, the open list"
+        },
+        {
+          "title": "The examples on schema diff",
+          "text": "Commit each example's schema.json, so the repository reviews its own API changes the way it asks apps to.",
+          "source": ".10x/status.md checkpoint 34, the open list (R10); ADR-062"
+        },
+        {
+          "title": "Cancelled port calls reach the platform",
+          "text": "A cancelled call is abandoned in the core today while the platform's request runs on. Its own decision record first.",
+          "source": ".10x/specs/2026-10-01-v1x-default-choice-design.md Amendment C item 6; .10x/specs/2026-10-01-v1x-gaps.md PO-5; docs/SPEC.md §5"
+        },
+        {
+          "title": "Your network stack, proved further",
+          "text": "Certificate pinning through OkHttp end to end, a build against OkHttp 5, and the iOS WebSocket adapter refusing a background session as the SSE adapter does.",
+          "source": ".10x/status.md checkpoint 34, the open list; .10x/reviews/2026-10-02-okhttp-adapters-review.md"
+        },
+        {
+          "title": "Smaller Android libraries",
+          "text": "Relocation packing saves about 3%, once a load test on API 23 passes.",
+          "source": ".10x/status.md checkpoint 34, the open list; .10x/reviews/2026-10-02-android-size-review.md"
+        },
+        {
+          "title": "Windows CLI",
+          "text": "Release binaries and docs for the undra command on Windows.",
+          "source": ".10x/specs/2026-09-30-launch-v2-design.md §2 Next"
+        },
+        {
+          "title": "A custom domain",
+          "text": "A home for the site and docs that is the project's own.",
+          "source": ".10x/specs/2026-09-30-launch-v2-design.md §2 Next"
+        }
       ]
     },
     {
@@ -129,9 +344,22 @@
       "when": "approved, not started",
       "intro": "Decided in direction and waiting their turn.",
       "items": [
-        { "title": "Dart and Flutter bindings", "text": "A fourth host after React Native, which proved the pattern. Not started.", "teaser": true, "source": ".10x/specs/2026-10-01-v1x-default-choice-design.md §2 G4 and Amendment A" },
-        { "title": "Desktop as a first-class target", "text": "Compose Desktop and macOS samples built in CI over the runtimes that exist; Windows and Linux over the same C ABI.", "source": ".10x/specs/2026-10-01-v1x-default-choice-design.md §2 C5; .10x/specs/2026-09-30-launch-v2-design.md §2 Later" },
-        { "title": "Xcode 27", "text": "The Swift test target was reported not to build on Xcode 27. Our machines and CI run Xcode 26; it is fixed once it reproduces.", "source": ".10x/status.md checkpoint 34 (U2, not taken on: needs the crash log)" }
+        {
+          "title": "Dart and Flutter bindings",
+          "text": "A fourth host after React Native, which proved the pattern. Not started.",
+          "teaser": true,
+          "source": ".10x/specs/2026-10-01-v1x-default-choice-design.md §2 G4 and Amendment A"
+        },
+        {
+          "title": "Desktop as a first-class target",
+          "text": "Compose Desktop and macOS samples built in CI over the runtimes that exist; Windows and Linux over the same C ABI.",
+          "source": ".10x/specs/2026-10-01-v1x-default-choice-design.md §2 C5; .10x/specs/2026-09-30-launch-v2-design.md §2 Later"
+        },
+        {
+          "title": "Xcode 27",
+          "text": "The Swift test target was reported not to build on Xcode 27. Our machines and CI run Xcode 26; it is fixed once it reproduces.",
+          "source": ".10x/status.md checkpoint 34 (U2, not taken on: needs the crash log)"
+        }
       ]
     },
     {
@@ -141,9 +369,21 @@
       "when": "ideas, not scheduled",
       "intro": "Questions the project is asking, not plans.",
       "items": [
-        { "title": "A GraphQL story", "text": "Undra has no GraphQL layer; an app built around Apollo keeps Apollo on the platform side.", "source": ".10x/status.md checkpoint 34 (U6, not taken on)" },
-        { "title": "A sync engine", "text": "If it comes, a separate package, not part of the core.", "source": ".10x/specs/2026-09-30-launch-v2-design.md §2 Later; README.md" },
-        { "title": "Compose Multiplatform interop", "text": "An Undra core under a Compose Multiplatform UI.", "source": ".10x/specs/2026-09-30-launch-v2-design.md §2 Later" }
+        {
+          "title": "A GraphQL story",
+          "text": "Undra has no GraphQL layer; an app built around Apollo keeps Apollo on the platform side.",
+          "source": ".10x/status.md checkpoint 34 (U6, not taken on)"
+        },
+        {
+          "title": "A sync engine",
+          "text": "If it comes, a separate package, not part of the core.",
+          "source": ".10x/specs/2026-09-30-launch-v2-design.md §2 Later; README.md"
+        },
+        {
+          "title": "Compose Multiplatform interop",
+          "text": "An Undra core under a Compose Multiplatform UI.",
+          "source": ".10x/specs/2026-09-30-launch-v2-design.md §2 Later"
+        }
       ]
     }
   ],

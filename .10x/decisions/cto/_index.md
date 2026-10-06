@@ -15,3 +15,4 @@ Active features:
   must win.
 * [v1x-default-choice](v1x-default-choice.md) - the v1.1 / v1.2 program: no reason to say no (2026-10-01).
 * [competitive-limitations](competitive-limitations.md) - the five plan changes from the sourced competitor catalogue: Android adapters, query completeness, boundary surface, production operability, ABI/iOS-floor decisions now (2026-10-01).
+* [bazel-first](bazel-first.md) - 1.1: Undra fits an existing Bazel monorepo; Cargo stays primary; native mode is 1.2 (2026-10-05).

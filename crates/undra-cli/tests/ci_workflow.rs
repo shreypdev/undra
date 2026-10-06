@@ -426,7 +426,7 @@ fn the_workflow_parses_and_names_every_job() {
     assert!(
         android.contains("ndk;27.2.12479018")
             && android.contains("ANDROID_NDK_HOME")
-            && android.contains("cargo install cargo-ndk"),
+            && !android.contains("cargo-ndk"),
         "{android}"
     );
     assert!(android.contains("./gradlew assembleDebug"), "{android}");

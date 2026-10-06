@@ -242,7 +242,7 @@ one line per finding. Each one says what was found (ok, missing, or the wrong ve
 command that fixes it and the heading of docs/ONBOARDING.md that explains it. It covers: rustup, stable Rust at the \
 MSRV or newer and the Rust targets of the platforms (wasm32; the iOS device and simulator targets; the Android ABIs \
 of undra.toml); full Xcode against the command line tools and a simulator runtime; the Android SDK, platform-tools, \
-NDK r27, ANDROID_HOME and ANDROID_NDK_HOME, cargo-ndk, JDK 17, adb and whether a device or emulator is attached, and \
+NDK r27, ANDROID_HOME and ANDROID_NDK_HOME, JDK 17, adb and whether a device or emulator is attached, and \
 the Gradle wrapper; Node 20+ and npm; wasm-opt (optional: it makes the wasm core 10-20% smaller); free disk space \
 (a warning under 10 GB); and whether `undra` is on PATH, since the Gradle task, the Xcode build phase and the Vite \
 plugin of a project run it by name. Checks for people who work on Undra (the Kotlin compiler, the `undra` emulator) are \

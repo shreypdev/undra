@@ -50,6 +50,10 @@ pub struct Stats {
     pub p50_ns: f64,
     /// The 90th percentile: how bad the slow tail was.
     pub p90_ns: f64,
+    /// The 99th percentile: the tail a row can gate with `p99_ns` in `budgets.toml`. With the
+    /// default 301 samples it is the third slowest; an operation that is reset between runs is
+    /// timed one run per sample, up to 3,000 samples.
+    pub p99_ns: f64,
     /// The fastest sample.
     pub min_ns: f64,
     /// How many samples were taken.
@@ -109,6 +113,7 @@ pub fn measure(bench: &mut dyn Bench, config: &MeasureConfig) -> Stats {
     Stats {
         p50_ns: at(0.5),
         p90_ns: at(0.9),
+        p99_ns: at(0.99),
         min_ns: samples[0],
         samples: samples.len(),
         iterations,
@@ -139,6 +144,7 @@ mod tests {
         assert!(stats.p50_ns >= 300_000.0, "{stats:?}");
         assert!(stats.p50_ns < 30_000_000.0, "{stats:?}");
         assert!(stats.min_ns <= stats.p50_ns && stats.p50_ns <= stats.p90_ns);
+        assert!(stats.p90_ns <= stats.p99_ns);
         assert_eq!(stats.samples, 11);
     }
 

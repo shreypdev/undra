@@ -692,3 +692,32 @@ has none. The tags keep their `v`, which is what Undra's peers use (UniFFI, Crux
 `docs/RELEASING.md` now gives the order for redoing a JitPack build and says to leave the twin alone.
 
 What remains is unchanged: the founder's step 2 and the announcement; the two follow-ups of checkpoint 38.
+
+### Checkpoint 40 (2026-10-06) - Undra 1.1, Bazel-first integration, on main
+
+The 1.1 design (`.10x/specs/2026-10-05-bazel-first-design.md`, ADR-064, ADR-065, the ADR-061 amendment) landed as one
+integration pull request after each piece had its own adversarial review (`.10x/reviews/2026-10-05-<slug>-review.md`)
+and its own record (`.10x/decisions/sde/<slug>.md`). The pieces were built in parallel worktrees and merged into
+`wt/undra-1-1` so the wave needed one Gate; their pull requests (#28, #29, #31, #32, #33, #35, #36, #37) were closed as
+superseded with their branches intact in the history of the integration commit.
+
+| Piece | What it is |
+|---|---|
+| **bazel-compat** | Bazel 8.8.1 and 9.2.0 both tested in CI; `bazel/MODULE.bazel` declares the lowest ruleset versions the rules need and CI runs the example at those minimums and at the newest versions (`examples/bazel/scripts/at-minimums.sh`); 9.x runs with `--lockfile_mode=off`. |
+| **bindings-test** (ADR-064) | `undra_bindings_test` over `bazel_lib`'s `write_source_file`: committed trees must equal the schema's output byte for byte, the failure names `bazel run //pkg:<name>.update`; the example commits `examples/bazel/committed/`; every example project pins `[undra] version = "1.0.0"`, and `scripts/bump-version.sh` owns the example pins and the committed trees. Review fixes: copies, not symlinks (remote cache); a missing committed directory fails only its own test. |
+| **ndk-input** (ADR-065) | `undra build --platform android` drives the NDK's clang and linker itself (`crates/undra-cli/src/builds/ndk.rs`); `cargo-ndk` gone from doctor, docs, CI and templates; `undra_core(ndk = <label>)` with `ANDROID_NDK_HOME` set inside the action; the Android target does not transition platforms; `undra.android_std(version, sha256s)` fetches the Android std by checksum and `run.sh` checks it against `rustc -V`; the example pins NDK r27c by SHA-256; a Linux CI job builds the Android core and `undra_android_library`. |
+| **lint-exclusions** | `[bindings] lint_exclusions = "beside" \| "none"`; the four files bindgen writes are documented with the root-config lines; the ktlint section is `[generated/**]` (a slash anchors to the file's directory), verified by running ktlint. |
+| **symbols-bazel** | The `symbols` output group had omitted the host library's dSYM / `.so.debug`; the layout is now `<target>.symbols/symbols/` plus `host/`; the host build id is explicit on Linux (`--build-id=sha1`); `//symbols:symbolicate_test` resolves a real panic of the Bazel-built release core on macOS and Linux. |
+| **xcodeproj-debug** | A `rules_apple` app and a `rules_xcodeproj` project in `examples/bazel/ios/`; a breakpoint in `hello_core::greeting` resolves with file and line; `undra_core(keep_debug_objects = True)` keeps the iOS archives the debug map names; the iOS core target is iOS-compatible; `undra_bindings` builds its host core in the exec configuration; the action's cleanup stays under its lock. |
+| **leaderboard-recipe** | `examples/cookbook`'s live leaderboard of 100,000 players: ingest on `spawn_blocking` into an app-owned structure, a 60-row window and aggregates in one transaction (780 bytes); lock hold p50 375 ns against 2.56 ms with the snapshot applied inside a call; four bench rows with budgets and a ratio; review fixes: a versioned publish (an older window could land after a newer one), the page's claims matched to tests, `bench-record-base.sh` copies the recipe's source so the baseline gates. |
+| **rn-086** | React Native 0.86.3 verified on the iOS simulator (24 of 24 checks) and the Android emulator (23 of 23), the module unchanged; an 0.86 app keeps 0.86's Gradle and Kotlin. |
+| **docs** | Getting started and the CLI reference point at the Bazel guide; "a release core under a debug app" with the switch per platform; the page "One core, several hosts"; the roadmap's 1.1 group. |
+
+Landed on the way, each at its cause: the React Native LazyList test waited a fixed 5 ms for a two-timer delivery
+(`wt/rn-lazylist-flake`); the Swift test target's waits were 5 s budgets, now 60 s hang detectors with the
+`HangDetector` kicked per step, four wall-clock ceilings removed, a TLS challenge list asserted by content
+(`wt/swift-sse-wait`); a public doc link to a private module in the lint piece (`cargo doc -D warnings`).
+
+Deviation, recorded: 1.1.0 was released without a `1.1.0-rc.1` rehearsal. The rehearsal proves the distribution
+channels with a real tag; they were proven at 1.0.0 on 2026-10-04 and 1.1 changes none of them. The Release smoke
+workflow on `v1.1.0` is the check.

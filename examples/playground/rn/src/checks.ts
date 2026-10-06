@@ -102,6 +102,69 @@ function native(portId: number): boolean {
   return nativePlatformDefaults(UndraPlaygroundCore.namespace).ports.includes(portId);
 }
 
+/**
+ * The deadline of a wait for something that always comes (a hang detector, never a speed assertion: a loaded device takes
+ * longer, it does not take forever).
+ */
+const HANG_DEADLINE_MS = 60_000;
+
+/** What {@link watchWebSocket} saw of one connection. */
+interface WatchedSocket {
+  /** The messages React Native's `WebSocket` handed to JavaScript. */
+  readonly messages: number;
+  /** Whether JavaScript closed it (the adapter giving up a connection whose core does not read calls `close`). */
+  readonly closedHere: boolean;
+  /** Whether it closed (its `close` event). */
+  readonly closed: boolean;
+  /** Puts React Native's `WebSocket` back. */
+  restore(): void;
+}
+
+/**
+ * Watches the next connection the app opens to a URL that contains `path`, until {@link WatchedSocket.restore}: the core's
+ * WebSocket port is React Native's global `WebSocket` (`reactNativeWebSocket` looks the constructor up when it connects),
+ * so a subclass in its place sees what the adapter sees. What a check waits on instead of a time.
+ */
+function watchWebSocket(path: string): WatchedSocket {
+  const g = globalThis as unknown as { WebSocket: typeof WebSocket };
+  const Original = g.WebSocket;
+  const seen = { messages: 0, closedHere: false, closed: false };
+  const watched = new WeakSet<object>();
+  class Watched extends Original {
+    constructor(...args: ConstructorParameters<typeof WebSocket>) {
+      super(...args);
+      if (String(args[0]).includes(path)) {
+        watched.add(this);
+        this.addEventListener('message', () => {
+          seen.messages++;
+        });
+        this.addEventListener('close', () => {
+          seen.closed = true;
+        });
+      }
+    }
+    close(code?: number, reason?: string): void {
+      if (watched.has(this)) seen.closedHere = true;
+      super.close(code, reason);
+    }
+  }
+  g.WebSocket = Watched;
+  return {
+    get messages() {
+      return seen.messages;
+    },
+    get closedHere() {
+      return seen.closedHere;
+    },
+    get closed() {
+      return seen.closed;
+    },
+    restore() {
+      g.WebSocket = Original;
+    },
+  };
+}
+
 /** Waits up to `ms` for `condition`. */
 async function eventually(condition: () => boolean, ms: number): Promise<boolean> {
   const until = Date.now() + ms;
@@ -529,9 +592,19 @@ const CHECKS: ReadonlyArray<readonly [string, string, Check]> = [
           `a drop is a typed end (Network; on iOS Closed), got ${String(dropped)}`,
         );
         // A flood the core does not read: React Native's WebSocket cannot pause, so what arrives waits in JavaScript up
-        // to 4,096 messages (plus the 16 the binding reads ahead), then the connection is given up with 1008.
-        await live.connect(`${LOOPBACK_WS}/ws/flood?n=6000&size=16`, [], []);
-        await sleep(1500);
+        // to 4,096 messages (plus the 16 the binding reads ahead), then the connection is given up with 1008. The core
+        // reads only once that happened, or once the whole flood arrived without it (when the adapter did not hold to its
+        // limit): reading earlier keeps up with the flood. (A fixed 1.5 s was not always enough on a loaded emulator.)
+        const watched = watchWebSocket('/ws/flood');
+        try {
+          await live.connect(`${LOOPBACK_WS}/ws/flood?n=6000&size=16`, [], []);
+        } finally {
+          watched.restore();
+        }
+        expect(
+          await eventually(() => watched.closedHere || watched.closed, HANG_DEADLINE_MS),
+          `the flood neither was given up nor ended in ${HANG_DEADLINE_MS} ms (${watched.messages} messages arrived)`,
+        );
         let flooded = 0;
         let floodEnd: unknown = null;
         while (floodEnd === null && flooded < 7000) {
@@ -546,7 +619,7 @@ const CHECKS: ReadonlyArray<readonly [string, string, Check]> = [
           `a stalled flood ends with WsError.Closed(1008, "the core did not keep up"), got ${String(floodEnd)} after ${flooded}`,
         );
         expect(flooded >= 4096 && flooded <= 4096 + 32, `bounded: ${flooded} of 6000 messages were kept for the core`);
-        floodDetail = `a stalled flood of 6000 kept ${flooded} then Closed(1008)`;
+        floodDetail = `a stalled flood of 6000 (${watched.messages} reached JavaScript) kept ${flooded} then Closed(1008)`;
       } finally {
         live.close();
       }

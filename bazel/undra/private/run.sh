@@ -48,9 +48,12 @@ SWIFT_FILES=""
 BINDGEN_PLATFORMS=""
 BINDGEN_DOCS=0
 EXTRA_PATH=""
+NDK=""
 INHERIT_PATH=0
+STD_VERSION_FILE=""
 ORIG_PATH="${PATH:-}"
 EXTRA_ENV=""
+KEEP_DEBUG_OBJECTS=0
 while IFS= read -r line || [ -n "$line" ]; do
   key="${line%%=*}"
   value="${line#*=}"
@@ -86,7 +89,10 @@ $value" ;;
     bindgen_platforms) BINDGEN_PLATFORMS="$value" ;;
     bindgen_docs) BINDGEN_DOCS="$value" ;;
     path) case "$value" in /*) EXTRA_PATH="$EXTRA_PATH:$value" ;; *) EXTRA_PATH="$EXTRA_PATH:$EXECROOT/$value" ;; esac ;;
+    ndk) NDK="$value" ;;
     inherit_path) INHERIT_PATH="$value" ;;
+    std_version) STD_VERSION_FILE="$value" ;;
+    keep_debug_objects) KEEP_DEBUG_OBJECTS="$value" ;;
     env) EXTRA_ENV="$EXTRA_ENV
 $value" ;;
     '') ;;
@@ -129,14 +135,45 @@ until mkdir -m 700 "$WORK" 2>/dev/null; do
     fi
     die "$WORK belongs to another user"
   fi
-  if [ -n "$owner" ] && ! alive "$owner"; then rm -rf "$WORK"; continue; fi # left by a build of ours that died
+  # Left by a build of ours that kept its debug objects (`kept`, below: not a process, so a recycled pid cannot look alive) or
+  # that died: ours to take over.
+  if [ "$owner" = kept ] || { [ -n "$owner" ] && ! alive "$owner"; }; then rm -rf "$WORK"; continue; fi
   if [ -z "$owner" ] && [ -n "$(find "$WORK" -maxdepth 0 -mmin +2 2>/dev/null)" ]; then rm -rf "$WORK"; continue; fi
   waited=$((waited + 1))
   [ "$waited" -le 1800 ] || die "waited 30 minutes for $WORK, held by process '$owner'"
   sleep 1
 done
 echo "$$" > "$WORK/.undra-bazel-owner"
-trap 'rm -rf "$WORK"' EXIT
+# `keep_debug_objects` (an iOS core): Apple's linker writes no DWARF for a prelinked slice, it writes a debug map naming the
+# objects the DWARF is in (`libundra_core_<hash>.a(..rcgu.o)` below `target/<triple>/<profile>/`, ADR-044, ADR-046), and a
+# debugger, or the dSYM of the app, follows the map to those paths; the DWARF in turn names the sources by their paths here,
+# which is what a debugger shows at a breakpoint. They are in this directory, so it is what stays: those archives, the
+# project's sources (`app/`) and the Undra crates' (`undra/`, 15 MB), and nothing else (the rest of what is below is build
+# output, 1.2 GB for the example; the vendored crates' sources are 295 MB unpacked and are not kept, so a frame inside one of
+# them has a file and a line but no source to show), and it is replaced by the next build of the target (its owner file says
+# `kept`, which no process is: a pid, once
+# this one has exited, could be another process's by then, and the next build would wait for it). The directory is pruned where
+# it is, never removed and made again: it is the lock, and a build of the same target waiting for it (another output base:
+# Xcode's and the command line's) would take it in the moment it did not exist, and this process would then write into that
+# build's directory.
+cleanup() {
+  if [ "$KEEP_DEBUG_OBJECTS" = 1 ] && [ -d "$WORK/target" ]; then
+    mv "$WORK/target" "$WORK/.target.all" || { rm -rf "$WORK"; exit 1; }
+    # The archives the debug map names: `<triple>/<profile>/libundra_core_<hash>.a`, not the copies Cargo keeps under `deps/`.
+    (cd "$WORK/.target.all" && find . -mindepth 3 -maxdepth 3 -name 'libundra_core_*.a') | while IFS= read -r object; do
+      object="${object#./}"
+      mkdir -p "$WORK/target/$(dirname "$object")"
+      mv "$WORK/.target.all/$object" "$WORK/target/$object"
+    done
+    # The sources, less what was built from them (the project's `build/`).
+    rm -rf "$WORK/app/$PROJECT/build"
+    find "$WORK" -mindepth 1 -maxdepth 1 ! -name target ! -name app ! -name undra ! -name .undra-bazel-owner -exec rm -rf {} +
+    echo kept > "$WORK/.undra-bazel-owner"
+  else
+    rm -rf "$WORK"
+  fi
+}
+trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
 # --- a private copy of the declared files -----------------------------------------------------------------------
@@ -185,6 +222,15 @@ exec "$REAL_RUSTC" --sysroot "$SYSROOT" "\$@"
 EOF
 chmod +x "$WORK/bin/rustc"
 ln -s "$(abs "$CARGO")" "$WORK/bin/cargo"
+
+# The Android standard library is pinned by `undra.android_std(version = ..)` in MODULE.bazel, and rustc rejects one that another
+# release built (E0514, "found crate `core` compiled by an incompatible version of rustc", whose advice is `cargo clean`). Compare
+# the two here, where the message can name the tag.
+if [ -n "$STD_VERSION_FILE" ]; then
+  want="$(tr -d ' \t\r\n' < "$(abs "$STD_VERSION_FILE")")"
+  have="$("$WORK/bin/rustc" -V | cut -d' ' -f2)"
+  [ "$want" = "$have" ] || die "undra.android_std(version = \"$want\") in MODULE.bazel is not the Rust toolchain's release, $have (rustc -V): rustc would refuse the standard library (E0514). Set \`version\` and \`sha256s\` of undra.android_std to the \`rust-std-$have-<triple>.tar.xz\` checksums (static.rust-lang.org/dist/rust-std-$have-<triple>.tar.xz.sha256), or the toolchain's \`versions\` in rust.toolchain(..) to $want"
+fi
 
 # --- Cargo, offline ----------------------------------------------------------------------------------------------
 export CARGO_HOME="$WORK/cargo-home"
@@ -237,8 +283,9 @@ fi
   fi
 } > "$CARGO_HOME/config.toml"
 
-# The toolchain's cargo and rustc first, then the system's; a platform whose toolchain is the machine's (Xcode, the NDK and
-# cargo-ndk) also gets the PATH the build was started with, after them.
+# The toolchain's cargo and rustc first, then the system's; iOS, whose toolchain is Xcode's and so the machine's, also gets the
+# PATH the build was started with, after them. The Android NDK is not the machine's: it is an input of the action (`ndk=`), and
+# the CLI links with it through the variables it computes from ANDROID_NDK_HOME (ADR-065).
 export PATH="$WORK/bin${EXTRA_PATH}:/usr/bin:/bin:/usr/sbin:/sbin"
 if [ "$INHERIT_PATH" = 1 ] && [ -n "$ORIG_PATH" ]; then export PATH="$PATH:$ORIG_PATH"; fi
 export RUSTC="$WORK/bin/rustc"
@@ -250,6 +297,10 @@ export CARGO_TERM_COLOR=never
 export LC_ALL=C
 export TZ=UTC
 unset RUSTUP_TOOLCHAIN RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
+if [ -n "$NDK" ]; then
+  unset ANDROID_NDK_ROOT NDK_HOME ANDROID_HOME ANDROID_SDK_ROOT
+  export ANDROID_NDK_HOME="$(abs "$NDK")"
+fi
 if [ -n "$EXTRA_ENV" ]; then
   # key=value lines
   OLD_IFS="$IFS"
@@ -316,8 +367,17 @@ case "$MODE" in
       *) die "unknown platform '$PLATFORM'" ;;
     esac
     if [ -n "$OUT_SYMBOLS" ]; then
-      mkdir -p "$(abs "$OUT_SYMBOLS")"
-      [ -d "$BUILD_DIR/symbols" ] && cp -R "$BUILD_DIR"/symbols/. "$(abs "$OUT_SYMBOLS")/"
+      # The layout of `undra build --release`, restricted to the symbol files: build/symbols/ (the manifest and the files it
+      # names) as symbols/, and the symbols of the host library, which the CLI keeps next to it, as host/ (the manifest names
+      # them as ../host/<library>.dSYM or .debug, relative to symbols/). `undra symbolicate --symbols <this>/symbols` reads it.
+      mkdir -p "$(abs "$OUT_SYMBOLS")/symbols"
+      if [ -d "$BUILD_DIR/symbols" ]; then cp -R "$BUILD_DIR"/symbols/. "$(abs "$OUT_SYMBOLS")/symbols/"; fi
+      if [ "$PLATFORM" = host ]; then
+        mkdir -p "$(abs "$OUT_SYMBOLS")/host"
+        for twin in "$BUILD_DIR"/host/*.dSYM "$BUILD_DIR"/host/*.debug; do
+          if [ -e "$twin" ]; then cp -R "$twin" "$(abs "$OUT_SYMBOLS")/host/"; fi
+        done
+      fi
     fi
     ;;
   bindgen)

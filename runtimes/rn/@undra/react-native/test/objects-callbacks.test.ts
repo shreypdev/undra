@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   PortStatus,
   ReplyStatus,
@@ -17,6 +17,9 @@ import { type Reporter, Shelf, UndraIds, Watch, Workshop } from "@playground/cor
 import { RecordKind, portPlan } from "../src/native.js";
 import { NativeTransport } from "../src/transport.js";
 import { FakeNative, le } from "./support/fake-native.js";
+import { eventually, testTimeout } from "./support/wait.js";
+
+vi.setConfig({ testTimeout });
 
 // Objects (ADR-040) and host callbacks (ADR-041) through @undra/react-native's JavaScript, over the stand-in of the
 // native module: handles are opaque to the module (two 32-bit halves, whatever the 24/40 layout), and a callback
@@ -63,7 +66,6 @@ async function attach(native = new FakeNative()): Promise<{ core: UndraCore; nat
   return { core, native, errors };
 }
 
-const tick = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const handle = (index: number, generation: number): bigint => (BigInt(generation) << 24n) | BigInt(index);
 
 describe("objects through the native module", () => {
@@ -126,8 +128,10 @@ describe("objects through the native module", () => {
     expect(native.log.filter((l) => l.startsWith("cancel"))).toHaveLength(1);
     expect(native.log.filter((l) => l.startsWith("release"))).toEqual([]);
     answer?.();
-    await tick(5);
-    expect(native.log.filter((l) => l.startsWith("release")), "the abandoned reply's reference went back").toEqual([half(shelf)]);
+    // The reply comes from a core thread: a drain away. Waited for by its effect, then counted.
+    const releases = (): string[] => native.log.filter((l) => l.startsWith("release"));
+    await eventually(() => releases().length > 0, "the release of the abandoned reply's reference");
+    expect(releases(), "the abandoned reply's reference went back, once").toEqual([half(shelf)]);
   });
 
   test("an object of another core is refused before anything reaches the module", async () => {
@@ -187,7 +191,8 @@ describe("host callbacks through the native module", () => {
     };
     native.queue(RecordKind.PortCall, portCall(reporter.note, 0, (w) => w.writeStr("hello")), "core");
     native.queue(RecordKind.PortCall, portCall(reporter.confirm, 41, (w) => w.writeStr("go on?")), "core");
-    await tick(10);
+    // Both calls are handled once the second one's answer is there (they are drained in order).
+    await eventually(() => native.portReplies.length > 0, "the answer to confirm");
     expect(heard).toEqual(["hello"]);
     expect(native.portReplies.length, "one answer: the async call's, never the fire-and-forget one's").toBe(1);
     const answer = new UndraReader(native.portReplies[0] ?? new Uint8Array(0));
@@ -195,8 +200,7 @@ describe("host callbacks through the native module", () => {
     expect(decodeValue(codecs.bool, (native.portReplies[0] ?? new Uint8Array(0)).subarray(5))).toBe(true);
 
     native.queue(RecordKind.PortCall, portCall(reporter.releaseInstance, 0, () => {}), "core");
-    await tick(10);
-    expect(callbacks(core).count(rep)).toBe(0);
+    await eventually(() => callbacks(core).count(rep) === 0, "the release of the lent callback");
     expect(errors).toEqual([]);
   });
 });

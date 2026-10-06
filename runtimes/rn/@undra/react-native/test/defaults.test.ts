@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   HttpError,
   type HttpRequest,
@@ -13,6 +13,9 @@ import { isHttpUrl, loadNative, nativeDefaultPorts, nativePlatformDefaults, reac
 import { RecordKind } from "../src/native.js";
 import { setAppState, setTurboModule } from "./support/react-native-stub.js";
 import { FakeNative, le } from "./support/fake-native.js";
+import { hangDeadline, testTimeout } from "./support/wait.js";
+
+vi.setConfig({ testTimeout });
 
 /*
  * The default ports of @undra/react-native (ADR-038 amendment B): which ones the module answers natively for which
@@ -38,7 +41,7 @@ const tick = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(reso
  * first call (ADR-052, `import()`; the time it takes is the module loader's, not a number of ticks). A failed test that stops
  * waiting too early leaves its core open and takes the next tests with it (one run in six, before this).
  */
-async function until(ready: () => boolean, ms = 5000): Promise<void> {
+async function until(ready: () => boolean, ms = hangDeadline): Promise<void> {
   for (const start = Date.now(); !ready(); await tick(1)) if (Date.now() - start > ms) throw new Error(`not ready after ${ms} ms`);
 }
 
@@ -228,9 +231,11 @@ describe("loadNative and the native defaults", () => {
           },
         },
       });
-      await tick(5);
+      // The app's source reports from a microtask after it subscribed; the event reaches the module after that.
+      const connectivityEvents = (): string[] => again.log.filter((l) => l.startsWith(`event ${PortIds.Connectivity.portId} `));
+      await until(() => connectivityEvents().length > 0);
       expect(again.started?.nativePorts).not.toContain(PortIds.Connectivity.portId);
-      expect(again.log.filter((l) => l.startsWith(`event ${PortIds.Connectivity.portId} `))).toHaveLength(1);
+      expect(connectivityEvents()).toHaveLength(1);
       expect(reports).toEqual([true]);
       second.close();
     } finally {
@@ -245,14 +250,14 @@ describe("loadNative and the native defaults", () => {
     const native = new FakeNative();
     installFake(native);
     const core = await loadNative(entryOf(native));
-    await tick();
+    const events = (): string[] => native.log.filter((l) => l.startsWith(`event ${PortIds.Lifecycle.portId} `));
+    await until(() => events().length > 0); // the current state, reported once the adapter subscribed
     setAppState("background");
     setAppState("background"); // the same state again is not a report
     setAppState("unknown"); // nor one that maps to the same state
-    const events = native.log.filter((l) => l.startsWith(`event ${PortIds.Lifecycle.portId} `));
-    expect(events).toHaveLength(2); // the current state first, then the change
+    expect(events()).toHaveLength(2); // the current state first, then the change
     setAppState("active");
-    expect(native.log.filter((l) => l.startsWith(`event ${PortIds.Lifecycle.portId} `))).toHaveLength(3);
+    expect(events()).toHaveLength(3);
     core.close();
   });
 });

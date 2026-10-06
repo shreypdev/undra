@@ -67,8 +67,8 @@ name: Bench
 # `undra build --release` (the size-tuned `release-mobile` profile of the generated shim, which keeps `panic = "unwind"`)
 # and fails when the hello-world core is over its `[size."android/hello-arm64-v8a"]`, `[size."android/hello-x86_64"]` or
 # `[size."ios/hello-arm64"]` table in bench/budgets.toml: the design's 1.2 MB per Android ABI and 900 KB added to an iOS
-# app, or 5% over the record, whichever is lower. The Android libraries are measured in the `size` job (NDK r27 and
-# cargo-ndk, the versions the record was measured with); the iOS slice needs Apple's linker, so it has a macOS job of its own,
+# app, or 5% over the record, whichever is lower. The Android libraries are measured in the `size` job (NDK r27, the version
+# the record was measured with); the iOS slice needs Apple's linker, so it has a macOS job of its own,
 # `size-ios`. A change that grows one on purpose re-records with `scripts/native-size.sh --record` in the same commit.
 
 on:
@@ -210,10 +210,8 @@ jobs:
           name: web-size
           path: bench-results/web-size.jsonl
           if-no-files-found: ignore
-      # cargo-ndk is what `undra build --platform android` runs; the NDK is the version the record was measured with (the image
-      # carries others; the Android cross-build job of ci.yml installs the same one).
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk
+      # `undra build --platform android` links with the NDK's clang itself (ADR-065); the NDK is the version the record was measured
+      # with (the image carries others; the Android cross-build job of ci.yml installs the same one).
       - name: The NDK r27 (the Android cores are linked with it)
         run: |
           bash scripts/android-sdk-install.sh "ndk;27.2.12479018"

@@ -90,7 +90,9 @@ private func sharedServer() throws -> RealtimeServer {
 
 final class RealtimeReviewTests: XCTestCase {
     /// 1a: a flood of small messages to a core that does not pull. The binding holds at most the
-    /// window, URLSession stops reading, and the server's `written` count stops growing far below n.
+    /// window, URLSession stops reading, and the server's writer stops before the end of the flood
+    /// (``RealtimeServer/waitForTheWriterToStall(_:answers:file:line:)``: counted, not timed); reading
+    /// then gets every message, in order, so the stall was the reader's push-back.
     func testAWebSocketFloodOfSmallMessagesStallsTheServerWhileTheCoreDoesNotPull() async throws {
         let server = try sharedServer()
         let counting = CountingWebSocket(URLSessionWebSocketAdapter())
@@ -100,15 +102,9 @@ final class RealtimeReviewTests: XCTestCase {
         let conn = try await binding.connect(url: "\(server.ws)/ws/flood?n=\(total)&size=512", protocols: [], headers: []).conn
         let first = try await binding.receive(conn: conn, max: 16)
         XCTAssertFalse(first.isEmpty)
-        try await Task.sleep(nanoseconds: 1_000_000_000)
-        let earlySeen = try await server.last("/ws/flood")
-        let early = try XCTUnwrap(earlySeen?.written)
-        try await Task.sleep(nanoseconds: 500_000_000)
-        let lateSeen = try await server.last("/ws/flood")
-        let late = try XCTUnwrap(lateSeen?.written)
+        let stalled = try await server.waitForTheWriterToStall("/ws/flood")
         let pumped = counting.pumped.withLock { $0[0] }
-        XCTAssertLessThan(late, total / 4, "the server wrote \(late) of \(total) messages to a stalled reader")
-        XCTAssertLessThanOrEqual(late - early, 32, "the server kept writing while the core did not pull")
+        XCTAssertLessThan(stalled, total, "the server wrote all \(total) messages to a core that did not pull: nothing pushed back")
         XCTAssertLessThanOrEqual(pumped - first.count, 16, "the binding read ahead more than the window")
         var received = first
         while true {
@@ -129,10 +125,12 @@ final class RealtimeReviewTests: XCTestCase {
         XCTAssertTrue(inOrder, "every message arrived, in order")
     }
 
-    /// 1a, SSE: a flood of events to a core that does not pull stops the server (URLSession's
-    /// body stream holds about 5 MB in the kernel and its buffers, then TCP pushes back); the
-    /// events then come in order. (Draining all 100,000 takes ~20 s in a debug build, so this reads
-    /// the first 5,000 and closes.)
+    /// 1a, SSE: a flood of events to a core that does not pull stops the server's writer before the
+    /// end of the flood (the adapter suspends its data task, URLSession stops reading, the kernel's
+    /// buffers fill and TCP pushes back; ``RealtimeServer/waitForTheWriterToStall(_:answers:file:line:)``
+    /// waits for that by counting, not by time); reading again starts the writer again, and the
+    /// events come in order. (Draining all 100,000 takes ~20 s in a debug build, so this reads at
+    /// least the first 5,000, until the server wrote more than at the stall, and closes.)
     func testAnSseFloodStallsTheServerWhileTheCoreDoesNotPull() async throws {
         let server = try sharedServer()
         let binding = SseBinding(adapter: URLSessionSseAdapter())
@@ -141,18 +139,28 @@ final class RealtimeReviewTests: XCTestCase {
         let stream = try await binding.open(url: "\(server.http)/sse/flood?n=\(total)&size=512", headers: [], lastEventId: nil)
         let first = try await binding.next(stream: stream, max: 16)
         XCTAssertFalse(first.isEmpty)
-        try await Task.sleep(nanoseconds: 1_000_000_000)
-        let earlySeen = try await server.last("/sse/flood")
-        let early = try XCTUnwrap(earlySeen?.written)
-        try await Task.sleep(nanoseconds: 500_000_000)
-        let lateSeen = try await server.last("/sse/flood")
-        let late = try XCTUnwrap(lateSeen?.written)
-        XCTAssertLessThan(late, total / 4, "the server wrote \(late) of \(total) events to a stalled reader")
-        XCTAssertLessThanOrEqual(late - early, 32, "the server kept writing while the core did not pull")
+        let stalled = try await server.waitForTheWriterToStall("/sse/flood")
+        XCTAssertLessThan(stalled, total, "the server wrote all \(total) events to a core that did not pull: nothing pushed back")
+        // Reading releases it: the stall was the reader's push-back, not a writer that stopped on its own. A reader whose
+        // server never writes again would wait for an event forever; the detector closes the stream so the test fails instead.
+        let detector = HangDetector { try? await binding.close(stream: stream) }
+        defer { detector.cancel() }
         var received = first
-        while received.count < 5_000 {
-            received += try await binding.next(stream: stream, max: 16)
+        var resumed = false
+        var nextLook = 0
+        while received.count < 5_000 || !resumed {
+            let batch = try await binding.next(stream: stream, max: 16)
+            if batch.isEmpty {
+                break // closed by the detector
+            }
+            received += batch
+            if !resumed && received.count >= nextLook {
+                nextLook = received.count + 500
+                resumed = try await server.last("/sse/flood").map { $0.written > stalled } ?? false
+            }
         }
+        XCTAssertFalse(detector.fired, "the reader waited for an event that never came")
+        XCTAssertTrue(resumed, "the server never wrote again after the core read \(received.count) events")
         XCTAssertTrue(received.enumerated().allSatisfy { $0.element.id == "\($0.offset)" }, "in order")
         try await binding.close(stream: stream)
         let left = try await server.waitFor("/sse/flood") { $0.clientClosed }
@@ -239,6 +247,14 @@ final class RealtimeReviewTests: XCTestCase {
     /// a trickle and is repeated, up to forty times; the assertions about the behaviour are made on a trial that was
     /// one. (A machine that never lets the feeder keep a 2 ms cadence for 8 ms fails with that said, not with a
     /// claim about the binding.)
+    ///
+    /// A trickle the feeder kept is not yet one the binding saw: the binding's pump is a task, and a loaded machine
+    /// can hold it up after it took a message, so that the next one reaches the buffer 2 ms later although it was
+    /// pushed 0.5 ms later (the likely cause of the one message answered in 1 loaded run of 30). So the times are recorded where the
+    /// events happen, not where the test hears of them: the scripted socket records when the pump took each message,
+    /// and a trial is judged only if the gap the binding could have seen before its answer was under `burstGap` too
+    /// (see `bindingGap` below). The answer's own time, read when the pull's task resumed, is later than the answer
+    /// whenever that task was held up, so it serves only as an upper bound.
     func testATrickleIsAnsweredByTheBurstCapNotHeldUntilItStops() async throws {
         let gapNanoseconds: UInt64 = 2_000_000 // burstGap
         var pauses: [Double] = []
@@ -281,9 +297,19 @@ final class RealtimeReviewTests: XCTestCase {
             let before = all.filter { $0 <= at }
             let pushes = before + [all.first(where: { $0 > at }) ?? at]
             let widest = zip(pushes, pushes.dropFirst()).map { $1 - $0 }.max() ?? 0
-            if widest >= gapNanoseconds {
-                pauses.append(Double(widest) / 1e6)
-                continue // the feeder was held up: not a trickle, so nothing to assert about one
+            // What the binding saw. Message k reached the binding's buffer after the pump took it (`taken[k]`) and before
+            // the pump took the next one (`taken[k + 1]`: the pump asks for the next message only once it delivered this
+            // one). An answer of `got.count` messages by the burst gap came at least `burstGap` after the last of them
+            // reached the buffer, before the one after it did, and no later than `at`; so it can only have happened if
+            // `bindingGap`, from the pump taking the last message answered to that bound, is `burstGap` or more. A trial
+            // whose `bindingGap` is shorter was answered by the cap or `max`, never by a quiet period.
+            let taken = socket.pulledAt
+            let last = got.count - 1
+            let bound = min(at, taken.count > got.count + 1 ? taken[got.count + 1] : at)
+            let bindingGap = last < taken.count && bound > taken[last] ? bound - taken[last] : UInt64.max
+            if widest >= gapNanoseconds || bindingGap >= gapNanoseconds {
+                pauses.append(Double(max(widest, bindingGap == UInt64.max ? 0 : bindingGap)) / 1e6)
+                continue // the feeder or the binding's pump was held up: not a trickle, so nothing to assert about one
             }
             let elapsed = Double(at - started) / 1e6
             XCTAssertGreaterThan(got.count, 1, "the trickle was one burst")

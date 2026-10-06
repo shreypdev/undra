@@ -100,15 +100,6 @@ pub fn runner_dir(target_dir: &Path, project_root: &Path) -> PathBuf {
         .join("dev-runner")
 }
 
-/// The staging directory for Android builds of this project (`cargo ndk -o`).
-#[must_use]
-pub fn android_stage_dir(target_dir: &Path, project_root: &Path) -> PathBuf {
-    target_dir
-        .join("undra")
-        .join(project_key(project_root))
-        .join("android-ndk")
-}
-
 /// The staging directory for iOS builds of this project.
 #[must_use]
 pub fn ios_stage_dir(target_dir: &Path, project_root: &Path) -> PathBuf {

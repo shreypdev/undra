@@ -349,3 +349,8 @@ records, the fakes, scenarios, SPEC sections, docs. The decisions below are the 
 
 Dated 2026-10-01 for ADR-049's "the panic report precedes a restart" and "background runs retry an unreadable queue": both
 hold (`onPanic` before the restart sequence; the replay task reads an unreadable queue again).
+
+Dated 2026-10-05 (`wt/symbols-bazel` review): the Linux host library is linked with `-C link-arg=-Wl,--build-id=sha1`, as
+the Android libraries are (`builds/host.rs`, `identity_args`). Its GNU build id is what a panic report carries and the
+manifest keys `lib<ns>.so.debug` by, and it was the linker's default only: `lld` writes none unless asked, and whether `cc`
+asks is a choice of the distribution that built it.

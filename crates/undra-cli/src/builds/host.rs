@@ -9,7 +9,8 @@
 //! **Symbols (ADR-046).** A release build strips the library it ships and keeps its symbols next
 //! to it: on macOS a dSYM (`lib<namespace>.dylib.dSYM`, from `dsymutil`) and `strip -S -x`; elsewhere
 //! `lib<namespace>.so.debug` (`objcopy --only-keep-debug`) and `strip --strip-unneeded`. The
-//! manifest records the library's `LC_UUID` / build id.
+//! manifest records the library's `LC_UUID` / GNU build id (which the Linux library is linked with
+//! explicitly, see [`identity_args`]).
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -43,13 +44,18 @@ pub fn library_file_name(name: &str) -> String {
 /// file it just wrote (`/Users/ana/app/target/debug/deps/libundra_core_1234abcd.dylib`). Anything linked
 /// against, or embedding, a copy of the library would then look for it on the machine that built
 /// it, and the path leaks into whatever embeds it. `@rpath/<name>` lets the consumer decide where
-/// the library lives. Other systems record no path (ELF has no install name unless asked), so
-/// nothing is passed there.
+/// the library lives. ELF records no path unless asked, but its identity, the GNU build id a panic
+/// report carries and the symbols manifest keys the `.so.debug` by (ADR-046), is written only when
+/// the linker is asked for it: `lld` (rustc's default linker on x86_64 Linux) writes none of its own,
+/// and whether `cc` asks depends on how the distribution built it. So Linux gets
+/// `--build-id=sha1`, as an Android library does ([`super::android::BUILD_ID_LINK_ARG`]). Windows
+/// gets nothing.
 #[must_use]
 pub fn identity_args(os: Os, file_name: &str) -> Vec<String> {
     match os {
         Os::Macos => vec![format!("-Clink-arg=-Wl,-install_name,@rpath/{file_name}")],
-        Os::Linux | Os::Windows => Vec::new(),
+        Os::Linux => vec![format!("-C{}", super::android::BUILD_ID_LINK_ARG)],
+        Os::Windows => Vec::new(),
     }
 }
 
@@ -321,8 +327,17 @@ mod tests {
     }
 
     #[test]
-    fn other_systems_record_no_path_so_nothing_is_passed() {
-        assert!(identity_args(Os::Linux, "libacme_pay.so").is_empty());
+    fn a_linux_library_is_linked_with_a_build_id_whatever_the_linker_defaults_to() {
+        // The id a panic report carries and the manifest keys the `.so.debug` by (ADR-046): without it
+        // a report of the shipped library cannot name its symbols.
+        assert_eq!(
+            identity_args(Os::Linux, "libacme_pay.so"),
+            vec!["-Clink-arg=-Wl,--build-id=sha1".to_owned()]
+        );
+    }
+
+    #[test]
+    fn windows_records_no_path_so_nothing_is_passed() {
         assert!(identity_args(Os::Windows, "acme_pay.dll").is_empty());
     }
 
