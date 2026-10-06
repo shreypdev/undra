@@ -26,8 +26,8 @@ use super::Env;
 pub fn run(env: &Env<'_>, args: &BindgenArgs) -> Result<()> {
     let ui = env.ui;
     // ADR-063: a released project's packages name the release where the environment says (GitHub unless a mirror is
-    // set, which is announced); a malformed setting stops the command before the core is built.
-    let dist = crate::dist::Dist::announced(env.sys, &ui)?;
+    // set, which is announced below); a malformed setting stops the command before the core is built.
+    let dist = crate::dist::Dist::from_sys(env.sys)?;
     let project = match Project::discover(&env.start_dir()?) {
         Ok(project) => Some(project),
         // `--schema` needs no project: generating from a file is the fallback of SPEC 13.
@@ -35,6 +35,20 @@ pub fn run(env: &Env<'_>, args: &BindgenArgs) -> Result<()> {
         Err(e) => return Err(e),
     };
     let session = project.map(|p| Session::new(p, env.sys, ui));
+    // The Swift package follows the repository the core takes Undra from, whatever the environment says (below), and
+    // the warning about the git URL override says which one it names.
+    let core_repository = session.as_ref().and_then(|s| match s.core() {
+        Ok(crate::cargo::CoreInfo {
+            undra: crate::cargo::UndraSource::Git { url, .. },
+            ..
+        }) => Some(url.clone()),
+        _ => None,
+    });
+    for warning in
+        crate::dist::bindgen_override_warnings(|key| env.sys.env(key), core_repository.as_deref())
+    {
+        ui.warn(&warning);
+    }
 
     let crate_name = crate_name(session.as_ref(), args);
     let schema = match (&args.schema, &args.library, &session) {
