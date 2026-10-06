@@ -31,9 +31,8 @@ Branch `wt/ndk-input`, from `main` `58e373a`. The binding text is ADR-065.
 
 ## Not verified, and deviations
 
-* **The NDK archives are not pinned by sha256.** Google publishes SHA-1 only (`repository2-3.xml`: `android-ndk-r27c-linux.zip` 663,987,688 bytes, `android-ndk-r27c-darwin.zip`
-  836,128,272 bytes); a SHA-256 comes from downloading each once. `MODULE.bazel` has `sha256 = ""` and a TODO; Bazel prints the value on the first fetch. Until then the
-  `http_archive` form itself was not fetched here: the build was proven with the installed NDK through `use-installed-ndk.sh` (the same BUILD file, the same repository names), which is also what CI does.
+* **The NDK archives are pinned.** Google publishes SHA-1 only, so each archive was downloaded once (2026-10-05, sizes equal to
+  `repository2-3.xml`: 663,987,688 and 836,128,272 bytes), hashed and deleted; the SHA-256 values are in `MODULE.bazel` and the guide.
 * The Linux run of the new job (`bazel-android`) and of the `android` job's new JNI step has not run; its commands were run on macOS (`ci-local` provisioning aside).
 * `rules_android` fetches one archive without a checksum when `//android:hello` is built (ADR-061's warning): acceptable for this job, which is why the target stays `manual`.
 * The deviation from ADR-065 text: none in what ships; item 3 says "host Rust toolchain", and the Android standard library had to come from somewhere, hence `undra.android_std`.

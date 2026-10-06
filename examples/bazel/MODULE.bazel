@@ -82,14 +82,13 @@ use_repo(undra, "undra", "undra_android_std", "undra_binaryen", "undra_vendor")
 # selects), and it is fetched only by a build that needs it (`bazel build //:mobile_android`), never by `bazel test //...`.
 # `android/use-installed-ndk.sh` stands the NDK that `sdkmanager` installed in for these two, which is what CI does.
 #
-# TODO(ndk-input): pin the archives. Google publishes SHA-1 only (repository2-3.xml: 663,987,688 and 836,128,272 bytes); fill `sha256`
-# from the first fetch (Bazel prints it: "sha256 = ...") and `bazel build //:mobile_android` verifies it from then on.
+# NDK r27c (27.2.12479018, the version the CI installs), pinned by the SHA-256 of each archive.
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "android_ndk_linux",
     build_file = "//android:ndk.BUILD",
-    sha256 = "",
+    sha256 = "59c2f6dc96743b5daf5d1626684640b20a6bd2b1d85b13156b90333741bad5cc",
     strip_prefix = "android-ndk-r27c",
     urls = ["https://dl.google.com/android/repository/android-ndk-r27c-linux.zip"],
 )
@@ -97,7 +96,7 @@ http_archive(
 http_archive(
     name = "android_ndk_macos",
     build_file = "//android:ndk.BUILD",
-    sha256 = "",
+    sha256 = "8c5685457c58a88527367d46d3f14e8c727d962c39f85344cff0c0768a73c3b7",
     strip_prefix = "android-ndk-r27c",
     urls = ["https://dl.google.com/android/repository/android-ndk-r27c-darwin.zip"],
 )
