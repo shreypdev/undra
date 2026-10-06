@@ -213,10 +213,12 @@ def undra_core(
     `build/symbols/` (`manifest.json`, `android/..`, `web/..`) and, for `host`, `host/` holds the library's symbols
     (`lib<namespace>.dylib.dSYM`, `.so.debug` on Linux), which the CLI keeps next to the library and the manifest names as
     `../host/..`. A crash report's addresses resolve to file and line with them: `undra symbolicate --symbols
-    <target>.symbols/symbols report.json`. iOS has none: its symbols are the app's own dSYM (ADR-046).
+    <target>.symbols/symbols report.json`. iOS writes no symbol file of its own (its group holds the manifest): the Rust
+    frames are in the app's own dSYM (ADR-046). A debug target has no `symbols` group, and a `filegroup` of it is empty.
 
     ```starlark
-    filegroup(name = "core_symbols", srcs = [":core_host"], output_group = "symbols")  # label of the directory
+    undra_core(name = "core_release", namespace = "hello_core", srcs = [...], platforms = ["host"], release = True)
+    filegroup(name = "core_release_symbols", srcs = [":core_release_host"], output_group = "symbols")  # the directory
     ```
 
     Args:
