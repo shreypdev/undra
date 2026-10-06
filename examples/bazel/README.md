@@ -66,7 +66,10 @@ xcrun lldb -b -o "process attach -p <pid>" -o "breakpoint set --name hello_core:
 
 What makes the Rust frames resolve is `keep_debug_objects` of `//:mobile` (set when the build is `-c dbg`, which the generated project
 uses): a prelinked iOS slice carries a debug map, not DWARF, and the map names objects below `/tmp/undra-bazel-<key>/target`, which the
-action otherwise removes. The full steps, output and caveats are in `site/docs/bazel.html` ("Debugging the core from a Bazel-built app").
+action otherwise removes. With it the directory keeps those archives and the sources the DWARF names (`app/` and `undra/`; the vendored crates'
+are not kept), so LLDB and Xcode show the Rust source at a breakpoint (`source list -n hello_core::greeting`); LLDB names the directory
+(`source info -n hello_core::greeting`), and it is the newest `/tmp/undra-bazel-*`. The full steps, output and caveats are in
+`site/docs/bazel.html` ("Debugging the core from a Bazel-built app").
 
 ## Symbol files and a crash report
 
@@ -114,9 +117,13 @@ then downloads its own tools, one archive without a checksum, which is why it is
 * The rulesets are at recent versions, the ones most applications run; `undra_rules` (`bazel/MODULE.bazel`) declares the lowest it needs,
   and Bazel resolves to the highest version anyone asks for, so an app keeps its own. CI runs this workspace at both ends, on Bazel
   8.8.1 and 9.2.0 (the lowest and the newest 9.x): as written, and through `scripts/at-minimums.sh`, which rewrites each `bazel_dep` of
-  `MODULE.bazel` to the rules' minimum for one command and puts the file back. It adds `--check_direct_dependencies=error`, so a
-  minimum something else in the graph raises fails the run, and `--lockfile_mode=off`. Why each minimum is where it is: the
-  "Ruleset versions" section of the Bazel guide (`site/docs/bazel.html`).
+  `MODULE.bazel` to the rules' minimum for one command and puts the file back (the original is held in memory and a copy sits
+  beside it, `MODULE.bazel.at-minimums~`, until then; `scripts/at-minimums.test.sh` checks both). It adds three flags:
+  `--check_direct_dependencies=error`, so a minimum something else in the graph raises fails the run; `--lockfile_mode=off`; and
+  `--deleted_packages=ios`, because the debugging example (`//ios`, the one user of `rules_xcodeproj`, whose line it drops) is not
+  part of what the minimums cover. CI runs every other target at the minimums on both Bazels: `bazel test //...` on Linux,
+  `//swift/...` and `//:mobile_ios` on macOS, `//:mobile_android` and `//android:hello` in the Android job. Why each minimum is
+  where it is: the "Ruleset versions" section of the Bazel guide (`site/docs/bazel.html`).
 * The lock files are committed as Bazel 8.8.1 (`.bazelversion`) writes them. Bazel 9.x records other registry files in them, so run 9.x
   with `--lockfile_mode=off`, as CI does, and the tree stays clean.
 * `committed/` names the Undra release `undra.toml` pins (`[undra] version`): `from: "<v>"` in its Swift package, `runtime:v<v>` in its
