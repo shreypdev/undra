@@ -15,3 +15,12 @@ sh_test(
     srcs = ["std_version_test.sh"],
     data = ["//undra/private:run.sh"],
 )
+
+# The build directory a core keeps with `keep_debug_objects` is free for the next build of the target (its owner file says
+# `kept`), and a build without the attribute leaves none. The test's timeout is the hang bound.
+sh_test(
+    name = "stage_lock_test",
+    timeout = "short",
+    srcs = ["stage_lock_test.sh"],
+    data = ["//undra/private:run.sh"],
+)

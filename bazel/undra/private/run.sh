@@ -135,7 +135,9 @@ until mkdir -m 700 "$WORK" 2>/dev/null; do
     fi
     die "$WORK belongs to another user"
   fi
-  if [ -n "$owner" ] && ! alive "$owner"; then rm -rf "$WORK"; continue; fi # left by a build of ours that died
+  # Left by a build of ours that kept its debug objects (`kept`, below: not a process, so a recycled pid cannot look alive) or
+  # that died: ours to take over.
+  if [ "$owner" = kept ] || { [ -n "$owner" ] && ! alive "$owner"; }; then rm -rf "$WORK"; continue; fi
   if [ -z "$owner" ] && [ -n "$(find "$WORK" -maxdepth 0 -mmin +2 2>/dev/null)" ]; then rm -rf "$WORK"; continue; fi
   waited=$((waited + 1))
   [ "$waited" -le 1800 ] || die "waited 30 minutes for $WORK, held by process '$owner'"
@@ -146,9 +148,10 @@ echo "$$" > "$WORK/.undra-bazel-owner"
 # objects the DWARF is in (`libundra_core_<hash>.a(..rcgu.o)` below `target/<triple>/`, ADR-044, ADR-046), and a debugger, or
 # the dSYM of the app, follows the map to those paths. They are in this directory, so it is the one thing that stays: the
 # objects and nothing else (the rest of what is below is copied, 1.2 GB for the example), and it is replaced by the next build of
-# the target (its owner file names a process that is gone). The directory is pruned where it is, never removed and made again:
-# it is the lock, and a build of the same target waiting for it (another output base: Xcode's and the command line's) would
-# take it in the moment it did not exist, and this process would then write into that build's directory.
+# the target (its owner file says `kept`, which no process is: a pid, once this one has exited, could be another process's by
+# then, and the next build would wait for it). The directory is pruned where it is, never removed and made again: it is the lock,
+# and a build of the same target waiting for it (another output base: Xcode's and the command line's) would take it in the moment
+# it did not exist, and this process would then write into that build's directory.
 cleanup() {
   if [ "$KEEP_DEBUG_OBJECTS" = 1 ] && [ -d "$WORK/target" ]; then
     mv "$WORK/target" "$WORK/.target.all" || { rm -rf "$WORK"; exit 1; }
@@ -158,6 +161,7 @@ cleanup() {
       mv "$WORK/.target.all/$object" "$WORK/target/$object"
     done
     find "$WORK" -mindepth 1 -maxdepth 1 ! -name target ! -name .undra-bazel-owner -exec rm -rf {} +
+    echo kept > "$WORK/.undra-bazel-owner"
   else
     rm -rf "$WORK"
   fi
