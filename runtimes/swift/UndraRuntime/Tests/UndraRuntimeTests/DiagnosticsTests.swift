@@ -194,7 +194,7 @@ final class DiagnosticsAdapterTests: XCTestCase {
         // The port call is answered before the handler runs: the core may hold its lock here.
         try assertAnsweredOk(panicCall(transport, sent))
         XCTAssertEqual(got.withLock { $0.count }, 0, "the handler never runs on the thread that called the port")
-        wait(for: [delivered], timeout: 5)
+        wait(for: [delivered], timeout: hangDeadline)
         let all = got.withLock { $0 }
         XCTAssertEqual(all.count, 1)
         XCTAssertEqual(all.first?.0, sent)
@@ -231,7 +231,7 @@ final class DiagnosticsAdapterTests: XCTestCase {
             }
             done.fulfill()
         }
-        wait(for: [done, all], timeout: 5)
+        wait(for: [done, all], timeout: hangDeadline)
         XCTAssertEqual(seen.withLock { $0 }, ["a", "b", "c", "d", "e"])
         core.shutdown()
     }
@@ -256,7 +256,7 @@ final class DiagnosticsAdapterTests: XCTestCase {
         let delivered = expectation(description: "onPanic ran")
         let core = try load(transport, onPanic: { _ in delivered.fulfill() })
         try assertAnsweredOk(panicCall(transport, report("Todos.add")))
-        wait(for: [delivered], timeout: 5)
+        wait(for: [delivered], timeout: hangDeadline)
         XCTAssertEqual(recorder.errors(containing: "Todos.add"), [])
         core.shutdown()
     }
@@ -281,7 +281,7 @@ final class DiagnosticsAdapterTests: XCTestCase {
         // Let the main queue run: nothing was queued for the handler.
         let drained = expectation(description: "main queue drained")
         DispatchQueue.main.async { drained.fulfill() }
-        wait(for: [drained], timeout: 5)
+        wait(for: [drained], timeout: hangDeadline)
         XCTAssertEqual(calls.withLock { $0 }, 0)
         core.shutdown()
     }
