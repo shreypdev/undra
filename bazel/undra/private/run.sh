@@ -51,6 +51,7 @@ EXTRA_PATH=""
 INHERIT_PATH=0
 ORIG_PATH="${PATH:-}"
 EXTRA_ENV=""
+KEEP_DEBUG_OBJECTS=0
 while IFS= read -r line || [ -n "$line" ]; do
   key="${line%%=*}"
   value="${line#*=}"
@@ -87,6 +88,7 @@ $value" ;;
     bindgen_docs) BINDGEN_DOCS="$value" ;;
     path) case "$value" in /*) EXTRA_PATH="$EXTRA_PATH:$value" ;; *) EXTRA_PATH="$EXTRA_PATH:$EXECROOT/$value" ;; esac ;;
     inherit_path) INHERIT_PATH="$value" ;;
+    keep_debug_objects) KEEP_DEBUG_OBJECTS="$value" ;;
     env) EXTRA_ENV="$EXTRA_ENV
 $value" ;;
     '') ;;
@@ -136,7 +138,28 @@ until mkdir -m 700 "$WORK" 2>/dev/null; do
   sleep 1
 done
 echo "$$" > "$WORK/.undra-bazel-owner"
-trap 'rm -rf "$WORK"' EXIT
+# `keep_debug_objects` (an iOS core): Apple's linker writes no DWARF for a prelinked slice, it writes a debug map naming the
+# objects the DWARF is in (`libundra_core_<hash>.a(..rcgu.o)` below `target/<triple>/`, ADR-044, ADR-046), and a debugger, or
+# the dSYM of the app, follows the map to those paths. They are in this directory, so it is the one thing that stays: the
+# objects and nothing else (the rest of what is below is copied, 1.2 GB for the example), and it is replaced by the next build of
+# the target (its owner file names a process that is gone).
+cleanup() {
+  if [ "$KEEP_DEBUG_OBJECTS" = 1 ] && [ -d "$WORK/target" ]; then
+    KEPT="$WORK.objects"
+    rm -rf "$KEPT"
+    mkdir -m 700 "$KEPT" || exit 1
+    (cd "$WORK" && find target -path '*/debug/libundra_core_*.a' -o -path '*/release*/libundra_core_*.a') | while IFS= read -r object; do
+      mkdir -p "$KEPT/$(dirname "$object")"
+      mv "$WORK/$object" "$KEPT/$object"
+    done
+    rm -rf "$WORK"
+    mv "$KEPT" "$WORK"
+    echo "$$" > "$WORK/.undra-bazel-owner"
+  else
+    rm -rf "$WORK"
+  fi
+}
+trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
 # --- a private copy of the declared files -----------------------------------------------------------------------

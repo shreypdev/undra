@@ -106,6 +106,9 @@ _undra_bindings = rule(
             doc = "The host build of the core (an `undra_core` target for the `host` platform): the library the schema is read from.",
             allow_single_file = True,
             mandatory = True,
+            # The library is loaded by the bindgen action, which runs on the execution platform: built for it whatever the target
+            # platform is (an iOS application depends on the bindings, and its host library is still a Mac's).
+            cfg = "exec",
         ),
         "config": attr.label(
             doc = "The project's undra.toml: its `[bindings]` names the generated modules, packages and scope.",

@@ -82,7 +82,9 @@ def _undra_core_impl(ctx):
         "project=" + project,
         "namespace=" + namespace,
         # The private copy is built in a directory named by the target, never by when or where it runs (run.sh says why).
-        "stage_key={}|{}".format(ctx.label, platform),
+        # A core that keeps its debug objects works in a directory of its own: a build of the same target that does not keep them
+        # (another configuration, another output base) must not remove them.
+        "stage_key={}|{}{}".format(ctx.label, platform, "|keep_debug_objects" if ctx.attr.keep_debug_objects else ""),
     ]
 
     outputs = []
@@ -108,6 +110,8 @@ def _undra_core_impl(ctx):
         lines.append("path=" + directory)
     if platform in ("ios", "android"):
         lines.append("inherit_path=1")
+    if ctx.attr.keep_debug_objects:
+        lines.append("keep_debug_objects=1")
     extra_tools = []
     if ctx.attr.wasm_opt:
         tool = [f for f in ctx.files.wasm_opt if f.basename == "wasm-opt"]
@@ -168,6 +172,7 @@ _undra_core = rule(
         "wasm_opt": attr.label(allow_files = True, cfg = "exec"),
         "execution_requirements": attr.string_dict(),
         "extra_path": attr.string_list(),
+        "keep_debug_objects": attr.bool(default = False),
         "cli": attr.label(default = Label("@undra//:cli"), executable = True, cfg = "exec"),
         "_undra_sources": attr.label(default = Label("@undra//:sources")),
         "_undra_manifest": attr.label(default = Label("@undra//:Cargo.toml"), allow_single_file = True),
@@ -195,6 +200,7 @@ def undra_core(
         symbols = True,
         wasm_opt = None,
         extra_path = [],
+        keep_debug_objects = False,
         tags = [],
         visibility = None,
         **kwargs):
@@ -224,6 +230,15 @@ def undra_core(
         wasm_opt: an executable `wasm-opt` (binaryen); without it the web module is not shrunk further, as the CLI says.
         extra_path: directories (absolute) put on the action's `PATH` for the `ios` and `android` builds, whose toolchains are the
             machine's: `cargo-ndk`'s directory, for one. `ANDROID_NDK_HOME` and `DEVELOPER_DIR` come in through `--action_env`.
+        keep_debug_objects: for an `ios` core a debugger can step into: leave the objects that hold the core's DWARF where the build
+            wrote them. A prelinked slice carries a debug map, not DWARF (ADR-044), and the map names files below the
+            `/tmp/undra-bazel-<key>/target` directory the action builds in, which is removed when the action ends; a debugger, and
+            the dSYM of the app (`--apple_generate_dsym`), find no Rust frames then. With this, the `libundra_core_*.a` of each
+            target triple (about 80 MB each in a debug build) stay there until the next build of the target with this attribute (the
+            directory is its own, named by the target and this attribute, so a build without it never removes them, and the
+            bytes of this build differ from the other's, which the directory name reaches). They are not an output, so a core
+            restored from a cache after the directory is gone has none: build it again (change the core, or a flag the action
+            reads) to debug it.
         tags: tags of the generated targets.
         visibility: the visibility of every generated target.
         **kwargs: passed to the generated rule instances (`execution_requirements`).
@@ -242,9 +257,16 @@ def undra_core(
             symbols = symbols,
             wasm_opt = wasm_opt if platform == "web" else None,
             extra_path = extra_path,
+            keep_debug_objects = keep_debug_objects,
             # The Apple and Android toolchains are the machine's, not Bazel's (ADR-061): they build when asked for by name.
             tags = tags + (["manual", "requires-darwin"] if platform == "ios" else []) + (["manual"] if platform == "android" else []),
-            target_compatible_with = ["@platforms//os:macos"] if platform == "ios" else [],
+            # The iOS core is built from a Mac, for iOS: also compatible with an iOS target platform, so the app (an
+            # `ios_application`, built for iOS) can depend on it. The rule builds the Apple slices itself, whatever its own is.
+            target_compatible_with = select({
+                "@platforms//os:macos": [],
+                "@platforms//os:ios": [],
+                "//conditions:default": ["@platforms//:incompatible"],
+            }) if platform == "ios" else [],
             visibility = visibility,
             **kwargs
         )
