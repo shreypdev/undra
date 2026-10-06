@@ -165,6 +165,11 @@ pub fn build(
             let strip = strip_tool(session)?;
             strip_shipped(&strip, &dest, session)?;
         }
+        if release {
+            // What ships, beside what Cargo made (which keeps its symbols): the size a later debug
+            // build's hint compares with ([`debug_size_hint`]).
+            write_if_changed(&shipped_size_file(built), &size_of(&dest).to_string())?;
+        }
         let mut note = None;
         if let Ok(bytes) = std::fs::read(&dest) {
             if elf_is_64(&bytes) {
@@ -364,14 +369,28 @@ fn play_archive(
 /// The Play Console's native debug symbols archive, below `build/symbols/android`.
 pub const PLAY_ARCHIVE: &str = "native-debug-symbols.zip";
 
-/// The size of the release library an earlier `undra build --platform android --release` left in
-/// Cargo's target directory for `abi` under `profile`, if there is one (`shim` is the shim's library
-/// name).
+/// Where a release build records the size of the library it shipped for the Cargo output `built`:
+/// `<built>.shipped-size`, the byte count as text. The library in Cargo's target directory keeps
+/// its symbols (several times the size of the stripped copy in `jniLibs/`), so its own size is not
+/// what a release build weighs.
+fn shipped_size_file(built: &Path) -> PathBuf {
+    let mut name = built.as_os_str().to_owned();
+    name.push(".shipped-size");
+    PathBuf::from(name)
+}
+
+/// The size of the library an earlier `undra build --platform android --release` shipped for `abi`
+/// under `profile` (the stripped copy in `jniLibs/`, as [`shipped_size_file`] recorded it), if there
+/// is one (`shim` is the shim's library name).
 fn earlier_release_size(target_dir: &Path, profile: Profile, abi: &str, shim: &str) -> Option<u64> {
     let library = target_dir
         .join(triple_of(abi))
         .join(format!("{}/lib{shim}.so", profile.dir_name()));
-    std::fs::metadata(library).ok().map(|m| m.len())
+    std::fs::read_to_string(shipped_size_file(&library))
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
 }
 
 /// The hint printed after a debug Android build: what a debug core weighs and what packaging
@@ -379,7 +398,7 @@ fn earlier_release_size(target_dir: &Path, profile: Profile, abi: &str, shim: &s
 ///
 /// `debug` is the largest library of the build and `abi` its ABI; `target_dir` is where Cargo put
 /// an earlier release build of the shim `shim` with `profile` (the one `--release` builds), whose
-/// size makes the hint exact.
+/// shipped size (recorded beside it, [`shipped_size_file`]) makes the hint exact.
 #[must_use]
 pub fn debug_size_hint(
     target_dir: &Path,
@@ -392,7 +411,7 @@ pub fn debug_size_hint(
     let how = "undra build --platform android --release";
     match release {
         Some(release) => format!(
-            "this Android core is a debug build ({} per ABI, fine for the dev loop); a release build is {}, {}x smaller. Package with `{how}`",
+            "this Android core is a debug build ({} per ABI, fine for the dev loop); the last release build shipped {}, {}x smaller. Package with `{how}`",
             human_size(debug),
             human_size(release),
             debug / release
@@ -457,11 +476,22 @@ mod tests {
         );
         assert!(!none.contains('\n'), "one line");
 
-        // With the release library of an earlier build at hand: the real numbers.
+        // The unstripped library Cargo left is not what ships: without the recorded size, a rule of thumb.
         let target = crate::fsutil::unique_temp_dir("android-hint");
         let release = target.join("aarch64-linux-android/release-mobile");
         std::fs::create_dir_all(&release).unwrap();
-        std::fs::write(release.join("libshim.so"), vec![0_u8; 1_500_000]).unwrap();
+        std::fs::write(release.join("libshim.so"), vec![0_u8; 6_500_000]).unwrap();
+        let unstripped_only = debug_size_hint(
+            &target,
+            Profile::ReleaseMobile,
+            "shim",
+            42_400_000,
+            "arm64-v8a",
+        );
+        assert!(unstripped_only.contains("typically"), "{unstripped_only}");
+
+        // With the size the release build shipped (the stripped copy): the real numbers.
+        std::fs::write(shipped_size_file(&release.join("libshim.so")), "898000").unwrap();
         let known = debug_size_hint(
             &target,
             Profile::ReleaseMobile,
@@ -470,7 +500,7 @@ mod tests {
             "arm64-v8a",
         );
         assert!(
-            known.contains("a release build is 1.5 MB, 28x smaller"),
+            known.contains("the last release build shipped 898.0 KB, 47x smaller"),
             "{known}"
         );
         // Another ABI has no release library of its own.
