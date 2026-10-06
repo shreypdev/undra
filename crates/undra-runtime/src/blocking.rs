@@ -313,7 +313,7 @@ pub(crate) enum Blocking {
     Inline,
     /// A pool of worker threads.
     #[cfg(not(target_family = "wasm"))]
-    Pool(native::Pool),
+    Threads(native::Pool),
 }
 
 impl Blocking {
@@ -321,7 +321,7 @@ impl Blocking {
     pub(crate) fn threaded(max: usize) -> Blocking {
         #[cfg(not(target_family = "wasm"))]
         {
-            Blocking::Pool(native::Pool::new(max))
+            Blocking::Threads(native::Pool::new(max))
         }
         #[cfg(target_family = "wasm")]
         {
@@ -340,7 +340,7 @@ impl Blocking {
         match self {
             Blocking::Inline => job(),
             #[cfg(not(target_family = "wasm"))]
-            Blocking::Pool(pool) => {
+            Blocking::Threads(pool) => {
                 // After shutdown the job is dropped and the task never completes; the
                 // awaiting task is being torn down anyway.
                 let _accepted = pool.submit(job);
@@ -353,7 +353,7 @@ impl Blocking {
         match self {
             Blocking::Inline => {}
             #[cfg(not(target_family = "wasm"))]
-            Blocking::Pool(pool) => pool.shutdown(),
+            Blocking::Threads(pool) => pool.shutdown(),
         }
     }
 
@@ -362,7 +362,7 @@ impl Blocking {
         match self {
             Blocking::Inline => 0,
             #[cfg(not(target_family = "wasm"))]
-            Blocking::Pool(pool) => pool.in_flight(),
+            Blocking::Threads(pool) => pool.in_flight(),
         }
     }
 
@@ -375,7 +375,7 @@ impl Blocking {
                 false
             }
             #[cfg(not(target_family = "wasm"))]
-            Blocking::Pool(pool) => pool.wait_for_progress(timeout),
+            Blocking::Threads(pool) => pool.wait_for_progress(timeout),
         }
     }
 
@@ -384,7 +384,7 @@ impl Blocking {
         match self {
             Blocking::Inline => (0, 0),
             #[cfg(not(target_family = "wasm"))]
-            Blocking::Pool(pool) => (pool.spawned_threads(), pool.max_threads()),
+            Blocking::Threads(pool) => (pool.spawned_threads(), pool.max_threads()),
         }
     }
 }
