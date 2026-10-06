@@ -1888,6 +1888,76 @@ A repository that lints everything reports the bindings, because they are the ou
 
 ktlint 1.8 reports 90 findings on the example's generated Kotlin without them and none with either one; `bazel test //kotlin:lint_test` in the example runs that comparison. The annotation does not silence the Kotlin compiler: its warnings about the generated code still show. The detekt, IntelliJ, SwiftLint and ESLint readings follow each tool's documentation and are not run in CI.
 
+## Linters over the whole tree
+
+A repository whose CI lints everything meets the generated bindings in every linter it runs. `undra bindgen` writes these four files, beside the tree each one belongs to, and lists them in `.undra-generated` with the rest (so `undra bindgen --check` fails when one is missing or edited, and the next run removes one the schema no longer needs). Paths are relative to the directory the bindings are written to (`generated/` in a project made by `undra init`); none of the files names that directory, so a tree that moves is still excluded.
+
+| File | Linter | Content |
+| --- | --- | --- |
+| `kotlin/.editorconfig` | ktlint, the IDE formatter | one section, `[*.{kt,kts}]`, with `ktlint_standard = disabled`, `ktlint_experimental = disabled` and `ij_formatter_enabled = false`; no `root = true`, so your own `.editorconfig` still applies to everything else |
+| `swift/.swiftlint.yml` | SwiftLint | `excluded:` with the package's two source directories, `**/Sources/<Module>/Generated` and `**/Sources/<Module>CoreFFI`. SwiftLint ignores the `excluded:` of a nested configuration, so this is a fragment for your root configuration (`swiftlint --config .swiftlint.yml --config generated/swift/.swiftlint.yml`), not a switch by itself |
+| `ts/.eslintrc.json` | ESLint 8 and earlier (eslintrc) | `{ "root": false, "ignorePatterns": ["**/*"] }` |
+| `ts/eslint.config.undra.mjs` | ESLint 9 (flat config) | `export default [{ ignores: ["<its own directory>/**"] }]`, the directory worked out from `import.meta.url` relative to where ESLint runs. A flat config is read only from that directory, so you spread it into your `eslint.config.js`: `export default [...undraGenerated, /* yours */]` |
+
+A tree is written only for a platform the project builds, so a project without `web` has no `ts/` files. Every generated Kotlin file also starts, after its header line, with `@file:Suppress("ALL", "ktlint")`. That line is not one of the four files: it is part of the Kotlin file itself, it travels with the file when it is copied or packed into a source jar, ktlint 1.x, detekt and IntelliJ read it with no configuration, and it stays whatever you set below. The generated `.gitattributes` and `.gitignore` are not lint files either.
+
+### A repository that configures its linters in one place
+
+If your root configuration already covers the bindings, or you would rather not have four more files in the tree, say so in `undra.toml`:
+
+undra.toml
+
+```toml
+[bindings]
+lint_exclusions = "none"       # "beside" (the default) writes the four files above; "none" writes none of them
+```
+
+With `none` the four files are not generated and not in the manifest. Switching an existing project to it makes `undra bindgen --check` name the old files as stale until you run `undra bindgen` once, which removes them. Anything that names one of them goes with it: an `import` of `eslint.config.undra.mjs` in your `eslint.config.js`, or a `--config generated/swift/.swiftlint.yml` in a SwiftLint command, would then fail, so replace it with the root lines below in the same change. Under Bazel the setting flows through the `undra.toml` you give `undra_bindings(config = ..)`: the rule has no list of these files, so nothing else changes. Any other value is `error[undra::C0002]`, naming the line. Then put the same exclusions in the root configurations. The examples use `generated/`, the default of `[paths] generated`; use your path.
+
+**SwiftLint**, in the root `.swiftlint.yml`:
+
+.swiftlint.yml
+
+```yaml
+excluded:
+  - generated
+```
+
+**ktlint**, in the root `.editorconfig`. A section with a slash is anchored to the directory of its `.editorconfig`, so write the bindings' path from there: `[**/generated/**]` misses a `generated/` right beside the file.
+
+.editorconfig
+
+```ini
+[generated/**]
+ktlint_standard = disabled
+ktlint_experimental = disabled
+```
+
+With the Gradle ktlint plugin, `ktlint { filter { exclude { it.file.path.contains("/generated/") } } }` does the same. **ESLint 9**, in `eslint.config.js` (an object with only `ignores` is a global ignore); for ESLint 8, `"ignorePatterns": ["generated/"]` in the root `.eslintrc.json` or a line in `.eslintignore`:
+
+eslint.config.js
+
+```js
+export default [
+  { ignores: ["generated/**"] },
+  // your configuration
+];
+```
+
+**Vale** lints the prose in the comments of source files when a section of `.vale.ini` matches them (for example `[*.{swift,kt,ts}]`), and the comments of generated code are a generator's, not yours. `undra bindgen` writes no Vale file at any setting. Give the generated tree an empty style list in a section placed after the ones that match its files:
+
+.vale.ini
+
+```ini
+[*.{swift,kt,ts}]
+BasedOnStyles = Vale
+
+[generated/**]
+BasedOnStyles =
+```
+
+As with the rest of this section, the SwiftLint, ESLint and Vale lines follow each tool's documentation and are not run in Undra's CI; ktlint is (the example's `bazel test //kotlin:lint_test`).
+
 ## Good to know
 
 - **Bazel caches a core as a whole.** A change to the core rebuilds its dependencies inside the action (seconds for a small core); a remote cache makes that cost the author's alone.
@@ -2381,7 +2451,7 @@ undra bindgen --check                  # exit 1 if the generated files are stale
 undra bindgen --docs                   # include the core's doc comments
 ```
 
-Reads the core's schema and writes the bindings the app shells import: a Swift package (`<out>/swift/`), a Gradle module (`<out>/kotlin/`) and an npm package (`<out>/ts/`). By default the schema comes from the core itself: the core is built as a host library, loaded, and asked for its schema. With `--schema` it is read from a file instead and nothing is built. Files an earlier run wrote and this one does not are removed; files you added next to them are never touched. Every generated file says it is generated (the generator, the schema hash, "Do not edit"), and each tree gets a `.gitattributes` that marks it `linguist-generated`, so GitHub collapses it in a pull request: [review the schema, not the bindings](https://shreypdev.github.io/undra/docs/reviewing-generated-code.html).
+Reads the core's schema and writes the bindings the app shells import: a Swift package (`<out>/swift/`), a Gradle module (`<out>/kotlin/`) and an npm package (`<out>/ts/`). By default the schema comes from the core itself: the core is built as a host library, loaded, and asked for its schema. With `--schema` it is read from a file instead and nothing is built. Files an earlier run wrote and this one does not are removed; files you added next to them are never touched. Beside the trees it writes the lint exclusion files, unless `[bindings] lint_exclusions = "none"` ([below](https://shreypdev.github.io/undra/docs/cli.html#undra-toml)). Every generated file says it is generated (the generator, the schema hash, "Do not edit"), and each tree gets a `.gitattributes` that marks it `linguist-generated`, so GitHub collapses it in a pull request: [review the schema, not the bindings](https://shreypdev.github.io/undra/docs/reviewing-generated-code.html).
 
 | Flag | Meaning |
 | --- | --- |
@@ -2565,6 +2635,7 @@ version = "1.0.0"              # the release every dependency names; path = "…
 # ts_js_number = false         # i64/u64 as `number` instead of `bigint`
 # swift_typed_throws = true    # port requirements: `throws(E)`; false emits plain `throws`
 # swift_observation = "observable-object"   # Swift stores: "observation" (@Observable, iOS 17+) or "observable-object" (iOS 15+)
+# lint_exclusions = "none"     # "beside" (the default) writes the linters' exclusion files beside the trees; "none" writes none
 
 [ios]
 deployment_target = "17.0"     # 15.0 or later; below 17.0 the Swift stores are ObservableObjects
@@ -2577,6 +2648,8 @@ min_sdk = 26
 ```
 
 Commit `generated/` or regenerate it in CI, and gate on `undra bindgen --check` so a stale binding cannot ship.
+
+`lint_exclusions` in `[bindings]` decides whether `undra bindgen` writes the files that keep a repository's linters out of the generated trees (`kotlin/.editorconfig`, `swift/.swiftlint.yml`, `ts/.eslintrc.json` and `ts/eslint.config.undra.mjs`): `"beside"`, the default, writes them; `"none"` writes none, for a repository that configures its linters at the root. The `@file:Suppress` line at the top of every generated Kotlin file is not one of these files and stays either way. [Linters over the whole tree](https://shreypdev.github.io/undra/docs/bazel.html#lint-everything) lists the files and the lines to add to a root configuration.
 
 ## Errors
 

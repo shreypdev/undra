@@ -89,6 +89,12 @@ NEXT
 Every file says it is generated (the generator, the schema hash, \"Do not edit\"), and each tree gets a .gitattributes \
 that marks it linguist-generated, so GitHub collapses it in a pull request (the diff is one click away). Review the \
 schema, not the bindings (`undra schema diff`); `--check` proves the bindings match it.\n\n\
+Beside the trees it also writes the files that keep a repository's linters out of them: kotlin/.editorconfig (ktlint), \
+swift/.swiftlint.yml (SwiftLint, an `excluded:` list to merge into yours), ts/.eslintrc.json (ESLint 8) and \
+ts/eslint.config.undra.mjs (ESLint 9, to spread into eslint.config.js). They are part of the manifest like the rest. \
+`lint_exclusions = \"none\"` in [bindings] of undra.toml writes none of them, for a repository that configures its \
+linters at the root (the Bazel guide lists the lines to add); `\"beside\"` is the default. The `@file:Suppress` line at the \
+top of every Kotlin file is not one of these files: it is part of the file and stays.\n\n\
 By default the schema comes from the core itself: the core is built as a host library with `undra-ffi` \
 linked in, loaded, and asked for `undra_schema_json` (docs/SPEC.md 13). With --schema it is read from a file \
 instead and nothing is built. Files an earlier run wrote and this one does not are removed; files you added \

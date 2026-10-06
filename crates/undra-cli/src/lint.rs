@@ -16,7 +16,9 @@
 //! No file names the directory the trees are written to: the same schema generates the same files into any directory (a test
 //! compares two routes to the same bindings byte for byte), and a tree that is moved is still excluded. Every file is part of the
 //! tree's manifest, so `undra bindgen --check` fails when one is missing or edited and a later
-//! run removes it with the rest. The `.gitattributes` that collapses the trees in a review is another piece's
+//! run removes it with the rest. `[bindings] lint_exclusions = "none"` in `undra.toml`
+//! ([`crate::config::LintExclusions`]) writes none of these files, for a repository that configures its linters at the root;
+//! the Kotlin `@file:Suppress` line is part of each Kotlin file and stays either way. The `.gitattributes` that collapses the trees in a review is another piece's
 //! (ADR-062); nothing here conflicts with it.
 
 use undra_bindgen::GeneratedFile;
@@ -31,9 +33,11 @@ pub const KOTLIN_EDITORCONFIG: &str = "\
 # is the generator's, not yours. Every generated file also starts with `@file:Suppress(\"ALL\", \"ktlint\")`, which
 # ktlint 1.x, detekt and IntelliJ read without any configuration (the Kotlin compiler does not: its warnings still show).
 #
-# If your repository's own .editorconfig switches ktlint on for everything and you would rather say it once at the root:
+# If your repository's own .editorconfig switches ktlint on for everything and you would rather say it once at the root,
+# give the path of the bindings from that file's directory (a section with a slash is anchored there, so
+# `[**/generated/**]` misses a `generated/` right beside the root .editorconfig):
 #
-#     [**/generated/**]
+#     [generated/**]
 #     ktlint_standard = disabled
 #     ktlint_experimental = disabled
 #
@@ -173,6 +177,22 @@ mod tests {
     }
 
     #[test]
+    fn the_root_section_the_editorconfig_suggests_matches_a_tree_beside_the_root_file() {
+        // An EditorConfig section with a slash is anchored to its file's directory: ktlint 1.8 applies `[**/generated/**]` to
+        // `app/generated/..` but not to `generated/..` beside the root .editorconfig, and reports every finding there.
+        // `[generated/**]` is what the guide gives and the Bazel example's `lint_test` runs.
+        assert!(
+            KOTLIN_EDITORCONFIG
+                .contains("#     [generated/**]\n#     ktlint_standard = disabled\n"),
+            "{KOTLIN_EDITORCONFIG}"
+        );
+        assert!(
+            !KOTLIN_EDITORCONFIG.contains("#     [**/"),
+            "{KOTLIN_EDITORCONFIG}"
+        );
+    }
+
+    #[test]
     fn nothing_names_the_directory_the_tree_is_written_to() {
         let yml = swiftlint("HelloCore", "HelloCoreFFI");
         assert!(
@@ -184,7 +204,7 @@ mod tests {
         assert!(ESLINT_FLAT.contains("import.meta.url"));
         assert!(ESLINT_FLAT.contains("ignores: [`${here}/**`]"));
         for file in fragments(&Platform::ALL, "HelloCore", "HelloCoreFFI") {
-            // (The Kotlin file's comment shows the repository-root form, `[**/generated/**]`, as an example.)
+            // (The Kotlin file's comment shows the repository-root form, `[generated/**]`, as an example.)
             let active: Vec<&str> = file
                 .contents
                 .lines()
