@@ -85,7 +85,26 @@ register_toolchains("@rust_toolchains//:all")
 undra = use_extension("@undra_rules//:extensions.bzl", "undra")
 undra.source(path = "../undra")  # a checkout of the Undra repository, or urls = [..]
 undra.vendor(lockfiles = ["//:Cargo.lock"])
-use_repo(undra, "undra", "undra_binaryen", "undra_vendor")</code></pre></div>
+use_repo(undra, "undra", "undra_binaryen", "undra_vendor")
+
+# Only for platforms = ["android"]: the Android NDK, as a repository (below), and the Rust standard library of the Android targets.
+undra.android_std(
+    version = "1.99.0",                          # the release of rust.toolchain above
+    sha256s = {                                  # static.rust-lang.org's .sha256 files
+        "aarch64-linux-android": "...",
+        "x86_64-linux-android": "...",
+    },
+)
+use_repo(undra, "undra_android_std")
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+http_archive(                                    # one per host OS: android-ndk-r27c-darwin.zip for macOS
+    name = "android_ndk_linux",
+    urls = ["https://dl.google.com/android/repository/android-ndk-r27c-linux.zip"],
+    sha256 = "...",                              # pin the archive
+    strip_prefix = "android-ndk-r27c",
+    build_file = "//android:ndk.BUILD",          # exports source.properties and toolchains/llvm/prebuilt/**
+)</code></pre></div>
 <div class="code"><div class="code-bar"><span>BUILD.bazel</span></div><pre><code data-lang="python">load("@undra_rules//undra:defs.bzl", "undra_bindings", "undra_core", "undra_kt_jvm_library")
 load("@undra_rules//undra:ts.bzl", "undra_ts_library")  # its own file: see the .bazelrc line above
 
@@ -95,6 +114,7 @@ undra_core(
     srcs = glob(["core/**"]) + ["Cargo.toml"],
     platforms = ["host", "web"],          # core_host, core_web; "ios" and "android" too
     wasm_opt = "@undra_binaryen//:wasm_opt",
+    # ndk = "@android_ndk_linux//:ndk",   # for "android": the NDK's files, as an input of the action
 )
 
 undra_bindings(name = "bindings", core = ":core_host")      # the generated trees, as outputs
@@ -104,14 +124,15 @@ undra_ts_library(name = "hello_ts", bindings = ":bindings", package = "@acme/hel
 
 # A JVM test loads the host library by its path: jvm_flags = ["-Dundra.native.hello_core.path=$(rootpath :core_host)"]</code></pre></div>
 </details>
-<p><code>bazel test //...</code> in <a href="https://github.com/shreypdev/undra/tree/main/examples/bazel" rel="noopener">examples/bazel</a> builds the to-do core for the host and the web, generates the bindings, and runs Kotlin tests against the real core through JNI, TypeScript tests against the wasm module under Node, and, on macOS, a Swift test that loads it in process. CI runs it on Linux for every change, and the Swift test and the iOS core on macOS.</p>
+<p><code>bazel test //...</code> in <a href="https://github.com/shreypdev/undra/tree/main/examples/bazel" rel="noopener">examples/bazel</a> builds the to-do core for the host and the web, generates the bindings, and runs Kotlin tests against the real core through JNI, TypeScript tests against the wasm module under Node, and, on macOS, a Swift test that loads it in process. CI runs it on Linux for every change, and the Swift test and the iOS core on macOS; a third job builds the Android core and the Android library on Linux.</p>
 <h2 id="hermetic">Why it is hermetic<a class="anchor" href="#hermetic" aria-label="Link to this section">#</a></h2>
 <p>The rules call the CLI rather than copy its build: the shim, the release profiles, the <code>wasm-opt</code> pipeline, the path remapping and the symbol files stay in one place, so the web size gate and the schema hash are the CLI's. What makes an action that runs Cargo safe to cache:</p>
-<ul><li><strong>The compiler is Bazel's.</strong> <code>rustc</code>, <code>cargo</code> and each target's standard library come from your <code>rules_rust</code> toolchain, pinned by checksum. No <code>rustup</code>.</li><li><strong>The crates are the lock file's.</strong> <code>undra_vendor</code> downloads each crates.io package once, by the checksum <code>Cargo.lock</code> records, and an action unpacks them into a Cargo directory source with the network off.</li><li><strong>The CLI is built the same way,</strong> from the checkout the core is built against.</li><li><strong>The build sees only what the target declares.</strong> The action copies <code>undra.toml</code>, <code>srcs</code> and <code>workspace</code> into a private directory and builds there, with any spawn strategy, sandboxed or not; a file missing from <code>srcs</code> is a build error, not a silent read of your tree.</li><li><strong>The build directory is named by the target,</strong> because Cargo and <code>undra build</code> put the build's path into symbol names: the same target builds in the same place in every checkout, so the same inputs give the same bytes (two clones on one Mac produced byte-identical cores).</li></ul>
-<p>The C linker, and for iOS and Android Xcode, the NDK and <code>cargo-ndk</code>, are the machine's: no Bazel rule distributes them for Rust.</p>
+<ul><li><strong>The compiler is Bazel's.</strong> <code>rustc</code>, <code>cargo</code> and each target's standard library come from your <code>rules_rust</code> toolchain, pinned by checksum (the Android standard library from <code>undra.android_std</code>, also by checksum). No <code>rustup</code>.</li><li><strong>The crates are the lock file's.</strong> <code>undra_vendor</code> downloads each crates.io package once, by the checksum <code>Cargo.lock</code> records, and an action unpacks them into a Cargo directory source with the network off.</li><li><strong>The CLI is built the same way,</strong> from the checkout the core is built against.</li><li><strong>The build sees only what the target declares.</strong> The action copies <code>undra.toml</code>, <code>srcs</code> and <code>workspace</code> into a private directory and builds there, with any spawn strategy, sandboxed or not; a file missing from <code>srcs</code> is a build error, not a silent read of your tree.</li><li><strong>The build directory is named by the target,</strong> because Cargo and <code>undra build</code> put the build's path into symbol names: the same target builds in the same place in every checkout, so the same inputs give the same bytes (two clones on one Mac produced byte-identical cores).</li></ul>
+<p>The machine's are the C linker (the host's own, as <code>rules_rust</code> uses it) and, for iOS, Xcode, which no Bazel rule distributes: <code>DEVELOPER_DIR</code> comes in through <code>--action_env</code>. The Android NDK is not the machine's: it is a label, an input of the action, so an Android core is cached like the others.</p>
 <h2 id="platforms">Platforms<a class="anchor" href="#platforms" aria-label="Link to this section">#</a></h2>
-<div class="table-wrap"><table><thead><tr><th>Platform</th><th>Needs</th><th>Where it is built</th></tr></thead><tbody><tr><td><code>host</code>, <code>web</code></td><td>nothing outside the rules</td><td>Linux and macOS, in CI on every change</td></tr><tr><td><code>ios</code></td><td>Xcode, and <code>apple_support</code> first in your <code>MODULE.bazel</code></td><td>macOS, in CI on every change; the target is <code>manual</code></td></tr><tr><td><code>android</code></td><td>the NDK and <code>cargo-ndk</code> on the machine, and a C++ toolchain registered for the Android platforms (<code>rules_android_ndk</code>), which the rules do not set up</td><td>declared, not built anywhere yet: without that toolchain, analysis stops at <code>Unable to find a CC toolchain</code>, even with the NDK installed</td></tr></tbody></table></div>
-<p><code>undra_android_library</code> needs the Android SDK only (<code>rules_android</code> reads <code>ANDROID_HOME</code>), not the NDK. The example's (<code>bazel build //android:hello --config=android</code>) was built by hand on macOS; CI does not build it, because <code>rules_android</code> then downloads its own tools, one of them an archive without a checksum.</p>
+<div class="table-wrap"><table><thead><tr><th>Platform</th><th>Needs</th><th>Where it is built</th></tr></thead><tbody><tr><td><code>host</code>, <code>web</code></td><td>nothing outside the rules</td><td>Linux and macOS, in CI on every change</td></tr><tr><td><code>ios</code></td><td>Xcode, and <code>apple_support</code> first in your <code>MODULE.bazel</code></td><td>macOS, in CI on every change; the target is <code>manual</code></td></tr><tr><td><code>android</code></td><td>the NDK as a labelled input (<code>undra_core(ndk = ..)</code>, an <code>http_archive</code> of the NDK pinned by checksum, or <code>rules_android_ndk</code>'s repository) and <code>undra.android_std</code>: no <code>cargo-ndk</code>, no <code>--action_env</code>, no <code>extra_path</code></td><td>Linux, in CI on every change; the target is <code>manual</code></td></tr></tbody></table></div>
+<p>The Android core is a Cargo cross-build that <code>undra build</code> links with the NDK's clang, so it is built in the host configuration, with the host's Rust toolchain: there is no Android platform to resolve a C++ toolchain for. The API level of the linker is <code>[android] min_sdk</code> of <code>undra.toml</code>. The archive is per host OS (a <code>select()</code> on <code>@platforms//os:*</code> picks the label) and is fetched only by a build that asks for the Android core, never by <code>bazel test //...</code>. CI gives that build the NDK that <code>sdkmanager</code> installed instead of downloading it through Bazel: <code>examples/bazel/android/use-installed-ndk.sh</code> prints the two <code>--override_repository</code> flags that do it, which is also the way to use an NDK you already have.</p>
+<p><code>undra_android_library</code> needs the Android SDK only (<code>rules_android</code> reads <code>ANDROID_HOME</code>), not the NDK. The example's (<code>bazel build //android:hello --config=android</code>) is built in the same CI job; <code>rules_android</code> then downloads its own tools, one of them an archive without a checksum, which is why it stays a <code>manual</code> target and is not part of <code>bazel test //...</code>.</p>
 <h2 id="lint">Generated code and your linters<a class="anchor" href="#lint" aria-label="Link to this section">#</a></h2>
 <p>A repository that lints everything reports the bindings, because they are the output of a generator. <code>undra bindgen</code> now writes the exclusions beside each tree and lists them in its manifest, so <code>--check</code> keeps them honest:</p>
 <div class="table-wrap"><table><thead><tr><th>Tree</th><th>File</th><th>Read by</th></tr></thead><tbody><tr><td>Kotlin</td><td><code>.editorconfig</code>, and <code>@file:Suppress("ALL", "ktlint")</code> in every file</td><td>ktlint 1.x; detekt and IntelliJ read the annotation too</td></tr><tr><td>Swift</td><td><code>.swiftlint.yml</code>, an <code>excluded:</code> list to merge into yours</td><td>SwiftLint</td></tr><tr><td>TypeScript</td><td><code>.eslintrc.json</code>, and <code>eslint.config.undra.mjs</code> to spread into a flat config</td><td>ESLint 8 and 9</td></tr></tbody></table></div>
