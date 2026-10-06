@@ -119,10 +119,12 @@ def _undra_core_impl(ctx):
         outputs.append(out_symbols)
 
     inputs = app_files + [app_manifest]
-    for directory in ctx.attr.extra_path:
-        lines.append("path=" + directory)
     if platform == "ios":
-        # Xcode is the machine's (the documented exception, ADR-065): the PATH the build was started with comes along.
+        # Xcode is the machine's (the documented exception, ADR-065): the PATH the build was started with comes along, and so
+        # do the directories of `extra_path`. No other platform's build reads the machine: the macro passes `extra_path` to the
+        # iOS core alone, and this guard holds even for a direct use of the rule.
+        for directory in ctx.attr.extra_path:
+            lines.append("path=" + directory)
         lines.append("inherit_path=1")
     if ctx.attr.keep_debug_objects:
         lines.append("keep_debug_objects=1")
@@ -199,7 +201,9 @@ def _undra_core_impl(ctx):
         OutputGroupInfo(**groups),
     ]
 
-_undra_core = rule(
+# The rule behind `undra_core`, exported for the rules' own tests (examples/bazel/tests analyses it with stand-in inputs):
+# an application uses the macro, which names the targets and passes each platform what it may see.
+undra_core_rule = rule(
     implementation = _undra_core_impl,
     attrs = dict(RUNNER_ATTRS, **{
         "platform": attr.string(values = ["host", "web", "ios", "android"], mandatory = True),
@@ -294,16 +298,22 @@ def undra_core(
             value.
         extra_path: directories (absolute) put on the action's `PATH` for the `ios` build, whose toolchain is the machine's
             (the documented exception: `DEVELOPER_DIR` comes in through `--action_env` and the `PATH` the build was started with
-            is inherited). Android does not use it.
-        keep_debug_objects: for an `ios` core a debugger can step into: leave the objects that hold the core's DWARF where the build
-            wrote them. A prelinked slice carries a debug map, not DWARF (ADR-044), and the map names files below the
-            `/tmp/undra-bazel-<key>/target` directory the action builds in, which is removed when the action ends; a debugger, and
-            the dSYM of the app (`--apple_generate_dsym`), find no Rust frames then. With this, the `libundra_core_*.a` of each
-            target triple (about 80 MB each in a debug build) stay there until the next build of the target with this attribute (the
-            directory is its own, named by the target and this attribute, so a build without it never removes them, and the
-            bytes of this build differ from the other's, which the directory name reaches). They are not an output, so a core
-            restored from a cache after the directory is gone, or after macOS cleared `/tmp` (a restart, or files unused for three
-            days), has none: build it again (`--action_env=UNDRA_REBUILD=<new value>`, or a change to the core) to debug it. Only the `ios` core reads it.
+            is inherited). The iOS core alone: the host, web and Android builds never see it (the Android core takes its NDK
+            from `ndk`; a 1.0 `extra_path` that named `cargo-ndk`'s directory is ignored by it).
+        keep_debug_objects: for an `ios` core a debugger resolves to Rust files and lines, with the source to show: leave the
+            objects that hold the core's DWARF, and the sources that DWARF names, where the build wrote them. A prelinked slice
+            carries a debug map, not DWARF (ADR-044), and the map names files below the `/tmp/undra-bazel-<key>/target` directory
+            the action builds in, which is removed when the action ends; a debugger, and the dSYM of the app
+            (`--apple_generate_dsym`), find no Rust frames then. With this, the `libundra_core_*.a` of each target triple (about
+            80 MB each in a debug build) stay there, with the copies of the project's sources (`app/`) and the Undra crates'
+            (`undra/`, 15 MB) that a debug build's DWARF names by that path (without them a breakpoint stops at the right file
+            and line but LLDB and Xcode have no source to show; the vendored crates' sources, 295 MB unpacked, are not kept, so a
+            frame inside one of them has no source to show), until the next
+            build of the target with this attribute (the directory is its own, named by the target and this attribute, so a build
+            without it never removes them, and the bytes of this build differ from the other's, which the directory name reaches).
+            They are not an output, so a core restored from a cache after the directory is gone, or after macOS cleared `/tmp` (a
+            restart, or files unused for three days), has none: build it again (`--action_env=UNDRA_REBUILD=<new value>`, or a
+            change to the core) to debug it. Only the `ios` core reads it.
         tags: tags of the generated targets.
         visibility: the visibility of every generated target.
         **kwargs: passed to the generated rule instances (`execution_requirements`).
@@ -313,7 +323,7 @@ def undra_core(
     targets = []
     for platform in platforms:
         target = "{}_{}".format(name, platform)
-        _undra_core(
+        undra_core_rule(
             name = target,
             platform = platform,
             namespace = namespace,
@@ -325,7 +335,7 @@ def undra_core(
             wasm_opt = wasm_opt if platform == "web" else None,
             ndk = ndk if platform == "android" else None,
             android_std = Label("@undra_android_std//:std") if platform == "android" else None,
-            extra_path = extra_path,
+            extra_path = extra_path if platform == "ios" else [],  # the machine's PATH reaches the iOS build alone (ADR-065)
             keep_debug_objects = keep_debug_objects if platform == "ios" else False,  # only an iOS slice has a debug map
             # Xcode is the machine's, not Bazel's (ADR-061), and the NDK is a large download: both build when asked for by name.
             tags = tags + (["manual", "requires-darwin"] if platform == "ios" else []) + (["manual"] if platform == "android" else []),
