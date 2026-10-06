@@ -7,11 +7,12 @@ the lowest version of each ruleset the rules need, tested at those versions, so 
 
 | Where | What |
 |---|---|
-| `bazel/MODULE.bazel`, `examples/bazel/MODULE.bazel` | every `bazel_dep` at its tested minimum (table below); the example pins the same numbers, so its run is the proof; comments say why |
-| both `MODULE.bazel.lock` | regenerated; the committed lock is the one Bazel 8.8.1 (`.bazelversion`) writes last. A 9.x run rewrites registry entries in it (different built-in modules), so the lock is never `--lockfile_mode=error` in CI |
-| `.github/workflows/ci.yml` | `bazel-example` (Linux) runs the rules' tests and `bazel test //...` a second time with `USE_BAZEL_VERSION=9.2.0`; `bazel-example-macos` runs `//swift/...` and `//:mobile_ios` on 9.2.0 too. Both jobs were already in the Gate (`complete.needs`) |
+| `bazel/MODULE.bazel` | every `bazel_dep` at its tested minimum (table below); comments say why |
+| `examples/bazel/MODULE.bazel`, `examples/bazel/scripts/at-minimums.sh` | the example pins recent versions (rules_apple 5.2.0, rules_swift 4.1.2, rules_kotlin 2.4.20, aspect_rules_js 3.5.1, aspect_rules_ts 3.10.1, rules_rust 0.74.0: what most applications run); `at-minimums.sh` runs one Bazel command with each of its `bazel_dep` lines rewritten to the rules' version, `--check_direct_dependencies=error` (a minimum the graph raises fails the run) and `--lockfile_mode=off`, then restores the file (review round, below) |
+| both `MODULE.bazel.lock` | regenerated; the committed lock is the one Bazel 8.8.1 (`.bazelversion`) writes. A 9.x run rewrites registry entries in it (different built-in modules), so the 9.x steps and the minimums run with `--lockfile_mode=off` and the tree stays clean |
+| `.github/workflows/ci.yml` | `bazel-example` (Linux) runs the rules' tests and `bazel test //...` on 8.8.1 and again with `USE_BAZEL_VERSION=9.2.0`, and `//...` at the minimums on both; `bazel-example-macos` runs `//swift/...` and `//:mobile_ios` at both ruleset ends on both Bazels. Both jobs were already in the Gate (`complete.needs`) |
 | `site/docs/bazel.html` (+ `llms-full.txt`, `search-index.json`) | "Set up" states Bazel 8.8 and 9.x, tested in CI; new section "Ruleset versions" (minimums, MVS picks the higher, why each floor) |
-| `examples/bazel/README.md` | the 9.x command, the minimums note, the lock-file note |
+| `examples/bazel/README.md` | the 9.x command (`--lockfile_mode=off`), `scripts/at-minimums.sh`, the both-ends note, the lock-file note |
 
 `bazel/README.md` does not exist; nothing to update. No rule source (`*.bzl`) needed a change for Bazel 9.2.0: they already load
 `cc_library`, `sh_test`, `java_test` and friends from their rulesets, never the removed native rules.
@@ -39,10 +40,12 @@ root warning that rules_apple resolved to 4.1.0.
 ```sh
 source scripts/env.sh
 R=$HOME/.cache/bazel-repository
-for v in 9.2.0 8.8.1; do                       # 9.2.0 is the newest 9.x release (9.3.0 was at rc4); 8.8.1 is .bazelversion
-  (cd bazel          && USE_BAZEL_VERSION=$v bazel test //tests/... --repository_cache=$R --test_output=errors --nocache_test_results)   # 3 of 3
-  (cd examples/bazel && USE_BAZEL_VERSION=$v bazel test //...       --repository_cache=$R --test_output=errors --nocache_test_results)   # 6 of 6
-  (cd examples/bazel && USE_BAZEL_VERSION=$v bazel build //:mobile_ios --repository_cache=$R)                                          # the XCFramework
+for v in 9.2.0 8.8.1; do                       # 9.2.0 is the newest 9.x release (9.3.0 at rc4 on 2026-10-05); 8.8.1 is .bazelversion
+  (cd bazel          && USE_BAZEL_VERSION=$v bazel test //tests/... --lockfile_mode=off --repository_cache=$R --test_output=errors --nocache_test_results)   # 3 of 3
+  (cd examples/bazel && USE_BAZEL_VERSION=$v bazel test //...       --lockfile_mode=off --repository_cache=$R --test_output=errors --nocache_test_results)   # 6 of 6, recent rulesets
+  (cd examples/bazel && USE_BAZEL_VERSION=$v bazel build //:mobile_ios --lockfile_mode=off --repository_cache=$R)                                          # the XCFramework
+  USE_BAZEL_VERSION=$v examples/bazel/scripts/at-minimums.sh test //... --repository_cache=$R --test_output=errors --nocache_test_results          # 6 of 6, minimums
+  USE_BAZEL_VERSION=$v examples/bazel/scripts/at-minimums.sh build //:mobile_ios --repository_cache=$R
 done
 node site/scripts/build-all.mjs && node site/scripts/check-links.mjs     # 54 pages OK
 bash scripts/check-no-em-dash.sh
@@ -60,3 +63,12 @@ is printed on either (the declared versions are what resolves).
 * The Android core (`//:mobile_android`) and `//android:hello` stay as before (declared / by hand); `//android` loads on both Bazels.
 * The minimums were found on macOS arm64 (host and web cores, Swift, Kotlin, TypeScript, the iOS XCFramework).
 * `rules_nodejs` is held at 6.7.5 only because the example's Node pin needs it; moving the example to Node 24.13.0 would let both files declare 6.7.3.
+
+## Review round (2026-10-05, `.10x/reviews/2026-10-05-bazel-compat-review.md`)
+
+The first version pinned the example to the minimums, so CI tested only the oldest rulesets and a break in the versions most
+applications run would have gone unnoticed. The example is back at the versions it had (recent ones), and
+`examples/bazel/scripts/at-minimums.sh` runs it at the minimums: CI now runs both ends on both Bazels (the reproduce block above). A
+minimum is the lowest that works on both Bazels: rules_swift 3.3.0 and rules_kotlin 2.2.2 still work on 8.8.1 (Swift consumer built;
+`//android:hello` loaded), and rules_rust 0.69.0 fails on both. `//android:hello --config=android` (`kt_android_library`) builds at both
+ends on both Bazels, by hand (the Android SDK). The guide's setup sample shows rules_rust 0.74.0, "0.70.0 or later".
