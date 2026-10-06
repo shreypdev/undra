@@ -23,7 +23,9 @@ def _committed_tree_impl(ctx):
     commands = ["set -eu", "mkdir -p \"$1\""]
     arguments = [out.path]
     for index, (language, tree) in enumerate(trees):
-        commands.append("mkdir -p \"$1/{language}\" && cp -R \"${n}\"/. \"$1/{language}/\"".format(language = language, n = index + 2))
+        # `-L`: in a sandbox the files of an input tree are links into the execroot, and a copy must not keep them (the
+        # output would hold absolute links into this machine's output base, which a disk or remote cache hands on).
+        commands.append("mkdir -p \"$1/{language}\" && cp -RL \"${n}\"/. \"$1/{language}/\"".format(language = language, n = index + 2))
         arguments.append(tree.path)
     ctx.actions.run_shell(
         command = "\n".join(commands),
@@ -36,6 +38,28 @@ def _committed_tree_impl(ctx):
         env = {"PATH": "/usr/bin:/bin"},
     )
     return [DefaultInfo(files = depset([out]))]
+
+def _missing_test_impl(ctx):
+    script = ctx.actions.declare_file(ctx.label.name + ".sh")
+    ctx.actions.write(
+        output = script,
+        content = "#!/bin/sh\ncat >&2 <<'UNDRA_MESSAGE'\n{}\nUNDRA_MESSAGE\nexit 1\n".format(ctx.attr.message),
+        is_executable = True,
+    )
+    return [DefaultInfo(executable = script)]
+
+_missing_test = rule(
+    implementation = _missing_test_impl,
+    attrs = {
+        "message": attr.string(
+            doc = "What the test prints before it fails.",
+            mandatory = True,
+        ),
+    },
+    test = True,
+    doc = """A test that fails with `message`: the test of a committed directory that does not exist yet. It fails when it runs, not
+when it is analysed, so a `bazel build //...` or `bazel test //...` of the rest of the repository is not stopped by it.""",
+)
 
 _committed_tree = rule(
     implementation = _committed_tree_impl,
@@ -65,7 +89,9 @@ def undra_bindings_test(name, bindings, committed, **kwargs):
 
     The directory belongs to the rule: do not keep other files in it. `undra bindgen --check` ignores a file beside the generated
     ones that its manifest does not list; this test does not, because it compares the directory as a whole, and the update removes
-    it. It is built on `write_source_file` of `bazel_lib`, so the diff, the update and the test are the standard ones.
+    it. It is built on `write_source_file` of `bazel_lib`, so the diff, the update and the test are the standard ones. A
+    `committed` that does not exist yet makes `<name>` fail when it runs, naming the update command; the rest of the build and
+    of `bazel test //...` goes on.
 
     Args:
         name: the test.
@@ -74,6 +100,9 @@ def undra_bindings_test(name, bindings, committed, **kwargs):
             this target, as `write_source_file` requires.
         **kwargs: `visibility`, `tags`.
     """
+    parts = committed.split("/")
+    if not committed or committed.startswith((":", "/", "@")) or "." in parts or ".." in parts or "" in parts:
+        fail("undra_bindings_test {}: `committed` is {}, which is not a directory below this package: name one by its path relative to the BUILD file, as `committed = \"generated\"` (the update target empties that directory, so it is never the package itself or a label)".format(name, repr(committed)))
     update = name + ".update"
     update_command = "bazel run //{}:{}".format(native.package_name(), update)
     tree = name + "_tree"
@@ -100,15 +129,32 @@ The committed bindings {committed} do not exist yet. To generate and write them,
     {command}
 
 """
-    write_source_file(
-        name = update,
-        in_file = ":" + tree,
-        out_file = committed,
-        diff_test_failure_message = differs.format(committed = committed, command = update_command),
-        file_missing_failure_message = missing.format(committed = committed, command = update_command),
-        verbosity = "short",
-        **kwargs
-    )
+    if _exists(committed):
+        write_source_file(
+            name = update,
+            in_file = ":" + tree,
+            out_file = committed,
+            diff_test_failure_message = differs.format(committed = committed, command = update_command),
+            verbosity = "short",
+            **kwargs
+        )
+    else:
+        # `write_source_file`'s own test of a missing directory fails analysis, which stops a `bazel test //...` of the whole
+        # repository (and a `bazel build //...`) until the update has run: this one fails when it runs, with the same message.
+        write_source_file(
+            name = update,
+            in_file = ":" + tree,
+            out_file = committed,
+            diff_test = False,
+            verbosity = "short",
+            **kwargs
+        )
+        _missing_test(
+            name = update + "_test",
+            message = missing.format(committed = committed, command = update_command),
+            size = "small",
+            **kwargs
+        )
 
     # `write_source_file` names its test `<update>_test`; the target a user runs is `<name>`.
     native.test_suite(
@@ -116,3 +162,7 @@ The committed bindings {committed} do not exist yet. To generate and write them,
         tests = [":" + update + "_test"],
         **kwargs
     )
+
+def _exists(path):
+    """Whether `path`, relative to the current package, is a file or a directory in it (or a package below it)."""
+    return bool(native.glob([path], exclude_directories = 0, allow_empty = True) or native.subpackages(include = [path], allow_empty = True))

@@ -1,6 +1,5 @@
 """Tests of `undra_bindings_test` against stand-in bindings (ADR-064): the rule, its test and its update target."""
 
-load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//undra:bindings_test.bzl", "undra_bindings_test")
 load(":fake_bindings.bzl", "fake_bindings")
@@ -21,14 +20,6 @@ _ALL = {
     },
 }
 
-def _absent_message_impl(ctx):
-    env = analysistest.begin(ctx)
-    asserts.expect_failure(env, "do not exist yet")
-    asserts.expect_failure(env, "bazel run //tests:absent.update")
-    return analysistest.end(env)
-
-_absent_message_test = analysistest.make(_absent_message_impl, expect_failure = True)
-
 def bindings_test_suite(name):
     """The tests of `undra_bindings_test`, as a test suite called `name`."""
     fake_bindings(name = "all_languages", swift = _ALL["swift"], kotlin = _ALL["kotlin"], ts = _ALL["ts"])
@@ -46,14 +37,15 @@ def bindings_test_suite(name):
     # The update target writes into a scratch workspace: what is below `committed` is the stand-in's trees and nothing else.
     undra_bindings_test(name = "to_update", bindings = ":all_languages", committed = "committed/to_update", tags = ["manual"])
 
-    # `committed` that does not exist yet fails analysis of the test (so `bazel run` of the update target can create it),
-    # with a message that names the update target.
+    # `committed` that does not exist yet: the test fails when it runs, with a message that names the update target. Its
+    # analysis succeeds (the test below depends on it), so it does not stop a `bazel test //...` of everything else.
     undra_bindings_test(name = "absent", bindings = ":all_languages", committed = "committed/absent", tags = ["manual"])
-    _absent_message_test(name = "absent_message_test", target_under_test = ":absent.update_test")
 
-    tests = ["identical", "identical_ts_only", "absent_message_test"]
-    for case in ["changed", "extra", "missing_file", "stale_language"]:
-        expected = ["bazel run //tests:{}.update".format(case), "differ"]
+    tests = ["identical", "identical_ts_only"]
+    cases = {case: "differ" for case in ["changed", "extra", "missing_file", "stale_language"]}
+    cases["absent"] = "do not exist yet"
+    for case, says in cases.items():
+        expected = ["bazel run //tests:{}.update".format(case), says]
         sh_test(
             name = case + "_fails_test",
             srcs = ["expect_failure.sh"],
@@ -72,4 +64,14 @@ def bindings_test_suite(name):
         data = [":to_update.update", ":committed/identical"],
     )
     tests.append("update_writes_test")
+
+    # The laid-out directory holds copies: in a sandbox the input trees' files are links into the execroot, which must not
+    # end up in an output (a disk or remote cache would hand them to another machine).
+    sh_test(
+        name = "copies_test",
+        srcs = ["expect_copies.sh"],
+        args = ["$(rootpath :identical_tree)", "identical_tree"],
+        data = [":identical_tree"],
+    )
+    tests.append("copies_test")
     native.test_suite(name = name, tests = [":" + t for t in tests])
