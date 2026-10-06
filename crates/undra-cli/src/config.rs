@@ -94,7 +94,7 @@ impl Platform {
 /// `undra.toml` (ADR-061).
 ///
 /// A repository that lints everything needs the generated bindings left out of its linters. The default writes the files each
-/// linter reads beside the trees ([`crate::lint`] lists them); a repository that configures its linters in one place says
+/// linter reads beside the trees (`crate::lint` lists them); a repository that configures its linters in one place says
 /// `none` and adds the same exclusions to that configuration (the "Linters over the whole tree" section of the Bazel guide
 /// lists the lines). The `@file:Suppress` line at the top of every generated Kotlin file is not one of these files: it is part
 /// of the file and stays whatever this says.
