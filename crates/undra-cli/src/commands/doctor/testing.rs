@@ -22,7 +22,6 @@ pub struct Spec {
     pub platform: bool,
     pub adb: bool,
     pub ndk: Option<&'static str>,
-    pub cargo_ndk: bool,
     pub emulator: bool,
     pub jdk: bool,
     pub node: bool,
@@ -42,7 +41,6 @@ impl Spec {
             platform: true,
             adb: true,
             ndk: Some("27.2.12479018"),
-            cargo_ndk: true,
             emulator: true,
             jdk: true,
             node: true,
@@ -149,11 +147,6 @@ impl Spec {
                     .with_file(&format!("{SDK}/emulator/emulator"))
                     .with_output("emulator", "-list-avds", "undra\n");
             }
-        }
-        if self.cargo_ndk {
-            sys = sys
-                .with_tool("cargo-ndk", &format!("{home}/.cargo/bin/cargo-ndk"))
-                .with_output("cargo", "ndk --version", "cargo-ndk 4.1.2\n");
         }
         if self.jdk {
             sys = sys.with_tool("java", "/usr/bin/java").with_stderr_output(
@@ -266,15 +259,6 @@ pub fn good_machine_with_ndk(version: &'static str) -> FakeSys {
 pub fn good_machine_without_ndk() -> FakeSys {
     Spec {
         ndk: None,
-        ..Spec::mac()
-    }
-    .build()
-}
-
-/// A Mac without `cargo-ndk`.
-pub fn good_machine_without_cargo_ndk() -> FakeSys {
-    Spec {
-        cargo_ndk: false,
         ..Spec::mac()
     }
     .build()

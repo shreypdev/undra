@@ -139,7 +139,7 @@ impl Default for IosConfig {
 pub struct AndroidConfig {
     /// The ABIs to build: `arm64-v8a`, `x86_64`, `armeabi-v7a`, `x86`.
     pub abis: Vec<String>,
-    /// The minimum API level (`cargo ndk --platform`).
+    /// The minimum API level: the one the NDK's clang the core is linked with targets (`26` when undra.toml says nothing, as `undra init` writes it).
     pub min_sdk: u32,
     /// What a release build optimises for (`opt_level`, [`NativeOptLevel`]).
     pub opt_level: NativeOptLevel,

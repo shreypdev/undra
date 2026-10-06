@@ -1,12 +1,19 @@
-//! The Android build: the shim as one `lib<namespace>.so` per ABI, through `cargo ndk`.
+//! The Android build: the shim as one `lib<namespace>.so` per ABI, cross-built by Cargo with the NDK's
+//! clang as the linker (ADR-065; no `cargo-ndk`).
 //!
 //! The result is the `jniLibs/` layout Gradle packages (`<abi>/lib<namespace>.so`). The name
 //! matters: the generated `UndraCoreNative` loads the core by its namespace (`System.loadLibrary`),
 //! so two cores (two namespaces) sit side by side in one APK (ADR-044). The library is built with
 //! the `jni` feature, whose `JNI_OnLoad` registers the natives on that generated class
 //! (`<kotlin package>.UndraCoreNative`), and is checked for the 16 KB page alignment that Google Play requires of
-//! 64-bit libraries (NDK r27 and `cargo-ndk` 4 do it by default; the check says so if a toolchain
-//! does not).
+//! 64-bit libraries (the build asks the linker for 16 KB pages itself, [`ndk::PAGE_SIZE_LINK_ARG`]; the
+//! check says so if a toolchain does not).
+//!
+//! **The NDK.** `ANDROID_NDK_HOME`, else `ANDROID_HOME/ndk/<version>` (the newest) is the NDK; for each
+//! ABI the CLI runs `cargo rustc --target <triple>` with the environment Cargo reads to link with it:
+//! `CARGO_TARGET_<TRIPLE>_LINKER`, `CC_<triple>`, `AR_<triple>` ([`ndk::environment`]). The API level of
+//! the clang wrapper is `[android] min_sdk` of `undra.toml`, 26 when the project says nothing (what
+//! `undra init` writes).
 //!
 //! **Symbols (ADR-046).** The libraries carry a GNU build id (`-Wl,--build-id=sha1`), which is what
 //! a panic report names its image by. A release build keeps the line tables the shim's profile asks
@@ -22,14 +29,14 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::binary::{elf_is_64, elf_min_load_alignment};
-use crate::cargo::{PathRemap, Profile};
+use crate::cargo::{Build, Profile};
 use crate::error::{CliError, Code, Result};
 use crate::fsutil::{copy_file, create_dir_all, human_size, remove_dir_all, size_of};
 use crate::session::Session;
 use crate::symbols::{Entry, Format, Symbols, image, sha256, slash_relative, tools, zip};
 use crate::toolchain::{Concern, ndk_major};
 
-use super::{Artifact, gradle};
+use super::{Artifact, gradle, ndk};
 
 /// The Rust target of an Android ABI.
 #[must_use]
@@ -46,31 +53,14 @@ pub fn triple_of(abi: &str) -> &'static str {
 ///
 /// # Errors
 ///
-/// `C0003` without `cargo-ndk` or the NDK, `C0011` without the Rust targets, `C0004` when the
-/// build fails.
+/// `C0003` without the NDK (or with one that lacks the clang of the project's API level), `C0011`
+/// without the Rust targets, `C0004` when the build fails.
 pub fn build(
     session: &Session<'_>,
     release: bool,
     symbols: &Symbols<'_, '_>,
 ) -> Result<Vec<Artifact>> {
     let cfg = &session.project.config.android;
-    let cargo = session
-        .toolchain
-        .which(session.sys, "cargo")
-        .ok_or_else(|| {
-            CliError::missing_tool(
-                "cargo",
-                "building the core",
-                "install Rust with rustup: https://rustup.rs",
-            )
-        })?;
-    if session.toolchain.which(session.sys, "cargo-ndk").is_none() {
-        return Err(CliError::missing_tool(
-            "cargo-ndk",
-            "building for Android",
-            "cargo install cargo-ndk",
-        ));
-    }
     let Some(ndk) = session.toolchain.android_ndk.clone() else {
         return Err(CliError::new(
             Code::MissingTool,
@@ -88,89 +78,69 @@ pub fn build(
             ndk.display()
         ));
     }
+    let os = session.sys.os();
+    for abi in &cfg.abis {
+        let triple = triple_of(abi);
+        let missing = ndk::missing_tools(session.sys, &ndk, os, triple, cfg.min_sdk);
+        if !missing.is_empty() {
+            return Err(incomplete_ndk(&ndk, &missing, cfg.min_sdk));
+        }
+    }
     for abi in &cfg.abis {
         session.cargo().require_target(triple_of(abi))?;
     }
 
     let manifest = session.shim_manifest()?;
-    let library = format!("lib{}.so", session.namespace()?);
+    let namespace = session.namespace()?;
+    let library = format!("lib{namespace}.so");
     let target_dir = session.target_dir()?;
-    let staging = crate::shim::android_stage_dir(&target_dir, &session.project.root);
-    remove_dir_all(&staging)?;
-
-    let mut cmd = Command::new(&cargo);
-    cmd.arg("ndk");
-    for abi in &cfg.abis {
-        cmd.args(["-t", abi]);
-    }
-    cmd.args(["-P", &cfg.min_sdk.to_string()])
-        .arg("-o")
-        .arg(&staging)
-        .arg("--manifest-path")
-        .arg(&manifest)
-        .args([
-            "rustc",
-            "--lib",
-            "--crate-type",
-            "cdylib",
-            "--features",
-            "jni",
-        ]);
     // A release build is the profile `[android] opt_level` names, the size-tuned `release-mobile` by
     // default (ADR-052, "native size gates"); a debug build is cargo's dev profile.
     let profile = Profile::mobile(release, session.project.config.android.opt_level);
-    cmd.args(profile.args());
-    if release {
-        // The builder's directories stay out of what ships (ADR-052), as in the other builds.
-        match session.cargo().path_remap(profile, &session.remap_roots()) {
-            Some(PathRemap::Config(arg)) => {
-                cmd.arg("--config").arg(arg);
-            }
-            Some(PathRemap::EncodedEnv(flags)) => {
-                cmd.env("CARGO_ENCODED_RUSTFLAGS", flags);
-            }
-            None => {}
-        }
-    }
-    for config in symbols.cargo_config(profile, false) {
-        cmd.arg("--config").arg(config);
-    }
-    // The image's identity (what a panic report names it by): a GNU build id, in the unstripped
-    // library and in the stripped copy alike.
-    cmd.args(["--", "-C", BUILD_ID_LINK_ARG]);
-    cmd.env("CARGO_TARGET_DIR", &target_dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
-    session.toolchain.apply(&mut cmd);
-    let status = cmd.status().map_err(|e| CliError::io("run", &cargo, &e))?;
-    if !status.success() {
-        return Err(CliError::tool_failed(
-            "cargo ndk",
-            &format!("building the core for {}", cfg.abis.join(", ")),
-            &status.to_string(),
-        ));
+
+    // One Cargo build per ABI, linked with the NDK's clang. The library lands where Cargo puts any
+    // cross-built cdylib, `<target>/<triple>/<profile>/lib<shim>.so`; the jniLibs layout is made below.
+    let mut built_libs = Vec::new();
+    for abi in &cfg.abis {
+        let triple = triple_of(abi);
+        session
+            .ui
+            .detail(&format!("rust target {triple} (NDK API {})", cfg.min_sdk));
+        let files = session.cargo().build_library(&Build {
+            manifest: manifest.clone(),
+            target_dir: target_dir.clone(),
+            triple: Some(triple.to_owned()),
+            profile,
+            crate_type: "cdylib",
+            features: vec!["jni".to_owned()],
+            env: ndk::environment(&ndk, os, triple, cfg.min_sdk),
+            lib_name: crate::shim::shim_lib_name(&session.project.root),
+            // The image's identity (what a panic report names it by) and the 16 KB pages, in the
+            // unstripped library and in the stripped copy alike.
+            rustc_args: ndk::rustc_args(triple),
+            cargo_config: symbols.cargo_config(profile, false),
+            remap: session.remap_roots(),
+        })?;
+        let built = files
+            .into_iter()
+            .find(|f| f.extension().is_some_and(|e| e == "so"))
+            .ok_or_else(|| {
+                CliError::new(
+                    Code::ToolFailed,
+                    format!("cargo built for {triple} but produced no shared library"),
+                    "the Android build packages the shim as a .so for every ABI it was asked for",
+                    "run `cargo clean` and try again; if it persists this is a bug in undra-cli",
+                )
+            })?;
+        built_libs.push((abi.clone(), built));
     }
 
     let jni_libs: PathBuf = session.project.build_dir().join("android/jniLibs");
     remove_dir_all(&jni_libs)?;
     let mut artifacts = Vec::new();
-    for abi in &cfg.abis {
-        let shim_so = format!(
-            "lib{}.so",
-            crate::shim::shim_lib_name(&session.project.root)
-        );
-        let built = staging.join(abi).join(&shim_so);
-        if !built.is_file() {
-            return Err(CliError::new(
-                Code::ToolFailed,
-                format!("cargo-ndk finished but {} does not exist", built.display()),
-                "the Android build expects the shim library for every ABI it was asked for",
-                "update cargo-ndk (`cargo install cargo-ndk --force`) and try again",
-            ));
-        }
+    for (abi, built) in &built_libs {
         let dest = jni_libs.join(abi).join(&library);
-        copy_file(&built, &dest)?;
+        copy_file(built, &dest)?;
         if release && symbols.enabled {
             // The profile no longer strips (it keeps the line tables for the twin below): the copy
             // that ships is stripped here instead.
@@ -183,16 +153,14 @@ pub fn build(
                 match elf_min_load_alignment(&bytes) {
                     Some(align) if align >= 16 * 1024 => note = Some("16 KB aligned".to_owned()),
                     Some(align) => session.ui.warn(&format!(
-                        "{abi}: LOAD segments are aligned to {align} bytes, not 16 KB; Google Play rejects 64-bit libraries like this. Use NDK r27+ with cargo-ndk 3.5+"
+                        "{abi}: LOAD segments are aligned to {align} bytes, not 16 KB; Google Play rejects 64-bit libraries like this. Use NDK r27 or newer"
                     )),
                     None => {}
                 }
             }
         }
         if release && symbols.enabled {
-            artifacts.extend(keep_symbols(
-                session, symbols, abi, &built, &dest, &library,
-            )?);
+            artifacts.extend(keep_symbols(session, symbols, abi, built, &dest, &library)?);
         }
         artifacts.push(Artifact {
             label: format!("android {abi}"),
@@ -214,6 +182,24 @@ pub fn build(
         session.ui.warn(&message);
     }
     Ok(artifacts)
+}
+
+/// The error for an NDK directory that lacks the tools of the build: an incomplete download or an
+/// NDK older than `api`.
+fn incomplete_ndk(ndk: &Path, missing: &[PathBuf], api: u32) -> CliError {
+    let list = missing
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    CliError::new(
+        Code::MissingTool,
+        format!("the Android NDK at {} lacks {list}", ndk.display()),
+        format!(
+            "the core is linked with the NDK's clang for API level {api} (`[android] min_sdk` of undra.toml); this directory is not a whole NDK for this machine, or is older than that API level"
+        ),
+        "point ANDROID_NDK_HOME at an NDK r27 or newer (`sdkmanager \"ndk;27.2.12479018\"`), or lower `min_sdk`",
+    )
 }
 
 /// The linker argument that gives the library a GNU build id: the identity a panic report names

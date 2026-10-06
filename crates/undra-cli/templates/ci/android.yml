@@ -12,13 +12,12 @@
         with:
           targets: @@ANDROID_TARGETS@@
       - uses: Swatinem/rust-cache@v2
-      - name: Set up the Android NDK r27 and cargo-ndk
+      - name: Set up the Android NDK r27
         run: |
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$sdkmanager" --licenses > /dev/null || true
           "$sdkmanager" "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
-          cargo install cargo-ndk --locked
       - uses: gradle/actions/setup-gradle@v4
 @@INSTALL_UNDRA@@      - name: Build (the undraBuild Gradle task builds the core first)
         working-directory: android

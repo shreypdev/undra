@@ -942,7 +942,7 @@ tolerance = 0.05
 # or two):
 #   scripts/native-size.sh                     gate what this machine can build (--platform android | ios)
 #   scripts/native-size.sh --record            ... and re-record bench/results/native-size.jsonl and these tables
-# KB is 1,000 bytes. Android: the bytes of the stripped, 16 KB aligned lib<ns>.so that Gradle packages (NDK r27, cargo-ndk).
+# KB is 1,000 bytes. Android: the bytes of the stripped, 16 KB aligned lib<ns>.so that Gradle packages (NDK r27).
 # iOS: the sections of the device slice linked as an app's link keeps them (-dead_strip, strip -x); the .a file is no measure
 # (it grows at opt-level "z" while the code shrinks), see the script's header. Cross-checked against a minimal executable that
 # references the core's entry: its sections grow by 0.9% less than the row says, its __LINKEDIT by 0.9% more (ADR-052's amendment).
