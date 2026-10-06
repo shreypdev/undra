@@ -11,6 +11,10 @@
 # and this run must neither read nor rewrite it; --check_direct_dependencies=error, so a minimum that something else in the graph
 # raises fails the run instead of quietly testing a higher version; and --deleted_packages=ios, because the debugging example
 # (//ios, the one user of rules_xcodeproj, whose line this run drops: see below) is not part of what the minimums cover.
+#
+# The original MODULE.bazel is held in memory and written back on exit, so nothing that happens to a file during the command can
+# lose it; a copy also sits beside it, MODULE.bazel.at-minimums~ (git-ignored), for the one case memory does not survive, a
+# killed script: the next run finds the copy and puts it back first.
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
@@ -20,12 +24,21 @@ fi
 
 example=$(cd "$(dirname "$0")/.." && pwd)
 module="$example/MODULE.bazel"
+backup="$module.at-minimums~"
 rules="$example/../../bazel/MODULE.bazel"
 dep='^bazel_dep\(name = "([^"]+)", version = "([^"]+)"\)$'
 
-backup=$(mktemp)
-cp "$module" "$backup"
-restore() { if [ -f "$backup" ]; then cp "$backup" "$module" && rm -f "$backup"; fi; }
+if [ -f "$backup" ]; then
+  echo "at-minimums: a previous run was cut short and left $backup: putting it back as MODULE.bazel" >&2
+  mv -f "$backup" "$module"
+fi
+original=$(cat "$module"; printf x) # the x keeps a trailing newline through $(...)
+original=${original%x}
+printf '%s' "$original" > "$backup"
+restore() {
+  printf '%s' "$original" > "$module" || { echo "at-minimums: could not write MODULE.bazel back; its original is $backup" >&2; exit 1; }
+  rm -f "$backup"
+}
 trap restore EXIT
 trap 'exit 130' INT TERM
 
@@ -52,9 +65,9 @@ while read -r name version; do
   fi
   echo "at-minimums: $name $version -> $minimum"
   script+="s/^bazel_dep\\(name = \"$name\", version = \"[^\"]+\"\\)\$/bazel_dep(name = \"$name\", version = \"$minimum\")/;"
-done < <(sed -nE "s/$dep/\1 \2/p" "$backup")
+done <<<"$(printf '%s' "$original" | sed -nE "s/$dep/\1 \2/p")"
 
-sed -E "$script" "$backup" > "$module"
+printf '%s' "$original" | sed -E "$script" > "$module"
 
 cd "$example"
 command=$1
