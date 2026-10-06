@@ -12,6 +12,7 @@ compiler and by `cargo test`, not only read.
 | `forms.rs` | a signal per field, errors derived from them, a command that refuses typed |
 | `upload.rs` | a file from `Fs` in parts over `Http`, progress as a signal, retries through the offline queue |
 | `offline.rs` | persisted queries, writes that queue, an outbox, an update (`#[undra(default)]`, `#[undra::migrate]`) |
+| `leaderboard.rs`, `standings.rs` | a ranking of 100,000 players from a snapshot and a delta stream: ingested on `spawn_blocking` into a structure the app owns, published as a window of 60 rows and four numbers in one transaction (`standings.rs` is plain Rust; the benchmark harness compiles it too) |
 | `realtime.rs` | a WebSocket that reconnects in the core, server-sent events as the fallback (feature `realtime`) |
 
 One recipe has no Rust module, because it is about what is under the ports, not what is above them: **Your network stack**

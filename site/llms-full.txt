@@ -2175,6 +2175,7 @@ Recipes for what every app does. Each is a module of one Rust crate that is comp
 ## Where to start
 
 - **An app with a login?** [Auth](https://shreypdev.github.io/undra/docs/cookbook/auth.html), then [offline-first](https://shreypdev.github.io/undra/docs/cookbook/offline.html).
+- **A big list that changes fast?** [Live leaderboard](https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html): 100,000 players, a snapshot and a delta stream, with the core lock held for under a microsecond.
 - **An existing codebase?** [From Kotlin Multiplatform](https://shreypdev.github.io/undra/docs/cookbook/from-kmp.html) or [from UniFFI](https://shreypdev.github.io/undra/docs/cookbook/from-uniffi.html): three steps, the first one small.
 - **Want it all in one place?** [Fieldbook](https://shreypdev.github.io/undra/docs/sample.html), field notes with photos, uses the recipes together on the web, iOS and Android.
 
@@ -2346,6 +2347,89 @@ The UI observes `link` (idle, open, reconnecting, fallback, stopped) and the key
 - A browser cannot send headers on a WebSocket, so a credential goes in the URL or a subprotocol.
 
 Source: [`examples/cookbook/core/src/realtime.rs`](https://github.com/shreypdev/undra/blob/main/examples/cookbook/core/src/realtime.rs).
+
+---
+
+Source: https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html
+
+# Live leaderboard
+
+A ranking of 100,000 players, a 1.4 MB snapshot and a stream of score changes. The big structure stays off the core lock and out of every signal: it is ingested on the blocking pool, and the screen gets a window of 60 rows and four numbers in one small transaction.
+
+## The problem
+
+A game, a contest or a fitness app shows a ranked list of 100,000 players. A snapshot (JSON, `[[id, score], ..]`, 1,377,798 bytes) arrives when the app opens and now and then after that, and score changes stream in between. The screen shows three things: the top 50, a few rows around the current player, and four numbers (how many players, the player's rank, the top score, the median). It never shows 100,000 rows, so the core should never ask a platform to hold them.
+
+The core has one lock. Whoever holds it is the core: a call, the poll of a task, the commit of a change-set all wait for it ([SPEC 5.1](https://github.com/shreypdev/undra/blob/main/docs/SPEC.md)). So the question is not whether the snapshot gets parsed, but where, and for how long the lock is held while it is.
+
+## Two designs that look right
+
+- **Apply the snapshot inside a core call.** An async store method fetches the bytes, then parses, sorts and stores them. It reads naturally, and the whole parse runs with the core lock held: every other call, timer and change-set waits for it. Measured here, 2.56 ms at the median and 2.94 ms at the 99th percentile, on a laptop core that is substantially faster than a phone's.
+- **Publish every player.** A `Signal<Vec<Player>>` of 100,000 rows puts the whole ranking on the platform, so the first change after a snapshot is a 1.2 MB change-set that each platform decodes and applies (at the core's price of 12 bytes a row), and the screen needs a window of it anyway. It also breaks the rule that a read does not cross the boundary: the list is in the core to be read there.
+
+| Design | Core lock held per snapshot, p50 | p99 | What reaches the platform |
+| --- | --- | --- | --- |
+| **This recipe**: pool, then publish a window | **375 ns** | **458 ns** | 780 bytes |
+| Parse inside a core call | 2.56 ms | 2.94 ms | 780 bytes |
+| Parse inside a call, a signal of every player | 2.94 ms | 3.26 ms | 1,200,033 bytes |
+
+## The recipe
+
+- **Ingest on `spawn_blocking`.** The snapshot (or a batch of deltas) goes to the blocking pool. The closure parses and sorts it into a `Standings` the app owns, behind its own `Mutex`, with no core lock held. A snapshot is a finished value built before the lock is taken: the lock is held for the swap, not for the parse.
+- **Publish a window, once.** The closure returns a small `View`: the top 50, the player and three neighbours on each side, and four numbers. The awaiting task is back on the core and writes three signals in one `txn`, skipping the ones that did not change (a write is a change-set whether or not the value moved). That is the only part of an update that holds the core lock. Each window carries the version it was read at under the app's lock, and an older one is not written: two updates can come back from the pool in either order.
+- **The big structure never crosses.** `follow` (the player who is highlighted) takes the same two steps. No generated getter, no signal and no call holds the 100,000 players, and a closure on the pool cannot write a signal at all (E0065), which is how the design stays honest.
+- **The feed is deterministic.** `start_demo` seeds a synthetic feed from the `Rng` port and drives it on the `Timer` port, so a test with the fake clock sees the same players and the same changes on every run.
+
+## The structure
+
+`Standings` (`standings.rs`) is plain Rust that knows nothing about Undra. It keeps every player twice: sorted by id, to find one, and in rank order, to answer for the top, for a neighbourhood and for the middle. A delta batch changes the scores in place, takes the players it touched out of the ranking and merges them back in one pass (`O(players + touched &times; log touched)`, never a sort of everyone). `view` is `O(top + around + log n)`. Ranks are competition ranks: players with the same score share a rank and the next one skips them (1, 2, 2, 4). Because it is plain Rust, the benchmark harness compiles the very same file, so the numbers on this page are the numbers of this code.
+
+## On the platform
+
+The screen observes three small signals: the best fifty, a few rows around the player and the summary. The platform neither knows nor cares how many players there are.
+
+## The numbers
+
+The benchmark rows time one core call on the host. A call holds the core lock for as long as it runs, so its time is how long one snapshot of 100,000 players holds the lock. The host copies every change-set under the lock, as each platform's callback does. Best of several runs on an Apple M5 Pro while other builds ran (load average 13), rustc 1.99.0, 2026-10-05:
+
+| Row (`leaderboard/..`) | What the call does under the core lock | p50 | p99 |
+| --- | --- | --- | --- |
+| `lock_hold/recommended` | publishes the window the pool prepared: three signals, one transaction | **375 ns** | **458 ns** |
+| `lock_hold/in_core_call` | parses, sorts and swaps the snapshot inside the call, then publishes the same window | 2.56 ms | 2.94 ms |
+| `lock_hold/signal_of_rows` | parses and sorts inside the call and sets a signal of every player | 2.94 ms | 3.26 ms |
+| `ingest/off_core` | (no core lock) what the pool does for this recipe: parse, sort, swap, window | 2.56 ms | 2.98 ms |
+
+The lock is held about 6,800 times shorter at the median and 6,400 times at the 99th percentile. The cost of the snapshot did not go away: it moved to a thread that does not hold the lock, and the snapshot reaches the screen about as soon either way. The second wrong design is only 15% worse under the lock on a host, because encoding and copying 1.2 MB is cheap next to parsing 1.4 MB; its price is paid on each platform, which has to decode and apply those 1.2 MB, and that no host-side row shows.
+
+What a caller sees: a second thread made a call that does nothing but need the core lock, in a loop, while a snapshot was applied about every 9 ms for 8 seconds per design (best of four runs; a busy machine deschedules the probe itself, so the maximum is the noisiest figure):
+
+| Design | Wait p50 | p99 | p99.9 | Max |
+| --- | --- | --- | --- | --- |
+| This recipe | 125 ns | 2.0 us | 7.8 us | 132 us |
+| Snapshot applied inside a call | 125 ns | 2.9 us | 3.47 ms | 7.04 ms |
+
+A call that arrives during an in-call apply waits out the parse. That is about one call in 200 here, so it is the p99.9 and the maximum that show it, and not the median or the p99. Both tables come from the same code: `cargo test -p undra-bench --test budgets --release -- --nocapture leaderboard` prints the rows and `cargo test -p undra-bench --test leaderboard --release -- --ignored --nocapture stall_report` the caller's wait. CI holds the first one to a budget (the recommended row's p50 and p99, in `bench/budgets.toml`) and to a ratio that does not depend on the machine: the publish must stay under 5% of the in-call apply, and it is 0.015%. A publish that grew with the players, the ranking read or sorted on the core or every row in a signal, would put that ratio near 1. These are host numbers; [finding 9 of the benchmark results](https://github.com/shreypdev/undra/blob/main/bench/RESULTS.md) has the method and the limits.
+
+## What the tests prove
+
+- A snapshot of 100,000 players publishes a top of 50 sorted by score, rank 1 first, the four numbers, and no window until a player is followed.
+- Following a player shows it with three neighbours on each side and its rank; a delta that makes it the leader moves the window with it, and a delta for a player the snapshot did not hold is ignored.
+- A snapshot that cannot be read (a repeated id, a score out of range, not JSON) is a typed error and leaves the ranking as it was; a failed fetch is a typed network error.
+- An update that changes nothing in the window writes nothing: no change-set.
+- What a platform receives for a snapshot of 100,000 players, with a player followed, is one change-set of 780 bytes: three signals, the 50 rows of the top and the 7 around the player, decoded from the wire.
+- Eight updates awaited together, whatever order the core resumes them in, leave the newest window on screen.
+- Merging delta batches gives the ranking a plain sort of the same scores gives, after each of forty batches; the demo feed runs on the fake clock, stops when stopped, and is the same on every run.
+
+## What to watch
+
+- **Never take the app's lock on the core.** Anything that reads the structure goes through the pool, as `follow` does. A core call that waits for the mutex while a snapshot is being swapped in would hold the core lock while it waits: the in-call parse again, by the back door. Keep the time under the app's lock to the swap and the window.
+- **The pool cannot write signals.** The closure returns the window and the awaiting task writes it; a write from the pool is refused with E0065.
+- **On the web, `spawn_blocking` runs inline.** The wasm core has no pool, so the parse runs synchronously inside the call and blocks the core's thread whichever design you pick. What the design still gives you there is the 771-byte change-set instead of 1.2 MB for the main thread to decode. Run the web core in a worker ([Workers & crash recovery](https://shreypdev.github.io/undra/docs/web.html)) so a long step does not stall a frame.
+- **A feed faster than the screen.** Each batch of deltas is one hand to the pool and one publish. A feed that sends thousands a second should be batched before it reaches `apply_deltas`, as the demo feed does with one batch every 100 ms; the platform's frame merge ([High-frequency data](https://github.com/shreypdev/undra/blob/main/docs/HIGH_FREQUENCY.md)) takes care of the rest.
+- **Memory.** The structure holds each player twice (about 1.6 MB for 100,000) and a swap briefly holds the old ranking and the new one. A snapshot is not part of the core's own snapshot: a restored store has no players, so it clears its window and the app loads the standings again.
+- **A window is not a lazy list.** `Lazy<T>` ([Paging and lazy lists](https://shreypdev.github.io/undra/docs/paging.html)) lets a platform scroll through a collection in the core; this recipe is for a screen that only ever shows a derived summary of it.
+
+Source: [`examples/cookbook/core/src/leaderboard.rs`](https://github.com/shreypdev/undra/blob/main/examples/cookbook/core/src/leaderboard.rs) and [`standings.rs`](https://github.com/shreypdev/undra/blob/main/examples/cookbook/core/src/standings.rs).
 
 ---
 

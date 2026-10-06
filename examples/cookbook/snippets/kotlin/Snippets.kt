@@ -79,3 +79,18 @@ suspend fun notesScreen() {
     println(waiting)
 }
 // docs:end
+
+// docs:begin leaderboard-kotlin
+class LeaderboardScreen(private val board: Leaderboard, private val myId: UInt) {
+    // Fifty rows, up to seven rows around me and four numbers: the 100,000 players stay in the core.
+    val top: StateFlow<List<Row>> = board.top
+    val around: StateFlow<List<Row>> = board.around
+    val summary: StateFlow<Summary> = board.summary
+
+    suspend fun refresh() { board.loadSnapshot("/standings") }
+
+    suspend fun findMe() = board.follow(myId)
+
+    fun isMine(row: Row): Boolean = row.id == myId
+}
+// docs:end

@@ -1477,6 +1477,7 @@ name = "undra-bench"
 version = "1.0.0"
 dependencies = [
  "criterion",
+ "serde_json",
  "undra",
  "undra-ports",
  "undra-query",

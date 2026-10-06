@@ -5,6 +5,8 @@ import {
   AuthError,
   type Auth,
   type Feed,
+  type Leaderboard,
+  type Row,
   type SignUp,
   SubmitError,
   type Uploads,
@@ -15,7 +17,7 @@ import {
 import { browserAdapters, fetchHttp } from "@undra/runtime";
 import { OptInPortIds, type WebSocketConstructorLike, browserWebSocket, fetchSse, ssePort, webSocketPort } from "@undra/runtime/realtime";
 import { useSignal } from "@undra/runtime/react";
-import type { ReactElement } from "react";
+import { type ReactElement, useEffect } from "react";
 
 // scaffolding
 declare function Login(props: { auth: Auth }): ReactElement;
@@ -119,4 +121,35 @@ export const ports = {
   [OptInPortIds.WebSocket.portId]: webSocketPort(browserWebSocket({ WebSocket: AppWebSocket })),
   [OptInPortIds.Sse.portId]: ssePort(fetchSse({ fetch: appFetch })),
 };
+// docs:end
+
+// docs:begin leaderboard-ts
+function PlayerRow({ row, mine }: { row: Row; mine: boolean }) {
+  return (
+    <li style={{ fontWeight: mine ? 700 : 400 }}>
+      #{row.rank} Player {row.id}: {row.score}
+    </li>
+  );
+}
+
+export function LeaderboardView({ board, myId }: { board: Leaderboard; myId: number }) {
+  const top = useSignal(board.top);         // the best fifty
+  const around = useSignal(board.around);   // a few rows around the player being followed
+  const summary = useSignal(board.summary); // players, top score, median score, my rank
+  useEffect(() => void board.loadSnapshot("/standings"), [board]);
+  return (
+    <>
+      <h2>{summary.players} players, median score {summary.medianScore}</h2>
+      <ol>{top.map((row) => <PlayerRow key={row.id} row={row} mine={row.id === myId} />)}</ol>
+      {summary.me ? (
+        <>
+          <h3>You are #{summary.me.rank}</h3>
+          <ol>{around.map((row) => <PlayerRow key={row.id} row={row} mine={row.id === myId} />)}</ol>
+        </>
+      ) : (
+        <button onClick={() => void board.follow(myId)}>Find me</button>
+      )}
+    </>
+  );
+}
 // docs:end

@@ -29,6 +29,13 @@
 # To set or re-base a budget: `cargo test -p undra-bench --test budgets --release -- --ignored
 # --nocapture baseline`, then apply the rule above.
 #
+# TAILS (`p99_ns`). A row whose claim is its tail, how long the core lock is held (the leaderboard rows),
+# may carry `p99_ns` and `measured_p99_ns` beside its p50 budget: the p99 of its iterations (301 samples; an
+# operation that is reset between runs is timed one run per sample, up to 3,000) must stay under it, the
+# best p99 of the three attempts, as the p50 is. The ceiling is 10x the measured p99, the rule of the
+# sustained scenarios' p999: a p99 is the noisiest number a shared runner gives. `UNDRA_BENCH_SCALE`
+# multiplies it; a baseline does not gate it.
+#
 # HARSH CONDITIONS (layer B). The `[stress."name"]` tables at the end gate the sustained scenarios
 # of `cargo test -p undra-bench --test stress --release` (and, for `soak/mixed`, the soak binary):
 # what the core does at rates far above any UI, for seconds at a time. Same machine, same best-of-
@@ -577,6 +584,43 @@ budget_ns = 28000
 measured_ns = 5513.8
 
 # ---------------------------------------------------------------------------------------------
+# The leaderboard recipe (site/docs/cookbook/leaderboard.html, bench/common/leaderboard.rs): how long one
+# snapshot of 100,000 players (1.4 MB) holds the core lock. A row times one call, and a call holds the lock
+# for as long as it runs. Best of three on the reference host while other builds ran (load average 13).
+# ---------------------------------------------------------------------------------------------
+
+# The recipe's publish step: the blocking pool already parsed, sorted and swapped the snapshot (the untimed
+# reset stages its window), and the awaiting task writes the top 50, the 7 rows around one player and four
+# numbers in one transaction: one change-set of about 1 KB, copied by the host as every platform's callback
+# does. The claim of the recipe is the tail of this row, so it carries a p99 gate: 10x the measured p99
+# (the rule for the tails of the sustained scenarios' p999; a p99 of a half-microsecond operation on a
+# shared runner is the noisiest number in this file).
+[bench."leaderboard/lock_hold/recommended"]
+budget_ns = 1900
+measured_ns = 375.0
+p99_ns = 4600
+measured_p99_ns = 458.0
+
+# The first wrong design: the snapshot is applied inside the call (parse, sort, swap), then the same
+# window is published. The lock is held for the whole parse: about 6,800 times the recommended row.
+[bench."leaderboard/lock_hold/in_core_call"]
+budget_ns = 13000000
+measured_ns = 2563917.0
+
+# The second wrong design: the same, and every player in a `Signal<Vec<Place>>` (a 1.2 MB change-set,
+# copied by the host under the lock). The platform still has to decode and apply those 1.2 MB, which
+# this host-side row does not show.
+[bench."leaderboard/lock_hold/signal_of_rows"]
+budget_ns = 15000000
+measured_ns = 2938750.0
+
+# What the blocking pool does for the recommended design, with no core lock: parse, sort, swap, window.
+# It is the latency of the snapshot reaching the screen, and it is allowed to be milliseconds.
+[bench."leaderboard/ingest/off_core"]
+budget_ns = 13000000
+measured_ns = 2559625.0
+
+# ---------------------------------------------------------------------------------------------
 # Harsh conditions, layer B: sustained runs (`cargo test -p undra-bench --test stress --release`).
 # Rules in the header. Measured with UNDRA_STRESS_SECONDS=10, best of three runs.
 # ---------------------------------------------------------------------------------------------
@@ -841,6 +885,18 @@ num = "query/infinite_append_page_50"
 den = "query/keyed_push_50"
 max = 2.0
 measured = 1.34
+
+# The point of the leaderboard recipe, as a relationship the machine's speed cancels: the core lock is held for
+# the publish of a snapshot, not for the snapshot. Measured 0.00015 on the reference host (375 ns against
+# 2.6 ms). The maximum is the bound of what it guards, not 1.15x a sample: a publish that grew with the
+# players (the standings read or sorted on the core, a signal of every row) would be 0.5 to 1 here, and the
+# two rows are different families (a few signal writes against a parse and a sort), so their ratio spreads
+# across hardware by a factor of a few at most; 0.05 sees any O(n) step on every runner.
+[ratio."leaderboard_publish_vs_in_core_apply"]
+num = "leaderboard/lock_hold/recommended"
+den = "leaderboard/lock_hold/in_core_call"
+max = 0.05
+measured = 0.00015
 
 # ---------------------------------------------------------------------------------------------
 # Sizes of shipped artefacts (ADR-052): measured by `scripts/wasm-size.sh` (the web) and

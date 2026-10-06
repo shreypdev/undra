@@ -613,6 +613,58 @@ yet measured on a device: a native core computes all of this twice per launch (`
 the table before `init`, then `Runtime::new` collects and hashes it again), and `fnv1a64` is now three quarters of the
 hash.
 
+### 9. A snapshot of 100,000 players holds the core lock for what the core does with it, not for what it costs (the leaderboard recipe)
+
+The cookbook's leaderboard (`site/docs/cookbook/leaderboard.html`, `examples/cookbook/core/src/leaderboard.rs`) takes a
+snapshot of 100,000 players (1,377,798 bytes of JSON: `[[id, score], ..]`) and a stream of score deltas. The design
+the recipe teaches ingests on `spawn_blocking` into a structure the app owns behind its own lock
+(`standings.rs`), and publishes a small window of it, the top 50, the 7 rows around one player and four numbers, in one
+transaction on the core. The rows below time one `Runtime::call_sync` on the bench thread, and a call holds the core lock
+for as long as it runs, so the time of the call is the core-lock hold of one snapshot. The host copies every change-set
+under the lock, as every platform's callback does (`CopyingHost`). `standings.rs` is the recipe's own file, compiled into
+the harness by path, so these are the numbers of the code the recipe shows. Budgets-test p50 and p99, the best of runs
+on the reference host at a load average of 13 (other builds ran), 2026-10-05, rustc 1.99.0:
+
+| Row (`leaderboard/..`) | What the call does under the core lock | p50 | p99 | Change-set |
+|---|---|---|---|---|
+| `lock_hold/recommended` | publishes the window the blocking pool prepared: three signals, one transaction | **375 ns** | **458 ns** | 780 bytes |
+| `lock_hold/in_core_call` | parses, sorts and swaps the snapshot inside the call, then publishes the same window | 2.56 ms | 2.94 ms | 780 bytes |
+| `lock_hold/signal_of_rows` | parses and sorts inside the call and sets a `Signal<Vec<Place>>` of every player | 2.94 ms | 3.26 ms | 1,200,033 bytes |
+| `ingest/off_core` | (no core lock) what the pool does for the recommended design: parse, sort, swap, window | 2.56 ms | 2.98 ms | none |
+
+The lock is held about **6,800 times** shorter with the recommended design at the median, and (2.94 ms against 458 ns)
+6,400 times at the 99th percentile: the cost of the snapshot did not go away, it moved to a thread that does not hold the lock (the
+`ingest/off_core` row: the snapshot is on screen about 2.6 ms after it arrives either way). Gated by
+`[bench."leaderboard/lock_hold/recommended"]` (p50 1.9 us and a `p99_ns` ceiling of 4.6 us: the first row of the file whose
+claim is its tail, so `Stats` has a p99 now and a `[bench]` table may carry `p99_ns`), and by the ratio
+`leaderboard_publish_vs_in_core_apply` (the publish is at most 0.05 of the in-call apply; 0.00015 measured): a publish that
+grew with the players, the standings read or sorted on the core or every row in a signal, would put it near 1, whatever the
+machine. The second wrong design is only 15% more under the lock on a host (the 1.2 MB change-set is encoded and copied
+in half a millisecond), but it is what the platform then has to decode and apply every time, which no host-side row
+shows; the recommended window is 780 bytes whatever the number of players. (The fixture's window mirrors the
+recipe's, the followed row and the version check included; re-measured after the review made it so, the best p50 and
+p99 were 375 ns and 459 ns, the same within the 42 ns tick of this host's clock.)
+
+What a caller sees. `cargo test -p undra-bench --test leaderboard --release -- --ignored --nocapture stall_report`
+applies a snapshot every ~9 ms (4 ms of work, then 5 ms of sleep) for 8 s per design while another thread makes a call
+that does nothing (`ping`: it only needs the core lock) in a loop, and records how long each call took. Best of four runs
+at a load average of 13 to 16 (a busy machine adds descheduling noise to the probe itself, so the worst call of a run is the noisiest number here):
+
+| Design | Calls | Wait p50 | p99 | p99.9 | Max |
+|---|---|---|---|---|---|
+| recommended (pool, then publish) | 269,276 | 125 ns | 2.0 us | 7.8 us | 131.7 us |
+| snapshot applied inside a call | 171,176 | 125 ns | 2.9 us | 3.47 ms | 7.04 ms |
+
+A call that arrives during an in-call apply waits out the parse: the p99.9 and the max are that wait (about 4 ms a
+snapshot with the probe running; the max adds the probe's own descheduling on a busy machine). A
+closed-loop probe sees one such wait per snapshot, about 1 call in 200, so the p99 does not show it; the p99.9 does. With
+the recommended design nobody waits more than the publish: the worst call of the best run is 132 us. These are the
+numbers of one host; the structure is the claim, the budgets test holds the ratio.
+
+The harness grew two fixture stores and two records for this: 1.8 KB of the 42,689 bytes of canonical schema it
+registers now, so about 2.7 us of `Runtime::new` at finding 8's price of 1.5 us a KB (3% of the two cold-start rows,
+which sit at 1.18x their baseline's); the baseline is not re-recorded.
+
 ## Full tables
 
 ### Wire: encode, decode and round trip per type

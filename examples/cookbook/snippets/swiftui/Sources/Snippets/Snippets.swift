@@ -114,6 +114,48 @@ struct UploadsView: View {
 }
 // docs:end
 
+// MARK: leaderboard
+
+// docs:begin leaderboard-swift
+struct LeaderboardView: View {
+    let board: Leaderboard
+    let myId: UInt32
+
+    var body: some View {
+        List {
+            // Four numbers about 100,000 players, and the best fifty of them.
+            Section("\(board.summary.players) players, median score \(board.summary.medianScore)") {
+                ForEach(board.top, id: \.id) { row in PlayerRow(row: row, mine: row.id == myId) }
+            }
+            // Where I stand: a few rows around me, which the core moves when I ask or when scores change.
+            if let me = board.summary.me {
+                Section("You are #\(me.rank)") {
+                    ForEach(board.around, id: \.id) { row in PlayerRow(row: row, mine: row.id == myId) }
+                }
+            } else {
+                Button("Find me") { Task { try? await board.follow(id: myId) } }
+            }
+        }
+        .task { _ = try? await board.loadSnapshot(path: "/standings") }
+        .refreshable { _ = try? await board.loadSnapshot(path: "/standings") }
+    }
+}
+
+struct PlayerRow: View {
+    let row: Row
+    let mine: Bool
+
+    var body: some View {
+        HStack {
+            Text("#\(row.rank)").monospacedDigit()
+            Text("Player \(row.id)").fontWeight(mine ? .bold : .regular)
+            Spacer()
+            Text("\(row.score)").monospacedDigit()
+        }
+    }
+}
+// docs:end
+
 // MARK: network
 
 // docs:begin network-swift

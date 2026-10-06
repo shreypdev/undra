@@ -12,6 +12,8 @@ undra-ports = { workspace = true }
 undra-query = { workspace = true }
 undra-runtime = { workspace = true }
 undra-wire = { workspace = true }
+# `examples/cookbook/core/src/standings.rs` (the leaderboard recipe) is compiled into the harness by path.
+serde_json = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["cargo_bench_support"] }
@@ -52,4 +54,8 @@ harness = false
 
 [[bench]]
 name = "ports"
+harness = false
+
+[[bench]]
+name = "leaderboard"
 harness = false
