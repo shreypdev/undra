@@ -55,6 +55,7 @@ cc_import(
 swift_library(
     name = "app_lib",
     srcs = ["HelloApp.swift"],
+    copts = ["-swift-version", "6"],  # strict concurrency, as the generated bindings are compiled
     module_name = "HelloApp",
     tags = _TAGS,
     deps = [

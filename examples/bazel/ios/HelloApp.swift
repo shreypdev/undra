@@ -19,10 +19,14 @@ struct HelloApp: App {
     /// Loads the core linked into the app and calls it once: the Swift frame above the Rust one.
     private func start() -> String {
         do {
-            _ = try UndraHelloCore.load(.inproc())
+            _ = try Self.core.get()
             return try greeting(name: "Xcode")
         } catch {
             return "The core did not start: \(error)"
         }
     }
+
+    /// The core, loaded the first time it is asked for. A core loads once per process, and SwiftUI runs `.task` again for a
+    /// scene it makes again.
+    private static let core = Result { try UndraHelloCore.load(.inproc()) }
 }
