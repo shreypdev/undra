@@ -1,9 +1,10 @@
 #!/bin/sh
 # ADR-061: the generated Kotlin does not break a repository that lints everything.
 #
-# ktlint (the version rules_kotlin pins) runs over the Kotlin tree `undra_bindings` generated, four ways: as generated, and with
-# each of the two exclusions `undra bindgen` writes taken away in turn, and with both. The first must be clean, the last must not
-# be (otherwise the test would pass whatever the exclusions do), and each exclusion alone must be enough. Usage:
+# ktlint (the version rules_kotlin pins) runs over the Kotlin tree `undra_bindings` generated, five ways: as generated, and with
+# each of the two exclusions `undra bindgen` writes taken away in turn, and with both. The first must be clean, the fourth must not
+# be (otherwise the test would pass whatever the exclusions do), and each exclusion alone must be enough. The fifth takes both
+# away and puts the root `.editorconfig` section of the Bazel guide in the repository's own file, which must be enough too. Usage:
 #
 #   lint_test.sh <ktlint> <the generated Kotlin tree>
 set -eu
@@ -55,6 +56,15 @@ repository neither
 drop_suppress neither
 drop_editorconfig neither
 expect findings neither
+
+# `[bindings] lint_exclusions = "none"`: no file beside the tree, the section the guide gives in the repository's own
+# .editorconfig instead. (An EditorConfig section with a slash is anchored to its file's directory, so `[**/generated/**]`
+# misses a `generated/` right beside it: ktlint 1.8 reports everything with it.)
+repository root-section
+drop_suppress root-section
+drop_editorconfig root-section
+printf '\n[generated/**]\nktlint_standard = disabled\nktlint_experimental = disabled\n' >> "$WORK/root-section/.editorconfig"
+expect clean root-section
 
 echo "kotlin lint: $([ "$failed" = 0 ] && echo passed || echo FAILED)"
 exit "$failed"
