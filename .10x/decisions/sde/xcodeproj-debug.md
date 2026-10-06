@@ -14,8 +14,9 @@ build through Bazel), with `__undra_dispatch_fn_greeting` (lib.rs:144) under it,
 line, attached to the process `simctl launch --wait-for-debugger` started).
 
 Versions: Bazel 8.8.1, Xcode 26.6 (17F113), Rust 1.99.0, `rules_apple` 5.2.0, `rules_swift` 4.1.2, `apple_support` 2.8.4, and the new
-`rules_xcodeproj` 4.1.0 (BCR; it asks for `rules_apple` 4.4.0 and `rules_swift` 3.5.0, so the example's higher ones win; lock diff: two
-lines for the module, nothing else moved).
+`rules_xcodeproj` 4.1.0 (BCR; it asks for `rules_apple` 4.4.0 and `rules_swift` 3.5.0, so the example's higher ones win; no version the
+example resolved before moved, and it adds six modules of its own: `rsync`, `openssl`, `lz4`, `xxhash`, `zstd`, `rules_perl`, `bazel mod
+graph` on main and on the branch, reviewer's correction; the lock also gained extension entries that 8.8.1 recorded).
 
 ## What was added
 
