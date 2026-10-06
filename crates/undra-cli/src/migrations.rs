@@ -131,7 +131,7 @@ pub const MIGRATIONS: &[Migration] = &[
             },
             Note {
                 kind: Kind::New,
-                text: "Bazel: `undra_bindings_test` guards committed bindings; `undra_core(ndk = <label>)` makes the NDK a declared input; `undra_core(keep_debug_objects = True)` keeps the iOS archives a debug map names; the `symbols` output group now holds the host library's debug symbols too, under `<target>.symbols/symbols/` and `host/` (a path that read the old flat layout must change). The rules support Bazel 8.8 and 9.x.",
+                text: "Bazel: `undra_bindings_test` guards committed bindings; `undra_core(ndk = <label>)` makes the NDK a declared input, and `extra_path` reaches the iOS core alone (an `extra_path` that named `cargo-ndk`'s directory for an Android core is ignored: that core needs `ndk`); `undra_core(keep_debug_objects = True)` keeps the iOS archives a debug map names; the `symbols` output group now holds the host library's debug symbols too, under `<target>.symbols/symbols/` and `host/` (a path that read the old flat layout must change). The rules support Bazel 8.8 and 9.x.",
             },
         ],
     },

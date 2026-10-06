@@ -9,9 +9,9 @@ _source = tag_class(
     doc = "Where Undra is: a checkout (`path`) or a source archive (`urls`, `integrity`, `strip_prefix`).",
     attrs = {
         "path": attr.string(doc = "A checkout of the Undra repository, relative to the root module or absolute."),
-        "urls": attr.string_list(),
-        "integrity": attr.string(),
-        "strip_prefix": attr.string(),
+        "urls": attr.string_list(doc = "Where a source archive of the Undra repository is downloaded from (one or more mirrors), when it is not a checkout."),
+        "integrity": attr.string(doc = "The archive's checksum, as Bazel's `http_archive` takes it (`sha256-<base64>`): a download that differs fails."),
+        "strip_prefix": attr.string(doc = "The directory of the archive the repository is in (`undra-1.1.0` for a tagged source archive)."),
     },
 )
 

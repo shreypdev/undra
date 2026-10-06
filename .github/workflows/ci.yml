@@ -498,7 +498,7 @@ jobs:
   # --lockfile_mode=error here: a lock records what the machine that wrote it resolved, per OS, and a Linux runner would fail on
   # every entry a macOS developer made. The 9.x steps and the minimums run with --lockfile_mode=off: 9.x records other registry
   # files than 8.8.1, and the minimums are another graph, so neither reads or rewrites the committed lock. Bump the 9.x pin
-  # (USE_BAZEL_VERSION, in the 9.x steps of this job and of the macOS one, and in examples/bazel/README.md) when a newer 9.x
+  # (USE_BAZEL_VERSION, in the 9.x steps of this job, of the macOS one and of the Android one, and in examples/bazel/README.md) when a newer 9.x
   # release is out and passes.
   bazel-example:
     name: Bazel example
@@ -538,6 +538,9 @@ jobs:
       - name: bazel test //... (host and web cores, bindings, Kotlin and TypeScript consumers, ktlint)
         working-directory: examples/bazel
         run: bazel test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+      - name: at-minimums.sh puts MODULE.bazel back whatever the command does
+        working-directory: examples/bazel
+        run: bash scripts/at-minimums.test.sh
       - name: bazel test //... at the ruleset minimums
         working-directory: examples/bazel
         run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
@@ -640,10 +643,41 @@ jobs:
           # On its own line, so that a failed script stops the step (bash -e ignores a failed substitution inside an argument),
           # where Bazel would otherwise download the 664 MB archive.
           flags="$(android/use-installed-ndk.sh "$ANDROID_HOME/ndk/$NDK_VERSION")"
+          echo "NDK_FLAGS=$flags" >> "$GITHUB_ENV"
           bazel build //:mobile_android $flags --repository_cache="$HOME/.cache/bazel-repository"
+          # The build used the installed NDK and not the archive: an NDK repository of the output base links into it. (Were the
+          # override to stop working, Bazel would download the archive and this job would be green for the wrong reason.)
+          ndk_real="$(cd "$ANDROID_HOME/ndk/$NDK_VERSION" && pwd -P)"
+          used=0
+          for repo in "$(bazel info output_base)"/external/*android_ndk_linux; do
+            [ -e "$repo/source.properties" ] || continue
+            case "$(readlink -f "$repo/source.properties")" in "$ndk_real"/*) used=1 ;; esac
+          done
+          [ "$used" = 1 ] || { echo "the build did not use the installed NDK: no NDK repository of the output base links into $ndk_real" >&2; exit 1; }
       - name: The Kotlin bindings as an Android library (//android:hello)
         working-directory: examples/bazel
         run: bazel build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
+      # Both at the ruleset minimums and on the newest 9.x, as the other two Bazel jobs run their targets (the same script and
+      # pin; a newer 9.x moves with theirs).
+      - name: The Android core and library at the ruleset minimums
+        working-directory: examples/bazel
+        run: |
+          scripts/at-minimums.sh build //:mobile_android $NDK_FLAGS --repository_cache="$HOME/.cache/bazel-repository"
+          scripts/at-minimums.sh build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
+      - name: The Android core and library on Bazel 9.x
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: |
+          bazel build //:mobile_android $NDK_FLAGS --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
+          bazel build //android:hello --config=android --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
+      - name: The Android core and library on Bazel 9.x at the ruleset minimums
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: |
+          scripts/at-minimums.sh build //:mobile_android $NDK_FLAGS --repository_cache="$HOME/.cache/bazel-repository"
+          scripts/at-minimums.sh build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
 
   playground-web:
     # The playground's web app and its stories page (src/stories, rendered by stories.html with Vite alone; the modules are Component Story Format

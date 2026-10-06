@@ -365,7 +365,7 @@ host library to read the schema hash for the symbol manifest, about 5 s per web 
 ## Amendment (1.1, Bazel-first integration, 2026-10-05)
 
 The 1.1 design (`.10x/specs/2026-10-05-bazel-first-design.md`) extends this ADR without changing its decision: the rules keep
-calling the CLI. Four things change in how they fit a repository:
+calling the CLI. Five things change in how they fit a repository:
 
 1. **A Bazel range, tested.** The rules support Bazel 8.8 and 9.x; CI runs the example on both (`.bazelversion` stays at the
    lowest supported, a second run sets `USE_BAZEL_VERSION`). The guide states the range.
@@ -374,7 +374,8 @@ calling the CLI. Four things change in how they fit a repository:
    them by depending on Undra. MVS still picks the repository's higher version when it has one.
 3. **Android in CI.** With the NDK a declared input (ADR-065), the example's Android core and `undra_android_library` build in
    a Linux job; item 5 of the implementation note (declared, not built) is closed.
-4. **Lint exclusions by choice.** The five exclusion files `undra bindgen` writes beside the trees (section 5) become a
+4. **Lint exclusions by choice.** The four exclusion files `undra bindgen` writes beside the trees (section 5; the
+   `@file:Suppress` line of every Kotlin file is part of the file and stays) become a
    project setting: written beside the trees (the default) or not written at all, for a repository that configures its
    linters centrally. The guide lists the files and the root-config lines such a repository adds.
 

@@ -145,22 +145,29 @@ until mkdir -m 700 "$WORK" 2>/dev/null; do
 done
 echo "$$" > "$WORK/.undra-bazel-owner"
 # `keep_debug_objects` (an iOS core): Apple's linker writes no DWARF for a prelinked slice, it writes a debug map naming the
-# objects the DWARF is in (`libundra_core_<hash>.a(..rcgu.o)` below `target/<triple>/`, ADR-044, ADR-046), and a debugger, or
-# the dSYM of the app, follows the map to those paths. They are in this directory, so it is the one thing that stays: the
-# objects and nothing else (the rest of what is below is copied, 1.2 GB for the example), and it is replaced by the next build of
-# the target (its owner file says `kept`, which no process is: a pid, once this one has exited, could be another process's by
-# then, and the next build would wait for it). The directory is pruned where it is, never removed and made again: it is the lock,
-# and a build of the same target waiting for it (another output base: Xcode's and the command line's) would take it in the moment
-# it did not exist, and this process would then write into that build's directory.
+# objects the DWARF is in (`libundra_core_<hash>.a(..rcgu.o)` below `target/<triple>/<profile>/`, ADR-044, ADR-046), and a
+# debugger, or the dSYM of the app, follows the map to those paths; the DWARF in turn names the sources by their paths here,
+# which is what a debugger shows at a breakpoint. They are in this directory, so it is what stays: those archives, the
+# project's sources (`app/`) and the Undra crates' (`undra/`, 15 MB), and nothing else (the rest of what is below is build
+# output, 1.2 GB for the example; the vendored crates' sources are 295 MB unpacked and are not kept, so a frame inside one of
+# them has a file and a line but no source to show), and it is replaced by the next build of the target (its owner file says
+# `kept`, which no process is: a pid, once
+# this one has exited, could be another process's by then, and the next build would wait for it). The directory is pruned where
+# it is, never removed and made again: it is the lock, and a build of the same target waiting for it (another output base:
+# Xcode's and the command line's) would take it in the moment it did not exist, and this process would then write into that
+# build's directory.
 cleanup() {
   if [ "$KEEP_DEBUG_OBJECTS" = 1 ] && [ -d "$WORK/target" ]; then
     mv "$WORK/target" "$WORK/.target.all" || { rm -rf "$WORK"; exit 1; }
-    (cd "$WORK/.target.all" && find . -path '*/debug/libundra_core_*.a' -o -path '*/release*/libundra_core_*.a') | while IFS= read -r object; do
+    # The archives the debug map names: `<triple>/<profile>/libundra_core_<hash>.a`, not the copies Cargo keeps under `deps/`.
+    (cd "$WORK/.target.all" && find . -mindepth 3 -maxdepth 3 -name 'libundra_core_*.a') | while IFS= read -r object; do
       object="${object#./}"
       mkdir -p "$WORK/target/$(dirname "$object")"
       mv "$WORK/.target.all/$object" "$WORK/target/$object"
     done
-    find "$WORK" -mindepth 1 -maxdepth 1 ! -name target ! -name .undra-bazel-owner -exec rm -rf {} +
+    # The sources, less what was built from them (the project's `build/`).
+    rm -rf "$WORK/app/$PROJECT/build"
+    find "$WORK" -mindepth 1 -maxdepth 1 ! -name target ! -name app ! -name undra ! -name .undra-bazel-owner -exec rm -rf {} +
     echo kept > "$WORK/.undra-bazel-owner"
   else
     rm -rf "$WORK"
