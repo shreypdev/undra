@@ -46,20 +46,38 @@ private func expectedEvents(_ range: Range<Int>) -> [SseEvent] {
     return range.map { SseEvent(id: "\($0)", event: "message", data: "\($0)") }
 }
 
-/// A hang detector for a test that waits on a stream: after `seconds` (far longer than any machine needs) it runs `onHang`, which
-/// ends the wait, so the test fails by its assertions (and by `fired`) instead of hanging the suite. Cancel it when the test is done.
+/// A hang detector for a test that waits on a stream: after `seconds` without progress it runs `onHang`, which ends the wait, so the
+/// test fails by its assertions (and by `fired`) instead of hanging the suite. The default is several times ``hangDeadline`` (the
+/// longest one wait of the test may take), so a test that makes a few waits one after the other cannot be ended by the detector while
+/// each wait is still within its own deadline; a test that makes many (one per byte) calls ``kick()`` after each, so the detector
+/// measures the time since the last step, never the length of the whole test. Cancel it when the test is done.
 final class HangDetector: @unchecked Sendable {
     private let hung = Locked(false)
-    private var task: Task<Void, Never>?
+    private let task = Locked<Task<Void, Never>?>(nil)
+    private let seconds: Double
+    private let onHang: @Sendable () async -> Void
 
-    init(seconds: Double = 30, _ onHang: @escaping @Sendable () async -> Void) {
+    init(seconds: Double = 5 * hangDeadline, _ onHang: @escaping @Sendable () async -> Void) {
+        self.seconds = seconds
+        self.onHang = onHang
+        kick()
+    }
+
+    /// Restarts the countdown: the test made progress.
+    func kick() {
         let hung = self.hung
-        task = Task {
+        let seconds = self.seconds
+        let onHang = self.onHang
+        let next = Task {
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             if !Task.isCancelled {
                 hung.withLock { $0 = true }
                 await onHang()
             }
+        }
+        task.withLock { current in
+            current?.cancel()
+            current = next
         }
     }
 
@@ -69,7 +87,7 @@ final class HangDetector: @unchecked Sendable {
     }
 
     func cancel() {
-        task?.cancel()
+        task.withLock { $0?.cancel() }
     }
 }
 
@@ -623,12 +641,21 @@ final class SseChunkWireTests: XCTestCase {
         defer { detector.cancel() }
         let reading = Task { await drain(stream) }
         var sent = ScriptedEventServer.opening.count
+        var allArrived = true
         for byte in awkwardBody {
             server.send([byte])
             sent += 1
-            await eventually("byte \(sent) of the body") { stream.received.bytes == sent }
+            // Each byte is a real socket round trip: how long it takes is the machine's business, so the wait has the hang deadline and
+            // the detector is restarted at every step (it is armed for the time since the last byte, not for the whole body).
+            guard await eventually("byte \(sent) of the body", { stream.received.bytes == sent }) else {
+                allArrived = false
+                break
+            }
+            detector.kick()
         }
-        XCTAssertGreaterThanOrEqual(stream.received.chunks, awkwardBody.count, "each byte was a chunk of its own")
+        if allArrived {
+            XCTAssertGreaterThanOrEqual(stream.received.chunks, awkwardBody.count, "each byte was a chunk of its own")
+        }
         server.finish()
         let (events, end) = await reading.value
         XCTAssertEqual(events, awkwardEvents)

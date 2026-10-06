@@ -882,7 +882,7 @@ final class RealtimeEndsReviewTests: XCTestCase {
                 try await binding.open(url: "\(server.http)/sse/hang?n=\(index)", headers: [], lastEventId: nil)
             } }
             let timeout = Task {
-                try await Task.sleep(nanoseconds: 3_000_000_000)
+                try await Task.sleep(nanoseconds: UInt64(hangDeadline * 1_000_000_000))
                 opening.cancel()
             }
             let result = await opening.value
@@ -896,7 +896,7 @@ final class RealtimeEndsReviewTests: XCTestCase {
         for stream in streams {
             try await binding.close(stream: stream)
         }
-        let deadline = Date().addingTimeInterval(5)
+        let deadline = Date().addingTimeInterval(hangDeadline)
         var hanging: [RealtimeServer.Connection] = []
         repeat {
             hanging = Array(try await server.connections().filter { $0.path == "/sse/hang" }.suffix(12))

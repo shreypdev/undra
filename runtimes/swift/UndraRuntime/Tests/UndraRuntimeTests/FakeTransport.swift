@@ -464,9 +464,15 @@ final class FakeTransport: UndraTransport, @unchecked Sendable {
 
 // MARK: - Helpers
 
-/// Polls `condition` until it holds or `timeout` seconds pass; yields the main actor between polls.
+/// The deadline of every wait in this test target, in seconds. A wait is a hang detector, never a speed assertion: the condition
+/// it waits for always arrives, however busy the machine is, so the deadline is far longer than any machine needs and only a
+/// genuine hang reaches it (a passing wait returns the moment its condition holds, so the length costs nothing). A test that
+/// supervises waits (``HangDetector``) is armed for longer still.
+let hangDeadline: Double = 60
+
+/// Polls `condition` until it holds or `timeout` seconds pass (``hangDeadline``); yields the main actor between polls.
 @MainActor
-func waitUntil(timeout: Double = 3, _ condition: () -> Bool) async -> Bool {
+func waitUntil(timeout: Double = hangDeadline, _ condition: () -> Bool) async -> Bool {
     let deadline = Date().addingTimeInterval(timeout)
     while Date() < deadline {
         if condition() {

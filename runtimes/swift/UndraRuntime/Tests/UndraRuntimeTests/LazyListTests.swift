@@ -641,24 +641,21 @@ final class LazyListTests: XCTestCase {
     // MARK: Cost
 
     func testReadingCachedRowsIsCheap() throws {
-        // The hot path of a view: rows of cached pages, read over and over. Generous (debug build, a busy machine), but it fails
-        // if a read starts to cost anything like a call.
+        // The hot path of a view: rows of cached pages, read over and over. What it asserts is that no read costs a call (the count
+        // of calls below); how fast the machine does 100,000 reads is not a property of the code (the budget is in `bench/`, R9).
         let rig = try LazyRig(rows: 5000)
         rig.list.prefetch(0 ..< 1200)
         rig.turns.runUntilQuiet()
         XCTAssertEqual(rig.list.testEngine.cachedPages.count, 24)
         let calls = rig.server.offsets.count
-        let start = Date()
         var sum = 0
         for round in 0 ..< 200 {
             for index in 0 ..< 500 {
                 sum += Int(rig.list[(round * 7 + index) % 1200] ?? 0)
             }
         }
-        let elapsed = Date().timeIntervalSince(start)
         XCTAssertGreaterThan(sum, 0)
         XCTAssertEqual(rig.server.offsets.count, calls, "no read of a cached row asks for anything")
-        XCTAssertLessThan(elapsed, 5, "100,000 cached reads took \(elapsed) s")
     }
 
     // MARK: The default turn

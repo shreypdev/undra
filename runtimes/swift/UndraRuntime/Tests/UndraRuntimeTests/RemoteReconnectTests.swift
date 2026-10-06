@@ -387,7 +387,7 @@ final class RemoteReconnectTests: XCTestCase {
         return Rig(server: server, scheduler: scheduler, inbound: inbound, transport: transport)
     }
 
-    private func eventually(_ what: String, timeout: Double = 5, _ condition: () -> Bool) {
+    private func eventually(_ what: String, timeout: Double = hangDeadline, _ condition: () -> Bool) {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition() {
             if Date() > deadline {
