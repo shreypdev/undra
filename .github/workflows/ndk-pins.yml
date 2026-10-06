@@ -1,0 +1,46 @@
+name: NDK pins
+
+# The Android NDK archives that examples/bazel/MODULE.bazel pins (`android_ndk_linux`, `android_ndk_macos`: url, sha256,
+# strip_prefix) are what a user's `bazel build //:mobile_android` downloads, and nothing else fetches them: the `bazel-android`
+# job of ci.yml gives the build the NDK that sdkmanager installed in their place (examples/bazel/android/use-installed-ndk.sh),
+# so a stale or wrong pin would show on a user's machine first. This fetches both archives through Bazel, which checks each
+# against its sha256 and lays the repository out with android/ndk.BUILD, on demand and monthly (the archives do not change,
+# the place they are served from can). Not a required check.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # The first day of the month, 05:23 UTC.
+    - cron: "23 5 1 * *"
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    name: Fetch the pinned NDK archives
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BAZELISK_VERSION: v1.29.0
+      # The sha256 of that release's bazelisk-linux-amd64.
+      BAZELISK_SHA256: 5a408715e932c0250d28bd84555f12edbf70117de42f9181691c736eacc4a992
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Bazelisk
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -sSfLo "$RUNNER_TEMP/bin/bazel" "https://github.com/bazelbuild/bazelisk/releases/download/$BAZELISK_VERSION/bazelisk-linux-amd64"
+          echo "$BAZELISK_SHA256  $RUNNER_TEMP/bin/bazel" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/bazel"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-repository
+          key: bazel-repository-${{ runner.os }}-ndk-pins-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
+          restore-keys: bazel-repository-${{ runner.os }}-
+      # Both archives, whatever the runner's OS: an archive is checked and unpacked the same way on any host, and a Linux
+      # runner is the cheapest one. `--lockfile_mode=off`: nothing here should rewrite the committed lock.
+      - name: bazel fetch the two NDK repositories (the sha256 of each archive is checked)
+        working-directory: examples/bazel
+        run: bazel fetch @android_ndk_linux//:ndk @android_ndk_macos//:ndk --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
