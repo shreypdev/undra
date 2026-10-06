@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use undra_bindgen::{BindgenError, GeneratedFile, Generator, SwiftObservation, provenance};
 use undra_meta::Schema;
 
-use crate::config::{Platform, ProjectConfig, check_ios_target};
+use crate::config::{LintExclusions, Platform, ProjectConfig, check_ios_target};
 use crate::error::{CliError, Code, Result};
 use crate::fsutil;
 use crate::names::{portable, relative_path};
@@ -37,6 +37,8 @@ pub struct Plan {
     /// The output directory, absolute with symlinks resolved (relative paths to the runtimes are
     /// computed from it).
     pub out: PathBuf,
+    /// Whether the lint exclusion files are written beside the trees (`[bindings] lint_exclusions`).
+    pub lint_exclusions: LintExclusions,
 }
 
 impl Plan {
@@ -159,12 +161,15 @@ pub fn plan_files(schema: &Schema, plan: &Plan) -> Result<Vec<GeneratedFile>> {
                 .map_err(bindgen_failure)?,
         ));
     }
-    // The exclusions the repository's linters read, beside each tree (ADR-061).
-    files.extend(crate::lint::fragments(
-        &plan.platforms,
-        &plan.generator.swift_module,
-        &plan.generator.core_names().ffi_module(),
-    ));
+    // The exclusions the repository's linters read, beside each tree (ADR-061), unless the project configures its linters
+    // centrally (`lint_exclusions = "none"`). The `@file:Suppress` line of every Kotlin file is part of that file and stays.
+    if plan.lint_exclusions == LintExclusions::Beside {
+        files.extend(crate::lint::fragments(
+            &plan.platforms,
+            &plan.generator.swift_module,
+            &plan.generator.core_names().ffi_module(),
+        ));
+    }
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(files)
 }
@@ -441,6 +446,7 @@ mod tests {
             platforms,
             runtimes,
             out: PathBuf::from("/proj/generated"),
+            lint_exclusions: LintExclusions::default(),
         }
     }
 
@@ -734,6 +740,117 @@ mod tests {
             e.detail.as_deref().unwrap_or_default().contains("E0050"),
             "{e}"
         );
+    }
+
+    /// The lint exclusion files of the three trees: what `lint_exclusions = "beside"` writes and `"none"` does not.
+    const LINT_FILES: [&str; 4] = [
+        "kotlin/.editorconfig",
+        "swift/.swiftlint.yml",
+        "ts/.eslintrc.json",
+        "ts/eslint.config.undra.mjs",
+    ];
+
+    fn all_paths(lint_exclusions: LintExclusions) -> Vec<String> {
+        let mut plan = plan(
+            Platform::ALL.to_vec(),
+            Runtimes::released("0.1.0", &Dist::github()),
+        );
+        plan.lint_exclusions = lint_exclusions;
+        plan_files(&schema(), &plan)
+            .unwrap()
+            .into_iter()
+            .map(|f| f.path)
+            .collect()
+    }
+
+    #[test]
+    fn beside_writes_the_lint_exclusions_and_none_writes_nothing_else_missing() {
+        let beside = all_paths(LintExclusions::Beside);
+        let none = all_paths(LintExclusions::None);
+        for file in LINT_FILES {
+            assert!(beside.iter().any(|p| p == file), "{file} not in {beside:?}");
+            assert!(!none.iter().any(|p| p == file), "{file} written with none");
+        }
+        // `none` removes exactly the four exclusion files: every other file is written as before, the `.gitattributes`
+        // of each tree (ADR-062) and the Kotlin `.gitignore` included.
+        let rest: Vec<&String> = beside
+            .iter()
+            .filter(|p| !LINT_FILES.contains(&p.as_str()))
+            .collect();
+        assert_eq!(rest, none.iter().collect::<Vec<_>>());
+        for kept in [
+            "swift/.gitattributes",
+            "kotlin/.gitattributes",
+            "ts/.gitattributes",
+            "kotlin/.gitignore",
+        ] {
+            assert!(none.iter().any(|p| p == kept), "{kept} in {none:?}");
+        }
+        // The default of the setting is `beside`: a plan that says nothing writes what it always did.
+        assert_eq!(LintExclusions::default(), LintExclusions::Beside);
+    }
+
+    #[test]
+    fn the_kotlin_suppress_line_is_not_an_exclusion_file_and_stays_with_none() {
+        let mut plan = plan(
+            vec![Platform::Android],
+            Runtimes::released("0.1.0", &Dist::github()),
+        );
+        plan.lint_exclusions = LintExclusions::None;
+        let files = plan_files(&schema(), &plan).unwrap();
+        let kotlin: Vec<&GeneratedFile> =
+            files.iter().filter(|f| f.path.ends_with(".kt")).collect();
+        assert!(!kotlin.is_empty());
+        for file in kotlin {
+            assert!(
+                file.contents
+                    .contains("@file:Suppress(\"ALL\", \"ktlint\")"),
+                "{} lost its suppression",
+                file.path
+            );
+        }
+    }
+
+    #[test]
+    fn switching_to_none_removes_the_files_an_earlier_run_wrote_and_check_names_them_until_then() {
+        let out = fsutil::unique_temp_dir("bindgen-lint-switch");
+        let mut plan = plan(
+            Platform::ALL.to_vec(),
+            Runtimes::released("0.1.0", &Dist::github()),
+        );
+        let beside = plan_files(&schema(), &plan).unwrap();
+        apply(&out, &beside).unwrap();
+        assert!(check(&out, &beside).is_empty());
+        for file in LINT_FILES {
+            assert!(out.join(file).is_file(), "{file}");
+        }
+
+        plan.lint_exclusions = LintExclusions::None;
+        let none = plan_files(&schema(), &plan).unwrap();
+        let problems = check(&out, &none);
+        assert_eq!(problems.len(), LINT_FILES.len(), "{problems:?}");
+        assert!(
+            problems.iter().all(|p| p.contains("is stale")),
+            "{problems:?}"
+        );
+
+        let applied = apply(&out, &none).unwrap();
+        assert_eq!(
+            applied.removed.len(),
+            LINT_FILES.len(),
+            "{:?}",
+            applied.removed
+        );
+        for file in LINT_FILES {
+            assert!(!out.join(file).exists(), "{file} survived");
+        }
+        assert!(check(&out, &none).is_empty());
+        // And back: the files return, and `--check` is clean again.
+        plan.lint_exclusions = LintExclusions::Beside;
+        let again = plan_files(&schema(), &plan).unwrap();
+        apply(&out, &again).unwrap();
+        assert!(check(&out, &again).is_empty());
+        let _ = std::fs::remove_dir_all(out);
     }
 
     #[test]

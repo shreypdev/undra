@@ -269,6 +269,7 @@ fn plan(
     let mut platforms = Platform::ALL.to_vec();
     let mut runtimes = Runtimes::released(crate::config::UNDRA_VERSION, dist);
     let mut default_out = cwd.join("generated");
+    let mut lint_exclusions = crate::config::LintExclusions::default();
     if let Some(session) = session {
         let project = &session.project;
         let cfg = &project.config.bindings;
@@ -286,6 +287,7 @@ fn plan(
             generator.ts_package.clone_from(package);
         }
         generator.ts_js_number = cfg.ts_js_number;
+        lint_exclusions = cfg.lint_exclusions;
         if let Some(typed) = cfg.swift_typed_throws {
             generator.swift_typed_throws = typed;
         }
@@ -317,6 +319,7 @@ fn plan(
         platforms,
         runtimes,
         out: canonicalize_lenient(&out),
+        lint_exclusions,
     })
 }
 

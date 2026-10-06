@@ -435,3 +435,136 @@ fn a_store_member_named_object_will_change_is_refused_at_the_floor_only() {
     );
     assert!(!out.path().join("floor").join("swift").exists());
 }
+
+/// The four lint exclusion files `undra bindgen` writes beside the trees (ADR-061), as paths below the output directory.
+const LINT_EXCLUSIONS: [&str; 4] = [
+    "kotlin/.editorconfig",
+    "swift/.swiftlint.yml",
+    "ts/.eslintrc.json",
+    "ts/eslint.config.undra.mjs",
+];
+
+/// `[bindings] lint_exclusions` of `undra.toml` decides whether the four exclusion files are written: absent and `"beside"`
+/// write them (as the goldens above lock), `"none"` writes none of them, drops the ones an earlier run wrote, and leaves the
+/// `@file:Suppress` line of every Kotlin file alone, since that line is part of the file.
+#[test]
+fn lint_exclusions_none_writes_no_exclusion_file_and_beside_and_absent_write_them_all() {
+    let project_with = |bindings: &str| {
+        let dir = TempDir::new("schema-lint");
+        std::fs::write(
+            dir.path().join("undra.toml"),
+            format!(
+                "[project]\nname = \"golden\"\nid = \"dev.undra.golden\"\n[core]\nnamespace = \"golden_stores\"\n{bindings}"
+            ),
+        )
+        .unwrap();
+        dir
+    };
+    let generate = |dir: &TempDir| {
+        run_ok(
+            undra()
+                .args(["bindgen", "--schema"])
+                .arg(fixture())
+                .current_dir(dir.path()),
+        )
+    };
+    let written = |dir: &TempDir| -> Vec<String> {
+        LINT_EXCLUSIONS
+            .iter()
+            .filter(|f| dir.path().join("generated").join(f).is_file())
+            .map(|f| (*f).to_owned())
+            .collect()
+    };
+
+    let absent = project_with("");
+    generate(&absent);
+    assert_eq!(written(&absent), LINT_EXCLUSIONS, "no key writes them all");
+    let beside = project_with("[bindings]\nlint_exclusions = \"beside\"\n");
+    generate(&beside);
+    assert_eq!(written(&beside), LINT_EXCLUSIONS);
+
+    let none = project_with("[bindings]\nlint_exclusions = \"none\"\n");
+    generate(&none);
+    assert!(written(&none).is_empty(), "{:?}", written(&none));
+    let generated = none.path().join("generated");
+    let manifest = std::fs::read_to_string(generated.join(".undra-generated")).unwrap();
+    assert!(
+        LINT_EXCLUSIONS.iter().all(|f| !manifest.contains(f)),
+        "{manifest}"
+    );
+    // Everything else is the same set of files as with `beside`.
+    let others = |dir: &TempDir| -> Vec<String> {
+        std::fs::read_to_string(dir.path().join("generated/.undra-generated"))
+            .unwrap()
+            .lines()
+            .filter(|l| !LINT_EXCLUSIONS.contains(l))
+            .map(ToOwned::to_owned)
+            .collect()
+    };
+    assert_eq!(others(&none), others(&beside));
+    let kotlin_files: Vec<String> = others(&none)
+        .into_iter()
+        .filter(|f| f.ends_with(".kt"))
+        .collect();
+    assert!(!kotlin_files.is_empty());
+    for file in kotlin_files {
+        let kotlin = std::fs::read_to_string(generated.join(&file)).unwrap();
+        assert!(
+            kotlin.contains("@file:Suppress(\"ALL\", \"ktlint\")"),
+            "{file}: the annotation travels with the file: {kotlin}"
+        );
+    }
+    run_ok(
+        undra()
+            .args(["bindgen", "--check", "--schema"])
+            .arg(fixture())
+            .current_dir(none.path()),
+    );
+
+    // Switching an existing tree to `none` makes `--check` name the files, and the next run removes them.
+    std::fs::write(
+        beside.path().join("undra.toml"),
+        std::fs::read_to_string(none.path().join("undra.toml")).unwrap(),
+    )
+    .unwrap();
+    let (code, stderr) = run_err(
+        undra()
+            .args(["bindgen", "--check", "--schema"])
+            .arg(fixture())
+            .current_dir(beside.path()),
+    );
+    assert_eq!(code, 1);
+    assert!(stderr.contains("kotlin/.editorconfig is stale"), "{stderr}");
+    generate(&beside);
+    assert!(written(&beside).is_empty());
+}
+
+/// A wrong `lint_exclusions` stops the command with a teaching `C0002` and writes nothing.
+#[test]
+fn a_wrong_lint_exclusions_value_stops_bindgen_with_a_teaching_error() {
+    let dir = TempDir::new("schema-lint-bad");
+    std::fs::write(
+        dir.path().join("undra.toml"),
+        "[project]\nname = \"golden\"\nid = \"dev.undra.golden\"\n[bindings]\nlint_exclusions = \"everywhere\"\n",
+    )
+    .unwrap();
+    let (code, stderr) = run_err(
+        undra()
+            .args(["bindgen", "--schema"])
+            .arg(fixture())
+            .current_dir(dir.path()),
+    );
+    assert_ne!(code, 0);
+    for needle in [
+        "error[undra::C0002]",
+        "line 5",
+        "`everywhere` is not a lint exclusions setting",
+        "= note: ",
+        "lint_exclusions = \"none\"",
+        "bazel.html#lint-everything",
+        "errors.html#C0002",
+    ] {
+        assert!(stderr.contains(needle), "{needle}: {stderr}");
+    }
+    assert!(!dir.path().join("generated").exists());
+}

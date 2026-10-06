@@ -16,7 +16,9 @@
 //! No file names the directory the trees are written to: the same schema generates the same files into any directory (a test
 //! compares two routes to the same bindings byte for byte), and a tree that is moved is still excluded. Every file is part of the
 //! tree's manifest, so `undra bindgen --check` fails when one is missing or edited and a later
-//! run removes it with the rest. The `.gitattributes` that collapses the trees in a review is another piece's
+//! run removes it with the rest. `[bindings] lint_exclusions = "none"` in `undra.toml`
+//! ([`crate::config::LintExclusions`]) writes none of these files, for a repository that configures its linters at the root;
+//! the Kotlin `@file:Suppress` line is part of each Kotlin file and stays either way. The `.gitattributes` that collapses the trees in a review is another piece's
 //! (ADR-062); nothing here conflicts with it.
 
 use undra_bindgen::GeneratedFile;
