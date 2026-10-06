@@ -20,7 +20,7 @@ Branch `wt/ndk-input`, from `main` `58e373a`. The binding text is ADR-065.
 
 * `cargo test -p undra-cli`: green (453 unit tests and every integration test binary), `UNDRA_TEST_ANDROID=1 cargo test -p undra-cli --test platforms android`: 2 pass
   (the 16 KB library per ABI under the 1.2 MB budget, and the debug hint); `cargo fmt --check`; `cargo clippy -p undra-cli --all-targets -- -D warnings`.
-* `undra init claude-ndk-smoke --dir /tmp --platforms android --undra-path <worktree>`, then, with a `PATH` that has `cargo` and `rustc` and no `cargo-ndk`,
+* `undra init ndk-smoke --dir <a scratch directory> --platforms android --undra-path <worktree>`, then, with a `PATH` that has `cargo` and `rustc` and no `cargo-ndk`,
   `undra build --platform android` and `--release`: both ABIs build; "16 KB aligned"; `llvm-readelf`: ELF64 AArch64 and X86-64, every LOAD segment aligned
   0x4000, the same GNU build id in the shipped library and its unstripped twin; release sizes 898.5 KB and 961.2 KB (the record: 898,176 and 960,776 bytes, ceiling +5%).
 * `bazel build //:mobile_android $(android/use-installed-ndk.sh)` in `examples/bazel`: builds (darwin sandbox, no `--action_env`, no `extra_path`); output
