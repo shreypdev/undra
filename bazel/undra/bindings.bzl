@@ -156,7 +156,8 @@ def undra_bindings(name, core, config = "undra.toml", languages = ["swift", "kot
 
     Args:
         name: the target.
-        core: the host build of the core: `":core_host"` of an `undra_core` that lists `host` among its platforms.
+        core: the host build of the core: `":core_host"` of an `undra_core` that lists `host` among its platforms. It is built for
+            the execution platform (the bindgen action loads it), so a test that also loads it builds it once more, for the target.
         config: the project's undra.toml.
         languages: any of `swift`, `kotlin`, `ts`.
         docs: keep the core's doc comments in the bindings.

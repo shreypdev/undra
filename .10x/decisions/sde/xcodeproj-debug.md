@@ -67,7 +67,7 @@ xcodebuild -project ios/HelloApp.xcodeproj -scheme app -configuration Debug \
   -destination 'platform=iOS Simulator,id=<udid>' -derivedDataPath $DD build        # ** BUILD SUCCEEDED **
 xcrun simctl install <udid> $DD/Build/Products/Debug-iphonesimulator/bazel-out/*/bin/ios/app.app
 xcrun simctl launch --wait-for-debugger <udid> dev.undra.bazel.hello.app            # pid
-cd $(bazel info output_base)/../rules_xcodeproj.noindex/build_output_base/execroot/_main
+cd $(bazel info output_base)/rules_xcodeproj.noindex/build_output_base/execroot/_main
 xcrun lldb -b -o "process attach -p <pid>" -o "breakpoint set --name hello_core::greeting" -o continue \
   -o "frame select 47" -o "bt -c 60" -o detach
 ```

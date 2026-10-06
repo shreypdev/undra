@@ -1903,7 +1903,7 @@ xcrun simctl install booted "$APP"
 xcrun simctl launch --wait-for-debugger booted dev.undra.bazel.hello.app    # prints the process id
 ```
 
-In Xcode the same is `open ios/HelloApp.xcodeproj` and Run. Without Xcode, `bazel build //ios:app --ios_multi_cpus=sim_arm64 -c dbg --apple_generate_dsym` builds the same app (`bazel-bin/ios/app.ipa`, and its dSYM next to it). Then attach LLDB *from the Bazel execution root* of the build, the directory Xcode's own session also uses: the debug map names the Swift objects by paths relative to it, and without it the Swift frames carry no file and line (the Rust frames do not need it). For the project `rules_xcodeproj` generated that is `$(bazel info output_base)/../rules_xcodeproj.noindex/build_output_base/execroot/_main`; for a plain `bazel build` it is `bazel info execution_root`.
+In Xcode the same is `open ios/HelloApp.xcodeproj` and Run. Without Xcode, `bazel build //ios:app --ios_multi_cpus=sim_arm64 -c dbg --apple_generate_dsym` builds the same app (`bazel-bin/ios/app.ipa`, and its dSYM next to it): unzip the `.ipa` and install its `Payload/app.app` as above. Then attach LLDB *from the Bazel execution root* of the build, the directory Xcode's own session also uses: the debug map names the Swift objects by paths relative to it, and without it the Swift frames carry no file and line (the Rust frames do not need it). For the project `rules_xcodeproj` generated that is `$(bazel info output_base)/rules_xcodeproj.noindex/build_output_base/execroot/_main`; for a plain `bazel build` it is `bazel info execution_root`.
 
 lldb
 
@@ -1964,9 +1964,10 @@ ktlint 1.8 reports 90 findings on the example's generated Kotlin without them an
 ## Good to know
 
 - **Bazel caches a core as a whole.** A change to the core rebuilds its dependencies inside the action (seconds for a small core); a remote cache makes that cost the author's alone.
+- **The host core is built for the machine that runs the bindings.** `undra_bindings` builds its `core` in the execution configuration, because the bindgen action loads it; a test that also loads `:core_host` (the JVM one, above) builds it once more, in the target configuration.
 - **Swift needs its files listed.** `rules_swift` compiles files, not a directory, so `undra_bindings(swift_files = [..])` names them; a wrong list fails the build and prints the right one.
 - **Telemetry.** Only `ts.bzl` loads `aspect_rules_js`, whose telemetry is on unless your `.bazelrc` sets `--repo_env=DO_NOT_TRACK=1` (Set up, above); the example sets it.
-- **The scratch directory.** Each core builds in `/tmp/undra-bazel-<key>`, removed when the action ends. On Linux the sandbox's `/tmp` is private; on macOS two builds of the same target take turns, and another user's build of it goes to a directory of its own.
+- **The scratch directory.** Each core builds in `/tmp/undra-bazel-<key>`, removed when the action ends (all but the core's objects with `keep_debug_objects`, Debugging, above). On Linux the sandbox's `/tmp` is private; on macOS two builds of the same target take turns, and another user's build of it goes to a directory of its own.
 - The decision, its alternatives and what was measured are in [ADR-061](https://github.com/shreypdev/undra/blob/main/.10x/adrs/ADR-061-bazel-support.md).
 
 ---
