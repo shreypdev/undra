@@ -631,6 +631,7 @@ pub(super) fn generate_bindings(setup: &Setup) -> Result<Generated> {
         platforms: setup.config.platforms.clone(),
         runtimes: Runtimes::for_project(&project, &setup.dist),
         out: canonicalize_lenient(&project.generated_dir()),
+        lint_exclusions: setup.config.bindings.lint_exclusions,
     };
     let files = bindgen::plan_files(&schema, &plan)?;
     bindgen::apply(&plan.out, &files)?;

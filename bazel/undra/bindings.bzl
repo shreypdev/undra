@@ -148,7 +148,8 @@ def undra_bindings(name, core, config = "undra.toml", languages = ["swift", "kot
     """Generates the bindings of an Undra core (ADR-061).
 
     Outputs: one tree artifact per language, `<name>_swift`, `<name>_kotlin` and `<name>_ts`, each the directory `undra bindgen`
-    writes for that language (the Swift package, the Gradle module, the npm package, lint exclusions beside them), and, with
+    writes for that language (the Swift package, the Gradle module, the npm package, lint exclusions beside them unless `config`
+    says `lint_exclusions = "none"` in `[bindings]`), and, with
     Kotlin, `<name>_kotlin.srcjar` of its sources. The output groups are `swift`, `kotlin`, `ts` and `kotlin_srcjar`.
 
     Args:
