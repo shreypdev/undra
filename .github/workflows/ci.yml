@@ -502,6 +502,7 @@ jobs:
   # release is out and passes.
   bazel-example:
     name: Bazel example
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
       BAZELISK_VERSION: v1.29.0
@@ -563,6 +564,7 @@ jobs:
   # the rules, which is nearly every change, and a job that can be skipped cannot be part of the roll-up.
   bazel-example-macos:
     name: "Bazel example (macOS, Swift and iOS)"
+    timeout-minutes: 60
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -609,6 +611,7 @@ jobs:
   # (android.googlesource.com, ADR-061): acceptable here, and why it is not part of the job that runs on every developer's machine.
   bazel-android:
     name: Bazel example (Android core and library)
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
       BAZELISK_VERSION: v1.29.0
