@@ -8,6 +8,7 @@ package dev.undra.bazel.hello.symbols
 
 import dev.undra.bazel.hello.UndraHelloCore
 import dev.undra.bazel.hello.crashForSymbolsTest
+import dev.undra.bazel.hello.greeting
 import dev.undra.runtime.LoadOptions
 import dev.undra.runtime.UndraCallError
 import dev.undra.runtime.adapters.UndraPanicReport
@@ -97,8 +98,10 @@ fun main() {
     } catch (e: UndraCallError.Panicked) {
         e
     }
-    check("the call that panicked fails with a typed error, the core lives on: ${outcome?.panicMessage}", outcome != null)
+    check("the call that panicked fails with a typed error: ${outcome?.panicMessage}", outcome != null)
     val report = received.get(60, TimeUnit.SECONDS) // a failure's bound, not a delay: the handler completes it
+    val after = greeting("symbols")
+    check("the core lives on: the next call answers \"$after\"", after == "Hello, symbols, from the bazel-hello core")
     core.close()
     println("bazel symbols: report: ${report.summary}, ${report.frames.size} frames, image ${report.imageId}")
     check("the report is of this core: ${report.namespace} ${report.coreVersion}", report.namespace == "hello_core" && report.coreVersion.isNotEmpty())
