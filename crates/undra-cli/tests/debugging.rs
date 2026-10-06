@@ -10,7 +10,9 @@
 //! of the full depth, through the core's guard frames (`&Runtime`, closures, `catch_unwind`) down to
 //! the host's `main`, must end with LLDB alive: on Xcode 26.6 with the Rust 1.99 formatters it died
 //! twice (SIGILL on a type LLDB laid out as containing itself, then an abort when the struct summary
-//! followed a pointer cycle), see `.10x/decisions/sde/lldb-formatters-bt.md`.
+//! followed a pointer cycle), see `.10x/decisions/sde/lldb-formatters-bt.md`. An app's `bt` goes on
+//! into Swift frames, so a small Swift program (an object of a reference cycle as an argument) is
+//! debugged with the same `.lldbinit` too: Swift values keep Swift's formatting and LLDB lives.
 //!
 //! Two processes are debugged: the host one (the macOS dylib, LLDB attached to the process) and, through the
 //! prelinked iOS object that the app links (ADR-044), a process in a booted iOS simulator that LLDB
@@ -379,6 +381,110 @@ fn lldb_stops_at_a_rust_line_in_a_simulator_process_linked_with_the_prelinked_co
     assert_full_backtrace_with_formatters(&output);
 }
 
+/// A Swift program whose `visit` takes an object of a reference cycle and an array: the shape of every
+/// Swift frame of an app (`self` of a class whose fields lead back to it). Line 11 is `visit`'s body.
+const SWIFT_CYCLE: &str = "\
+import Foundation
+
+final class Node {
+    var name: String
+    var next: Node?
+    init(name: String) { self.name = name }
+}
+
+@inline(never)
+func visit(_ node: Node, bytes: [UInt8]) -> Int {
+    return node.name.count + bytes.count
+}
+
+let a = Node(name: \"a\")
+let b = Node(name: \"b\")
+a.next = b
+b.next = a
+if ProcessInfo.processInfo.environment[\"UNDRA_HARNESS_WAIT\"] != nil { raise(SIGSTOP) }
+print(visit(a, bytes: [1, 2, 3]))
+";
+
+#[test]
+fn lldb_with_the_lldbinit_shows_a_swift_frame_as_swift_and_survives_a_reference_cycle() {
+    // The Rust formatters match types by shape, not by language: without the template's last line they
+    // print Swift values too (`bytes={[0]:{}, ...}`) and walk a Swift object's fields round a reference
+    // cycle until Python aborts LLDB (exit 134), at the first stop in such a frame, so a `bt` from the
+    // core down to the app died on the app's frames. The app's Swift code is the same everywhere: this
+    // test needs no core.
+    let _serial = serial();
+    if skip_unless(
+        cfg!(target_os = "macos"),
+        "this test runs Xcode's LLDB on a Swift program",
+    ) {
+        return;
+    }
+    if skip_unless(
+        has_tool("xcrun", "--version"),
+        "Xcode's tools (xcrun) are not installed",
+    ) {
+        return;
+    }
+    let work = scratch("swift-cycle");
+    let source = work.join("main.swift");
+    std::fs::write(&source, SWIFT_CYCLE).unwrap();
+    let program = work.join("cycle");
+    run_text(
+        Command::new("xcrun")
+            .args(["swiftc", "-g", "-Onone"])
+            .arg(&source)
+            .arg("-o")
+            .arg(&program),
+    );
+    let mut app = Command::new(&program)
+        .env("UNDRA_HARNESS_WAIT", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .spawn()
+        .expect("the Swift program starts");
+    wait_until_stopped(app.id());
+    let attach = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        run_debugger(
+            Command::new("xcrun")
+                .args(["lldb", "-b"])
+                .args(["-o", &format!("command source {}", lldbinit().display())])
+                .args([
+                    "-o",
+                    "script import sys; print('rust formatters:', 'lldb_lookup' in sys.modules)",
+                ])
+                .args(["-o", &format!("process attach -p {}", app.id())])
+                .args(["-o", "breakpoint set -f main.swift -l 11"])
+                .args(["-o", "continue"])
+                .args(["-o", "bt"])
+                .args(["-o", "frame variable"])
+                .args(["-o", "detach"]),
+            120,
+            &work,
+        )
+    }));
+    let _ = app.kill();
+    let _ = app.wait();
+    let output = attach.unwrap_or_else(|e| std::panic::resume_unwind(e));
+    eprintln!("{output}");
+    // The formatters were loaded (else the test proves nothing), and LLDB lived to print the frame.
+    assert!(output.contains("rust formatters: True"), "{output}");
+    assert!(
+        output.lines().any(|l| l.contains("frame #0:")
+            && l.contains("visit(node=0x")
+            && l.contains("main.swift:11")),
+        "{output}"
+    );
+    // Swift's own formatting: the array's elements are numbers, not the Rust struct summary's `{}` (the
+    // echoed comments of the `.lldbinit` quote that summary, so they are not looked at).
+    assert!(output.contains("[0] = 1"), "{output}");
+    assert!(
+        !output
+            .lines()
+            .any(|l| !l.starts_with("(lldb) #") && l.contains("[0]:{}")),
+        "{output}"
+    );
+}
+
 /// Waits until process `pid` is stopped (`SIGSTOP`), which is how the harness waits for a debugger.
 fn wait_until_stopped(pid: u32) {
     for _ in 0..100 {
@@ -412,16 +518,17 @@ fn booted_simulator() -> Option<String> {
 
 #[test]
 fn the_lldbinit_undra_init_writes_loads_the_formatters_and_says_nothing_without_them() {
-    // The file is two `script` lines: the first asks the toolchain on this machine for its formatters (a
+    // The file is three `script` lines: the first asks the toolchain on this machine for its formatters (a
     // machine without `rustc` on PATH gets an empty stdout, not an error, and no formatters); the second
     // re-registers the struct and enum summaries of the Rust 1.99 formatters with pointers skipped, and
-    // does nothing when they are not loaded or are older than that.
+    // does nothing when they are not loaded or are older than that; the third makes their type
+    // recognizers decline Swift and Objective-C types, and does nothing without them.
     let text = std::fs::read_to_string(lldbinit()).unwrap();
     let script: Vec<&str> = text
         .lines()
         .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
         .collect();
-    assert_eq!(script.len(), 2, "{text}");
+    assert_eq!(script.len(), 3, "{text}");
     for line in &script {
         assert!(line.starts_with("script "), "{line}");
     }
@@ -447,6 +554,16 @@ fn the_lldbinit_undra_init_writes_loads_the_formatters_and_says_nothing_without_
         "hasattr(L, \"register_summary\")",
     ] {
         assert!(script[1].contains(needle), "{needle}: {}", script[1]);
+    }
+    for needle in [
+        "sys.modules.get(\"lldb_lookup\")",
+        "eTypeIsSwift",
+        "eTypeIsObjC",
+        "GetTypeFlags()",
+        "\"is_udt\", \"is_tuple_type\", \"is_gnu_enum\"",
+        "if hasattr(L, n)",
+    ] {
+        assert!(script[2].contains(needle), "{needle}: {}", script[2]);
     }
 }
 
