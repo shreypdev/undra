@@ -1841,6 +1841,7 @@ Undra's build is a command line, and a Bazel repository can call it as one: the 
 | --- | --- | --- |
 | `undra_core` | per platform: `lib<ns>.dylib` or `.so` (host), `<ns>.wasm` (web), the XCFramework (iOS), `jniLibs/<abi>/` (Android), and the symbol files | `undra build`, the profiles of every other build |
 | `undra_bindings` | the Swift package, the Gradle module and the npm package, as outputs, never committed, never stale | `undra bindgen --library`, read from the host build |
+| `undra_bindings_test` | a test that fails when the bindings you committed are not what the schema generates, and `<name>.update`, which rewrites them | `bazel_lib`'s `write_source_file` |
 | `undra_kt_jvm_library` | the Kotlin bindings over the Kotlin runtime | `rules_kotlin` |
 | `undra_ts_library` (`ts.bzl`) | the TypeScript bindings, type-checked and compiled against the runtime, linked into `node_modules` | `aspect_rules_ts`, `aspect_rules_js` |
 | `undra_swift_library` | the Swift bindings and the C module of the core's entry over the Swift runtime | `rules_swift` (macOS) |
@@ -1887,6 +1888,26 @@ A repository that lints everything reports the bindings, because they are the ou
 | TypeScript | `.eslintrc.json`, and `eslint.config.undra.mjs` to spread into a flat config | ESLint 8 and 9 |
 
 ktlint 1.8 reports 90 findings on the example's generated Kotlin without them and none with either one; `bazel test //kotlin:lint_test` in the example runs that comparison. The annotation does not silence the Kotlin compiler: its warnings about the generated code still show. The detekt, IntelliJ, SwiftLint and ESLint readings follow each tool's documentation and are not run in CI.
+
+## Committed bindings
+
+There are two ways to hold the bindings, and both are checked by the build. `undra_bindings` alone makes them outputs: nothing is committed and nothing can be stale. A repository whose policy requires generated code in the tree commits them and adds `undra_bindings_test`, so a pull request cannot change the core's API and leave the committed copy behind.
+
+| Choose | When | What the build guarantees |
+| --- | --- | --- |
+| Generated outputs: `undra_bindings` | Your repository treats generated code as an artifact: reviewers read the schema, not the bindings, and nothing outside Bazel needs the files | The bindings are a function of the core library, so they cannot be stale |
+| Committed, with the test: `undra_bindings` and `undra_bindings_test` | Your policy puts generated code in the tree: a tool outside Bazel reads it, an IDE or a review wants it on disk, or the app is also built without Bazel | The committed directory equals the build's output, or `bazel test` fails and names the command that fixes it |
+
+Create the files once and refresh them after every change to the core:
+
+shell
+
+```sh
+bazel run //:bindings_check.update    # writes the trees into the source tree; commit the result
+bazel test //:bindings_check          # fails, naming the line above, when they are out of date
+```
+
+The comparison is the one `undra bindgen --check` makes: the same files, byte for byte, nothing normalised (not line endings, not trailing space). `undra bindgen --check --out generated` accepts the directory the update writes, and a file edited by hand fails both. The rule is stricter in one way: it compares the directory as a whole, so a file that you keep beside the generated ones fails the test (the CLI ignores files its manifest does not list), and the update removes it. Keep the directory for the bindings alone. A directory that does not exist yet fails analysis of the test with the update command in its message, so the first run of the update target creates it.
 
 ## Good to know
 
