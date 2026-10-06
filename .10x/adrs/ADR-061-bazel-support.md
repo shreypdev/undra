@@ -378,5 +378,11 @@ calling the CLI. Four things change in how they fit a repository:
    project setting: written beside the trees (the default) or not written at all, for a repository that configures its
    linters centrally. The guide lists the files and the root-config lines such a repository adds.
 
+5. **A debuggable iOS core.** A prelinked iOS slice carries a debug map, not DWARF (ADR-044), and the map names objects
+   under the action's scratch directory, which the action removes. `undra_core(keep_debug_objects = True)` keeps the
+   per-triple archives in a directory of their own so a `-c dbg` build's dSYM resolves Rust frames; the iOS core target
+   is compatible with an iOS target platform (an `ios_application` can depend on it), and `undra_bindings` builds its
+   host core in the exec configuration. The guide's debugging section records the verified path through `rules_xcodeproj`.
+
 Committed bindings and their drift test are ADR-064; the NDK as an input is ADR-065. Native mode (no Cargo or Xcode
 subprocess) remains a later ADR.
