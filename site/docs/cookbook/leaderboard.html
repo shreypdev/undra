@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Live leaderboard · Undra cookbook</title>
-<meta name="description" content="Rank 100,000 players from a 1.4 MB snapshot and a delta stream: ingest on the blocking pool, publish a 771-byte window, hold the core lock for 375 ns.">
+<meta name="description" content="Rank 100,000 players from a 1.4 MB snapshot and a delta stream: ingest on the blocking pool, publish a 780-byte window, hold the core lock for 375 ns.">
 <link rel="canonical" href="https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Undra">
 <meta property="og:title" content="Live leaderboard · Undra cookbook">
-<meta property="og:description" content="Rank 100,000 players from a 1.4 MB snapshot and a delta stream: ingest on the blocking pool, publish a 771-byte window, hold the core lock for 375 ns.">
+<meta property="og:description" content="Rank 100,000 players from a 1.4 MB snapshot and a delta stream: ingest on the blocking pool, publish a 780-byte window, hold the core lock for 375 ns.">
 <meta property="og:url" content="https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html">
 <meta property="og:image" content="https://shreypdev.github.io/undra/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -17,10 +17,10 @@
 <meta property="og:image:alt" content="Undra: the Rust core for native apps">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Live leaderboard · Undra cookbook">
-<meta name="twitter:description" content="Rank 100,000 players from a 1.4 MB snapshot and a delta stream: ingest on the blocking pool, publish a 771-byte window, hold the core lock for 375 ns.">
+<meta name="twitter:description" content="Rank 100,000 players from a 1.4 MB snapshot and a delta stream: ingest on the blocking pool, publish a 780-byte window, hold the core lock for 375 ns.">
 <meta name="twitter:image" content="https://shreypdev.github.io/undra/assets/og.png">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html#article","headline":"Live leaderboard · Undra cookbook","description":"Rank 100,000 players from a 1.4 MB snapshot and a delta stream: ingest on the blocking pool, publish a 771-byte window, hold the core lock for 375 ns.","url":"https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html","inLanguage":"en","dateModified":"2026-10-05","datePublished":"2026-10-05","author":{"@type":"Organization","name":"Undra team"},"publisher":{"@id":"https://shreypdev.github.io/undra/#org"},"isPartOf":{"@id":"https://shreypdev.github.io/undra/#website"},"about":{"@type":"SoftwareApplication","name":"Undra"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Undra","item":"https://shreypdev.github.io/undra/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://shreypdev.github.io/undra/docs/"},{"@type":"ListItem","position":3,"name":"Live leaderboard","item":"https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html"}]}]}
+{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","@id":"https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html#article","headline":"Live leaderboard · Undra cookbook","description":"Rank 100,000 players from a 1.4 MB snapshot and a delta stream: ingest on the blocking pool, publish a 780-byte window, hold the core lock for 375 ns.","url":"https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html","inLanguage":"en","dateModified":"2026-10-05","datePublished":"2026-10-05","author":{"@type":"Organization","name":"Undra team"},"publisher":{"@id":"https://shreypdev.github.io/undra/#org"},"isPartOf":{"@id":"https://shreypdev.github.io/undra/#website"},"about":{"@type":"SoftwareApplication","name":"Undra"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Undra","item":"https://shreypdev.github.io/undra/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://shreypdev.github.io/undra/docs/"},{"@type":"ListItem","position":3,"name":"Live leaderboard","item":"https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html"}]}]}
 </script>
 <!-- chrome:head -->
 <meta name="theme-color" content="#0a0a0a">
@@ -66,9 +66,9 @@
 <p>The core has one lock. Whoever holds it is the core: a call, the poll of a task, the commit of a change-set all wait for it (<a href="https://github.com/shreypdev/undra/blob/main/docs/SPEC.md" rel="noopener">SPEC 5.1</a>). So the question is not whether the snapshot gets parsed, but where, and for how long the lock is held while it is.</p>
 <h2 id="the-wrong-designs">Two designs that look right<a class="anchor" href="#the-wrong-designs" aria-label="Link to this section">#</a></h2>
 <ul><li><strong>Apply the snapshot inside a core call.</strong> An async store method fetches the bytes, then parses, sorts and stores them. It reads naturally, and the whole parse runs with the core lock held: every other call, timer and change-set waits for it. Measured here, 2.56 ms at the median and 2.94 ms at the 99th percentile, on a laptop core that is substantially faster than a phone's.</li><li><strong>Publish every player.</strong> A <code>Signal&lt;Vec&lt;Player&gt;&gt;</code> of 100,000 rows puts the whole ranking on the platform, so the first change after a snapshot is a 1.2 MB change-set that each platform decodes and applies (at the core's price of 12 bytes a row), and the screen needs a window of it anyway. It also breaks the rule that a read does not cross the boundary: the list is in the core to be read there.</li></ul>
-<div class="table-wrap"><table><thead><tr><th>Design</th><th>Core lock held per snapshot, p50</th><th>p99</th><th>What reaches the platform</th></tr></thead><tbody><tr><td><strong>This recipe</strong>: pool, then publish a window</td><td><strong>375 ns</strong></td><td><strong>458 ns</strong></td><td>771 bytes</td></tr><tr><td>Parse inside a core call</td><td>2.56 ms</td><td>2.94 ms</td><td>771 bytes</td></tr><tr><td>Parse inside a call, a signal of every player</td><td>2.94 ms</td><td>3.26 ms</td><td>1,200,033 bytes</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Design</th><th>Core lock held per snapshot, p50</th><th>p99</th><th>What reaches the platform</th></tr></thead><tbody><tr><td><strong>This recipe</strong>: pool, then publish a window</td><td><strong>375 ns</strong></td><td><strong>458 ns</strong></td><td>780 bytes</td></tr><tr><td>Parse inside a core call</td><td>2.56 ms</td><td>2.94 ms</td><td>780 bytes</td></tr><tr><td>Parse inside a call, a signal of every player</td><td>2.94 ms</td><td>3.26 ms</td><td>1,200,033 bytes</td></tr></tbody></table></div>
 <h2 id="the-recipe">The recipe<a class="anchor" href="#the-recipe" aria-label="Link to this section">#</a></h2>
-<ul><li><strong>Ingest on <code>spawn_blocking</code>.</strong> The snapshot (or a batch of deltas) goes to the blocking pool. The closure parses and sorts it into a <code>Standings</code> the app owns, behind its own <code>Mutex</code>, with no core lock held. A snapshot is a finished value built before the lock is taken: the lock is held for the swap, not for the parse.</li><li><strong>Publish a window, once.</strong> The closure returns a small <code>View</code>: the top 50, the player and three neighbours on each side, and four numbers. The awaiting task is back on the core and writes three signals in one <code>txn</code>, skipping the ones that did not change (a write is a change-set whether or not the value moved). That is the only part of an update that holds the core lock.</li><li><strong>The big structure never crosses.</strong> <code>follow</code> (the player who is highlighted) takes the same two steps. No generated getter, no signal and no call holds the 100,000 players, and a closure on the pool cannot write a signal at all (E0065), which is how the design stays honest.</li><li><strong>The feed is deterministic.</strong> <code>start_demo</code> seeds a synthetic feed from the <code>Rng</code> port and drives it on the <code>Timer</code> port, so a test with the fake clock sees the same players and the same changes on every run.</li></ul>
+<ul><li><strong>Ingest on <code>spawn_blocking</code>.</strong> The snapshot (or a batch of deltas) goes to the blocking pool. The closure parses and sorts it into a <code>Standings</code> the app owns, behind its own <code>Mutex</code>, with no core lock held. A snapshot is a finished value built before the lock is taken: the lock is held for the swap, not for the parse.</li><li><strong>Publish a window, once.</strong> The closure returns a small <code>View</code>: the top 50, the player and three neighbours on each side, and four numbers. The awaiting task is back on the core and writes three signals in one <code>txn</code>, skipping the ones that did not change (a write is a change-set whether or not the value moved). That is the only part of an update that holds the core lock. Each window carries the version it was read at under the app's lock, and an older one is not written: two updates can come back from the pool in either order.</li><li><strong>The big structure never crosses.</strong> <code>follow</code> (the player who is highlighted) takes the same two steps. No generated getter, no signal and no call holds the 100,000 players, and a closure on the pool cannot write a signal at all (E0065), which is how the design stays honest.</li><li><strong>The feed is deterministic.</strong> <code>start_demo</code> seeds a synthetic feed from the <code>Rng</code> port and drives it on the <code>Timer</code> port, so a test with the fake clock sees the same players and the same changes on every run.</li></ul>
 <details class="reveal-code"><summary>Show the Rust</summary>
 <!-- snippet:examples/cookbook/core/src/leaderboard.rs#leaderboard-store rust -->
 <div class="code"><div class="code-bar"><span>core/src/leaderboard.rs</span></div><pre><code data-lang="rust">/// The big structure and who is followed, behind the app's own lock. Only blocking-pool threads
@@ -77,6 +77,15 @@
 struct Inner {
     standings: Standings,
     me: Option&lt;u32&gt;,
+    version: u64, // bumped by every change, under this lock
+}
+
+impl Inner {
+    /// The window, and the version it shows: read under the lock, right after a change.
+    fn window(&amp;mut self) -&gt; (u64, View) {
+        self.version += 1;
+        (self.version, self.standings.view(self.me, TOP, AROUND))
+    }
 }
 
 /// The leaderboard's store: three small signals, and a handle on the structure that is not one.
@@ -94,24 +103,28 @@ pub struct Leaderboard {
 async fn load(&amp;self, bytes: Vec&lt;u8&gt;) -&gt; Result&lt;u32, LeaderboardError&gt; {
     let ctx = self.ctx.upgrade().map_err(|_| LeaderboardError::Closed)?;
     let shared = self.shared.clone();
-    let work = ctx.spawn_blocking(move || -&gt; Result&lt;View, SnapshotError&gt; {
+    let work = ctx.spawn_blocking(move || -&gt; Result&lt;(u64, View), SnapshotError&gt; {
         // Milliseconds of parsing and sorting, with no lock held at all.
         let fresh = Standings::from_snapshot(&amp;bytes)?;
         // The lock is held for the swap and the window, not for the parse.
         let mut inner = lock(&amp;shared.inner);
         inner.standings = fresh;
-        Ok(inner.standings.view(inner.me, TOP, AROUND))
+        Ok(inner.window())
     });
     drop(ctx);
-    let view = work.await?; // back on the core, with 50 rows and four numbers
-    self.publish(&amp;view);
+    let (version, view) = work.await?; // back on the core, with 50 rows and four numbers
+    self.publish(version, &amp;view);
     Ok(view.players)
 }</code></pre></div>
 <!-- /snippet -->
 <!-- snippet:examples/cookbook/core/src/leaderboard.rs#leaderboard-publish rust -->
 <div class="code"><div class="code-bar"><span>core/src/leaderboard.rs</span></div><pre><code data-lang="rust">/// Writes the window: three signals, one transaction, and nothing that grows with the players.
 /// This is the only part of an update that runs on the core.
-fn publish(&amp;self, view: &amp;View) {
+fn publish(&amp;self, version: u64, view: &amp;View) {
+    // Two updates can come back from the pool in either order: never write an older window.
+    if self.shared.published.fetch_max(version, Ordering::SeqCst) &gt;= version {
+        return;
+    }
     let top: Vec&lt;Row&gt; = view.top.iter().map(Row::from).collect();
     let around: Vec&lt;Row&gt; = view.around.iter().map(Row::from).collect();
     let summary = Summary {
@@ -240,7 +253,7 @@ export function LeaderboardView({ board, myId }: { board: Leaderboard; myId: num
 <div class="table-wrap"><table><thead><tr><th>Design</th><th>Wait p50</th><th>p99</th><th>p99.9</th><th>Max</th></tr></thead><tbody><tr><td>This recipe</td><td>125 ns</td><td>2.0 us</td><td>7.8 us</td><td>132 us</td></tr><tr><td>Snapshot applied inside a call</td><td>125 ns</td><td>2.9 us</td><td>3.47 ms</td><td>7.04 ms</td></tr></tbody></table></div>
 <p>A call that arrives during an in-call apply waits out the parse. That is about one call in 200 here, so it is the p99.9 and the maximum that show it, and not the median or the p99. Both tables come from the same code: <code>cargo test -p undra-bench --test budgets --release -- --nocapture leaderboard</code> prints the rows and <code>cargo test -p undra-bench --test leaderboard --release -- --ignored --nocapture stall_report</code> the caller's wait. CI holds the first one to a budget (the recommended row's p50 and p99, in <code>bench/budgets.toml</code>) and to a ratio that does not depend on the machine: the publish must stay under 5% of the in-call apply, and it is 0.015%. A publish that grew with the players, the ranking read or sorted on the core or every row in a signal, would put that ratio near 1. These are host numbers; <a href="https://github.com/shreypdev/undra/blob/main/bench/RESULTS.md" rel="noopener">finding 9 of the benchmark results</a> has the method and the limits.</p>
 <h2 id="what-the-tests-prove">What the tests prove<a class="anchor" href="#what-the-tests-prove" aria-label="Link to this section">#</a></h2>
-<ul><li>A snapshot of 100,000 players publishes a top of 50 sorted by score, rank 1 first, the four numbers, and no window until a player is followed.</li><li>Following a player shows it with three neighbours on each side and its rank; a delta that makes it the leader moves the window with it, and a delta for a player the snapshot did not hold is ignored.</li><li>A snapshot that cannot be read (a repeated id, a score out of range, not JSON) is a typed error and leaves the ranking as it was; a failed fetch is a typed network error.</li><li>An update that changes nothing in the window writes nothing: no change-set.</li><li>What a platform receives for a snapshot of 100,000 players is one change-set of 771 bytes, decoded from the wire.</li><li>Merging delta batches gives the ranking a plain sort of the same scores gives, after each of forty batches; the demo feed runs on the fake clock, stops when stopped, and is the same on every run.</li></ul>
+<ul><li>A snapshot of 100,000 players publishes a top of 50 sorted by score, rank 1 first, the four numbers, and no window until a player is followed.</li><li>Following a player shows it with three neighbours on each side and its rank; a delta that makes it the leader moves the window with it, and a delta for a player the snapshot did not hold is ignored.</li><li>A snapshot that cannot be read (a repeated id, a score out of range, not JSON) is a typed error and leaves the ranking as it was; a failed fetch is a typed network error.</li><li>An update that changes nothing in the window writes nothing: no change-set.</li><li>What a platform receives for a snapshot of 100,000 players, with a player followed, is one change-set of 780 bytes: three signals, the 50 rows of the top and the 7 around the player, decoded from the wire.</li><li>Eight updates awaited together, whatever order the core resumes them in, leave the newest window on screen.</li><li>Merging delta batches gives the ranking a plain sort of the same scores gives, after each of forty batches; the demo feed runs on the fake clock, stops when stopped, and is the same on every run.</li></ul>
 <h2 id="what-to-watch">What to watch<a class="anchor" href="#what-to-watch" aria-label="Link to this section">#</a></h2>
 <ul><li><strong>Never take the app's lock on the core.</strong> Anything that reads the structure goes through the pool, as <code>follow</code> does. A core call that waits for the mutex while a snapshot is being swapped in would hold the core lock while it waits: the in-call parse again, by the back door. Keep the time under the app's lock to the swap and the window.</li><li><strong>The pool cannot write signals.</strong> The closure returns the window and the awaiting task writes it; a write from the pool is refused with E0065.</li><li><strong>On the web, <code>spawn_blocking</code> runs inline.</strong> The wasm core has no pool, so the parse runs synchronously inside the call and blocks the core's thread whichever design you pick. What the design still gives you there is the 771-byte change-set instead of 1.2 MB for the main thread to decode. Run the web core in a worker (<a href="../web.html">Workers &amp; crash recovery</a>) so a long step does not stall a frame.</li><li><strong>A feed faster than the screen.</strong> Each batch of deltas is one hand to the pool and one publish. A feed that sends thousands a second should be batched before it reaches <code>apply_deltas</code>, as the demo feed does with one batch every 100 ms; the platform's frame merge (<a href="https://github.com/shreypdev/undra/blob/main/docs/HIGH_FREQUENCY.md" rel="noopener">High-frequency data</a>) takes care of the rest.</li><li><strong>Memory.</strong> The structure holds each player twice (about 1.6 MB for 100,000) and a swap briefly holds the old ranking and the new one. A snapshot is not part of the core's own snapshot: a restored store has no players, so it clears its window and the app loads the standings again.</li><li><strong>A window is not a lazy list.</strong> <code>Lazy&lt;T&gt;</code> (<a href="../paging.html">Paging and lazy lists</a>) lets a platform scroll through a collection in the core; this recipe is for a screen that only ever shows a derived summary of it.</li></ul>
 <p>Source: <a href="https://github.com/shreypdev/undra/blob/main/examples/cookbook/core/src/leaderboard.rs" rel="noopener"><code class="cw">examples/cookbook/core/src/leaderboard.rs</code></a> and <a href="https://github.com/shreypdev/undra/blob/main/examples/cookbook/core/src/standings.rs" rel="noopener"><code class="cw">standings.rs</code></a>.</p>

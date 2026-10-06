@@ -627,8 +627,8 @@ on the reference host at a load average of 13 (other builds ran), 2026-10-05, ru
 
 | Row (`leaderboard/..`) | What the call does under the core lock | p50 | p99 | Change-set |
 |---|---|---|---|---|
-| `lock_hold/recommended` | publishes the window the blocking pool prepared: three signals, one transaction | **375 ns** | **458 ns** | 771 bytes |
-| `lock_hold/in_core_call` | parses, sorts and swaps the snapshot inside the call, then publishes the same window | 2.56 ms | 2.94 ms | 771 bytes |
+| `lock_hold/recommended` | publishes the window the blocking pool prepared: three signals, one transaction | **375 ns** | **458 ns** | 780 bytes |
+| `lock_hold/in_core_call` | parses, sorts and swaps the snapshot inside the call, then publishes the same window | 2.56 ms | 2.94 ms | 780 bytes |
 | `lock_hold/signal_of_rows` | parses and sorts inside the call and sets a `Signal<Vec<Place>>` of every player | 2.94 ms | 3.26 ms | 1,200,033 bytes |
 | `ingest/off_core` | (no core lock) what the pool does for the recommended design: parse, sort, swap, window | 2.56 ms | 2.98 ms | none |
 
@@ -641,7 +641,9 @@ claim is its tail, so `Stats` has a p99 now and a `[bench]` table may carry `p99
 grew with the players, the standings read or sorted on the core or every row in a signal, would put it near 1, whatever the
 machine. The second wrong design is only 15% more under the lock on a host (the 1.2 MB change-set is encoded and copied
 in half a millisecond), but it is what the platform then has to decode and apply every time, which no host-side row
-shows; the recommended window is 771 bytes whatever the number of players.
+shows; the recommended window is 780 bytes whatever the number of players. (The fixture's window mirrors the
+recipe's, the followed row and the version check included; re-measured after the review made it so, the best p50 and
+p99 were 375 ns and 459 ns, the same within the 42 ns tick of this host's clock.)
 
 What a caller sees. `cargo test -p undra-bench --test leaderboard --release -- --ignored --nocapture stall_report`
 applies a snapshot every ~9 ms (4 ms of work, then 5 ms of sleep) for 8 s per design while another thread makes a call
@@ -653,8 +655,9 @@ at a load average of 13 to 16 (a busy machine adds descheduling noise to the pro
 | recommended (pool, then publish) | 269,276 | 125 ns | 2.0 us | 7.8 us | 131.7 us |
 | snapshot applied inside a call | 171,176 | 125 ns | 2.9 us | 3.47 ms | 7.04 ms |
 
-A call that arrives during an in-call apply waits out the parse: the p99.9 and the max are the 4 ms the lock was held (a
-closed-loop probe sees one such wait per snapshot, about 1 call in 200, so the p99 does not show it; the p99.9 does). With
+A call that arrives during an in-call apply waits out the parse: the p99.9 and the max are that wait (about 4 ms a
+snapshot with the probe running; the max adds the probe's own descheduling on a busy machine). A
+closed-loop probe sees one such wait per snapshot, about 1 call in 200, so the p99 does not show it; the p99.9 does. With
 the recommended design nobody waits more than the publish: the worst call of the best run is 132 us. These are the
 numbers of one host; the structure is the claim, the budgets test holds the ratio.
 

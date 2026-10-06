@@ -2107,14 +2107,14 @@ The core has one lock. Whoever holds it is the core: a call, the poll of a task,
 
 | Design | Core lock held per snapshot, p50 | p99 | What reaches the platform |
 | --- | --- | --- | --- |
-| **This recipe**: pool, then publish a window | **375 ns** | **458 ns** | 771 bytes |
-| Parse inside a core call | 2.56 ms | 2.94 ms | 771 bytes |
+| **This recipe**: pool, then publish a window | **375 ns** | **458 ns** | 780 bytes |
+| Parse inside a core call | 2.56 ms | 2.94 ms | 780 bytes |
 | Parse inside a call, a signal of every player | 2.94 ms | 3.26 ms | 1,200,033 bytes |
 
 ## The recipe
 
 - **Ingest on `spawn_blocking`.** The snapshot (or a batch of deltas) goes to the blocking pool. The closure parses and sorts it into a `Standings` the app owns, behind its own `Mutex`, with no core lock held. A snapshot is a finished value built before the lock is taken: the lock is held for the swap, not for the parse.
-- **Publish a window, once.** The closure returns a small `View`: the top 50, the player and three neighbours on each side, and four numbers. The awaiting task is back on the core and writes three signals in one `txn`, skipping the ones that did not change (a write is a change-set whether or not the value moved). That is the only part of an update that holds the core lock.
+- **Publish a window, once.** The closure returns a small `View`: the top 50, the player and three neighbours on each side, and four numbers. The awaiting task is back on the core and writes three signals in one `txn`, skipping the ones that did not change (a write is a change-set whether or not the value moved). That is the only part of an update that holds the core lock. Each window carries the version it was read at under the app's lock, and an older one is not written: two updates can come back from the pool in either order.
 - **The big structure never crosses.** `follow` (the player who is highlighted) takes the same two steps. No generated getter, no signal and no call holds the 100,000 players, and a closure on the pool cannot write a signal at all (E0065), which is how the design stays honest.
 - **The feed is deterministic.** `start_demo` seeds a synthetic feed from the `Rng` port and drives it on the `Timer` port, so a test with the fake clock sees the same players and the same changes on every run.
 
@@ -2154,7 +2154,8 @@ A call that arrives during an in-call apply waits out the parse. That is about o
 - Following a player shows it with three neighbours on each side and its rank; a delta that makes it the leader moves the window with it, and a delta for a player the snapshot did not hold is ignored.
 - A snapshot that cannot be read (a repeated id, a score out of range, not JSON) is a typed error and leaves the ranking as it was; a failed fetch is a typed network error.
 - An update that changes nothing in the window writes nothing: no change-set.
-- What a platform receives for a snapshot of 100,000 players is one change-set of 771 bytes, decoded from the wire.
+- What a platform receives for a snapshot of 100,000 players, with a player followed, is one change-set of 780 bytes: three signals, the 50 rows of the top and the 7 around the player, decoded from the wire.
+- Eight updates awaited together, whatever order the core resumes them in, leave the newest window on screen.
 - Merging delta batches gives the ranking a plain sort of the same scores gives, after each of forty batches; the demo feed runs on the fake clock, stops when stopped, and is the same on every run.
 
 ## What to watch

@@ -25,8 +25,8 @@ average 13 (other agents were building):
 
 | Row | p50 | p99 | Change-set |
 |---|---|---|---|
-| `leaderboard/lock_hold/recommended` (the publish) | 375 ns | 458 ns | 771 bytes |
-| `leaderboard/lock_hold/in_core_call` (parse, sort, swap and publish inside the call) | 2.56 ms | 2.94 ms | 771 bytes |
+| `leaderboard/lock_hold/recommended` (the publish) | 375 ns | 458 ns | 780 bytes |
+| `leaderboard/lock_hold/in_core_call` (parse, sort, swap and publish inside the call) | 2.56 ms | 2.94 ms | 780 bytes |
 | `leaderboard/lock_hold/signal_of_rows` (inside the call, a `Signal<Vec<Place>>` of every player) | 2.94 ms | 3.26 ms | 1,200,033 bytes |
 | `leaderboard/ingest/off_core` (the pool's work, no core lock) | 2.56 ms | 2.98 ms | none |
 
