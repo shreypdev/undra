@@ -58,17 +58,31 @@ shadow note, the note after the hint, paths compared without resolving symlinks,
 depends on the network or on timing: the fakes answer at once, the 10 s guard is never reached.
 
 The harness ran only in the release workflow; CI's Rust job now runs it after `cargo build -p undra-cli`
-(`UNDRA_BIN=target/debug/undra bash packaging/test-install.sh`, about 20 s), so a change to the installer is checked on its
-pull request.
+(`UNDRA_BIN=target/debug/undra bash packaging/test-install.sh`, about 30 s on a laptop with the review's sections), so a
+change to the installer is checked on its pull request.
+
+## The review's fixes (`.10x/reviews/2026-10-06-install-path-review.md`)
+
+* The guard's subshell, killed with TERM once the version was in, left its `sleep 10` running for the rest of the 10 s; and
+  under dash (Ubuntu's `sh`) `wait` printed `Terminated` when the guard killed a hung `undra`. The subshell now traps TERM and
+  kills its own sleep; `wait`'s stderr is closed. Section 12 of the harness puts a fake `sleep` first on PATH (the installer
+  finds `sleep` there): one that records its pid and sleeps for real shows the sleep is gone once the version is in; one that
+  returns at once fires the guard without the 10 s wait, so a hung `undra` (`exec /bin/sleep 600`) is "version unknown", is
+  killed, and no shell prints `Terminated`. Nothing waits 10 s.
+* `has_path_line` matched the directory's name inside a longer one: `~/.undra/bin-old`, `$HOME/.undra/bin2` and
+  `$HOME/.undra/bin/sub` counted as the line and nothing was written. The name must now be whole (a trailing slash allowed),
+  and `PATH` is matched in any case, so zsh's `path=(~/.undra/bin $path)` and `path+=(...)` count too. Section 10b checks
+  both ways; 10g checks a custom `UNDRA_HOME` is written in full, once.
 
 ## Not covered
 
 * `shellcheck` is not installed on this machine and nothing could be downloaded, so it was not run; the script was written to
   the existing `# shellcheck disable=` conventions and passes `sh -n`, `dash -n` and `bash -n`. CI does not run shellcheck.
-* The 10 s guard on an `undra --version` that hangs is not tested (the test would wait 10 s).
 * `ZDOTDIR` and `XDG_CONFIG_HOME` are not honoured: the files are the ones the brief names (`~/.zshrc`,
   `~/.config/fish/...`), as the printed hint already assumed.
-* A line that names the directory in some other way (a variable of the user's, `path+=`) is not recognised and a second line
-  is written; it is harmless (the directory twice on PATH).
+* A line that puts the directory on PATH through a variable of the user's (`export PATH="$UNDRA_HOME/bin:$PATH"`) is not
+  recognised and a second line is written; it is harmless (the directory twice on PATH).
+* A custom `UNDRA_HOME` holding `"` or `$` is written into the double-quoted line as it is; a space, `'`, `%` or `\` is fine
+  (checked by hand under sh and bash).
 * No page under `site/docs/` documents the installer's environment variables (`UNDRA_HOME` appears in none), so no site page
   changed; `--help` documents `UNDRA_MODIFY_PATH`.
