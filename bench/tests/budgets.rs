@@ -93,21 +93,34 @@ fn selected(workloads: Vec<Workload>) -> Vec<Workload> {
     }
 }
 
-/// Builds the operation afresh for each attempt and keeps the best p50.
-fn best_of(workload: &Workload, attempts: usize, budget_ns: f64) -> Stats {
+/// Builds the operation afresh for each attempt and keeps the best p50 (and, separately, the best
+/// p99: a row whose claim is its tail is judged on its cleanest tail, as the others are on their
+/// cleanest median). The attempts stop at the first one under `budget_ns` and, when the row has
+/// one, `p99_limit_ns`.
+fn best_of(
+    workload: &Workload,
+    attempts: usize,
+    budget_ns: f64,
+    p99_limit_ns: Option<f64>,
+) -> Stats {
     let config = MeasureConfig::default();
     let mut best: Option<Stats> = None;
+    let mut best_p99 = f64::MAX;
     for _ in 0..attempts {
         let mut op = workload.build();
         let stats = measure(&mut *op, &config);
+        best_p99 = best_p99.min(stats.p99_ns);
         if best.is_none_or(|b| stats.p50_ns < b.p50_ns) {
             best = Some(stats);
         }
-        if stats.p50_ns <= budget_ns {
+        let under_p99 = p99_limit_ns.is_none_or(|limit| best_p99 <= limit);
+        if stats.p50_ns <= budget_ns && under_p99 {
             break;
         }
     }
-    best.expect("at least one attempt")
+    let mut best = best.expect("at least one attempt");
+    best.p99_ns = best_p99;
+    best
 }
 
 fn human(ns: f64) -> String {
@@ -158,6 +171,16 @@ fn the_budget_file_covers_every_workload_and_nothing_else() {
                 b.budget_ns
             );
         }
+        if let (Some(ceiling), Some(measured)) = (b.p99_ns, b.measured_p99_ns) {
+            assert!(
+                ceiling >= measured,
+                "{name}: the p99 ceiling ({ceiling}) is below what was measured ({measured})"
+            );
+        }
+        assert!(
+            b.measured_p99_ns.is_none() || b.p99_ns.is_some(),
+            "{name}: measured_p99_ns without a p99_ns gate"
+        );
     }
 }
 
@@ -263,12 +286,14 @@ fn budgets() {
         // The attempts stop at the first one under both gates; a recording keeps the best of all.
         let effective = gate.map_or(limit, |g| limit.min(g.limit_ns));
         let stop_at = if recording.is_some() { 0.0 } else { effective };
-        let stats = best_of(workload, ATTEMPTS, stop_at);
+        let p99_limit = budget.p99_ns.map(|p99| p99 * scale);
+        let stats = best_of(workload, ATTEMPTS, stop_at, p99_limit);
         p50s.insert(workload.name.clone(), stats.p50_ns);
         rows.push(RowResult {
             name: workload.name.clone(),
             p50_ns: stats.p50_ns,
             p90_ns: stats.p90_ns,
+            p99_ns: stats.p99_ns,
             budget_ns: limit,
             baseline_ns: gate.map(|g| g.baseline_ns),
             iterations: stats.iterations,
@@ -304,6 +329,23 @@ fn budgets() {
                 human(limit),
                 stats.iterations
             ));
+        }
+        if let Some(p99_limit) = p99_limit {
+            eprintln!(
+                "    p99 {} of {} ({} iterations)",
+                human(stats.p99_ns),
+                human(p99_limit),
+                stats.iterations
+            );
+            if stats.p99_ns > p99_limit {
+                failures.push(format!(
+                    "{}: p99 {} is over its ceiling of {} ({} iterations, best of up to {ATTEMPTS})",
+                    workload.name,
+                    human(stats.p99_ns),
+                    human(p99_limit),
+                    stats.iterations
+                ));
+            }
         }
         if let (Some(g), Some(b)) = (gate, &baseline) {
             if stats.p50_ns > g.limit_ns {
@@ -346,7 +388,7 @@ fn budgets() {
             attempt += 1;
             for (row, p50) in [(&ratio.num, &mut num), (&ratio.den, &mut den)] {
                 if let Some(workload) = workloads.iter().find(|w| &w.name == row) {
-                    let again = best_of(workload, 1, f64::MAX);
+                    let again = best_of(workload, 1, f64::MAX, None);
                     *p50 = p50.min(again.p50_ns);
                 }
             }
@@ -410,6 +452,7 @@ struct RowResult {
     name: String,
     p50_ns: f64,
     p90_ns: f64,
+    p99_ns: f64,
     budget_ns: f64,
     baseline_ns: Option<f64>,
     iterations: u64,
@@ -454,10 +497,11 @@ fn write_results(
         .iter()
         .map(|r| {
             format!(
-                "    {{\"name\": {}, \"p50_ns\": {}, \"p90_ns\": {}, \"budget_ns\": {}, \"baseline_p50_ns\": {}, \"iterations\": {}, \"failed\": {}}}",
+                "    {{\"name\": {}, \"p50_ns\": {}, \"p90_ns\": {}, \"p99_ns\": {}, \"budget_ns\": {}, \"baseline_p50_ns\": {}, \"iterations\": {}, \"failed\": {}}}",
                 json_string(&r.name),
                 json_number(r.p50_ns),
                 json_number(r.p90_ns),
+                json_number(r.p99_ns),
                 json_number(r.budget_ns),
                 json_opt(r.baseline_ns),
                 r.iterations,
@@ -847,11 +891,15 @@ fn baseline() {
         .and_then(|f| f.parse().ok())
         .unwrap_or(5.0);
     for workload in selected(common::workloads::all()) {
-        let stats = best_of(&workload, 1, f64::MAX);
+        let stats = best_of(&workload, 1, f64::MAX, None);
         let budget = round_up(stats.p50_ns * factor);
         println!("[bench.\"{}\"]", workload.name);
         println!("budget_ns = {budget}");
         println!("measured_ns = {:.1}", stats.p50_ns);
+        println!(
+            "# p99 {:.1} (a row whose claim is its tail takes p99_ns, 5x this, and measured_p99_ns)",
+            stats.p99_ns
+        );
         if let Some(old) = existing.benches.get(&workload.name) {
             if let Some(ns) = old.blueprint_ns {
                 println!("blueprint_ns = {ns}");
