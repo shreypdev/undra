@@ -450,17 +450,27 @@ fn the_lldbinit_undra_init_writes_loads_the_formatters_and_says_nothing_without_
     }
 }
 
-/// The crates linked into a core: `undra-ffi` and every workspace crate its `[dependencies]` reach.
+/// The crates linked into a core: the shim links the app's core, which depends on `undra`, and
+/// `undra-ffi` (`src/shim.rs`), so those two and every workspace crate their `[dependencies]`
+/// reach, without the proc-macro crates (`undra-macros` runs in the compiler, it is not linked).
 fn core_crates() -> Vec<(String, PathBuf)> {
     let crates = repo_root().join("crates");
-    let mut todo = vec!["undra-ffi".to_owned()];
+    let mut todo = vec!["undra".to_owned(), "undra-ffi".to_owned()];
     let mut seen: Vec<String> = Vec::new();
+    let mut linked: Vec<String> = Vec::new();
     while let Some(name) = todo.pop() {
         if seen.contains(&name) {
             continue;
         }
+        seen.push(name.clone());
         let manifest = std::fs::read_to_string(crates.join(&name).join("Cargo.toml"))
             .unwrap_or_else(|e| panic!("{name}/Cargo.toml: {e}"));
+        if manifest
+            .lines()
+            .any(|l| l.split_whitespace().collect::<String>() == "proc-macro=true")
+        {
+            continue;
+        }
         let mut in_deps = false;
         for line in manifest.lines() {
             let line = line.trim();
@@ -480,10 +490,11 @@ fn core_crates() -> Vec<(String, PathBuf)> {
                 todo.push(name.to_owned());
             }
         }
-        seen.push(name);
+        linked.push(name);
     }
-    seen.sort();
-    seen.into_iter()
+    linked.sort();
+    linked
+        .into_iter()
         .map(|name| (name.clone(), crates.join(name)))
         .collect()
 }
@@ -586,10 +597,20 @@ fn no_enum_variant_of_the_core_is_named_after_a_type_of_its_own_crate() {
     // since the formatters inspect the pointee of every `&T` argument). A type of another crate
     // (`String(String)`) is parsed first and is not confused. Keep the pattern out of the core.
     let crates = core_crates();
-    assert!(
-        crates.iter().any(|(name, _)| name == "undra-runtime"),
-        "{crates:?}"
-    );
+    let names: Vec<&str> = crates.iter().map(|(name, _)| name.as_str()).collect();
+    for linked in [
+        "undra",
+        "undra-ffi",
+        "undra-runtime",
+        "undra-ports",
+        "undra-query",
+    ] {
+        assert!(
+            names.contains(&linked),
+            "{linked} is not scanned: {names:?}"
+        );
+    }
+    assert!(!names.contains(&"undra-macros"), "{names:?}");
     let mut offenders = Vec::new();
     for (name, root) in &crates {
         let mut files = Vec::new();
