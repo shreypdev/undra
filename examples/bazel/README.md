@@ -42,7 +42,6 @@ bazel run //ios:xcodeproj             # macOS: ios/HelloApp.xcodeproj, the app's
 | `//swift:hello_test` | the same in Swift, with the XCFramework's host twin linked (macOS only; skipped on Linux) |
 | `//kotlin:lint_test` | ktlint 1.8 reports nothing on the generated Kotlin, and 90 findings once the exclusions `undra bindgen` writes are taken away; the root `.editorconfig` section the Bazel guide gives for `lint_exclusions = "none"` is enough on its own |
 | `//:bindings_check` | `committed/` is what the core's schema generates, byte for byte (`undra bindgen --check`'s comparison); when it is not, the failure says `bazel run //:bindings_check.update`, which rewrites it |
-| `//kotlin:lint_test` | ktlint 1.8 reports nothing on the generated Kotlin, and 90 findings once the exclusions `undra bindgen` writes are taken away |
 | `//symbols:symbolicate_test` | a crash report of the Bazel-built release core, resolved by `undra symbolicate` with the `symbols` output group of that build: a frame names `core/src/lib.rs` and the line of the `panic!` (below) |
 | `//consumer:summary_test` | a Kotlin library an app writes over the generated store compiles and runs, the core loaded by `-Dundra.native.hello_core.path=$(rootpath //:core_host)` |
 | `//consumer:runtime_test` | a Node test that imports `@undra/runtime` beside the bindings resolves both |
