@@ -509,6 +509,14 @@ jobs:
           path: ~/.cache/bazel-repository
           key: bazel-repository-${{ runner.os }}-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
           restore-keys: bazel-repository-${{ runner.os }}-
+      # //symbols:symbolicate_test resolves a crash of the release core with the machine's llvm-symbolizer (the `.so.debug`,
+      # ADR-046). The test also looks below /usr/lib/llvm-*, where the image's clang may have put one; when there is none, the
+      # distribution's LLVM is installed.
+      - name: llvm-symbolizer for the symbols test
+        run: |
+          if command -v llvm-symbolizer >/dev/null || ls /usr/lib/llvm-*/bin/llvm-symbolizer >/dev/null 2>&1; then exit 0; fi
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends llvm
       - name: The rules' own tests (the Cargo.lock reader)
         working-directory: bazel
         run: bazel test //tests/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
