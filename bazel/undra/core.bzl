@@ -95,7 +95,9 @@ def _undra_core_impl(ctx):
         "project=" + project,
         "namespace=" + namespace,
         # The private copy is built in a directory named by the target, never by when or where it runs (run.sh says why).
-        "stage_key={}|{}".format(ctx.label, platform),
+        # A core that keeps its debug objects works in a directory of its own: a build of the same target that does not keep them
+        # (another configuration, another output base) must not remove them.
+        "stage_key={}|{}{}".format(ctx.label, platform, "|keep_debug_objects" if ctx.attr.keep_debug_objects else ""),
     ]
 
     outputs = []
@@ -122,6 +124,8 @@ def _undra_core_impl(ctx):
     if platform == "ios":
         # Xcode is the machine's (the documented exception, ADR-065): the PATH the build was started with comes along.
         lines.append("inherit_path=1")
+    if ctx.attr.keep_debug_objects:
+        lines.append("keep_debug_objects=1")
     extra_tools = []
     android_inputs = []
     if platform == "android":
@@ -210,6 +214,7 @@ _undra_core = rule(
         "extra_path": attr.string_list(),
         "ndk": attr.label(allow_files = True),
         "android_std": attr.label(allow_files = True),
+        "keep_debug_objects": attr.bool(default = False),
         "cli": attr.label(default = Label("@undra//:cli"), executable = True, cfg = "exec"),
         "_undra_sources": attr.label(default = Label("@undra//:sources")),
         "_undra_manifest": attr.label(default = Label("@undra//:Cargo.toml"), allow_single_file = True),
@@ -238,6 +243,7 @@ def undra_core(
         wasm_opt = None,
         ndk = None,
         extra_path = [],
+        keep_debug_objects = False,
         tags = [],
         visibility = None,
         **kwargs):
@@ -260,7 +266,9 @@ def undra_core(
     (`lib<namespace>.dylib.dSYM`, `.so.debug` on Linux), which the CLI keeps next to the library and the manifest names as
     `../host/..`. A crash report's addresses resolve to file and line with them: `undra symbolicate --symbols
     <target>.symbols/symbols report.json`. iOS writes no symbol file of its own (its group holds the manifest): the Rust
-    frames are in the app's own dSYM (ADR-046). A debug target has no `symbols` group, and a `filegroup` of it is empty.
+    frames are in the app's own dSYM (ADR-046) when the core is built with `keep_debug_objects = True` in the build that makes
+    the dSYM (see that argument; without it the dSYM has the Swift frames only). A debug target has no `symbols` group, and a
+    `filegroup` of it is empty.
 
     ```starlark
     undra_core(name = "core_release", namespace = "hello_core", srcs = [...], platforms = ["host"], release = True)
@@ -287,6 +295,15 @@ def undra_core(
         extra_path: directories (absolute) put on the action's `PATH` for the `ios` build, whose toolchain is the machine's
             (the documented exception: `DEVELOPER_DIR` comes in through `--action_env` and the `PATH` the build was started with
             is inherited). Android does not use it.
+        keep_debug_objects: for an `ios` core a debugger can step into: leave the objects that hold the core's DWARF where the build
+            wrote them. A prelinked slice carries a debug map, not DWARF (ADR-044), and the map names files below the
+            `/tmp/undra-bazel-<key>/target` directory the action builds in, which is removed when the action ends; a debugger, and
+            the dSYM of the app (`--apple_generate_dsym`), find no Rust frames then. With this, the `libundra_core_*.a` of each
+            target triple (about 80 MB each in a debug build) stay there until the next build of the target with this attribute (the
+            directory is its own, named by the target and this attribute, so a build without it never removes them, and the
+            bytes of this build differ from the other's, which the directory name reaches). They are not an output, so a core
+            restored from a cache after the directory is gone, or after macOS cleared `/tmp` (a restart, or files unused for three
+            days), has none: build it again (`--action_env=UNDRA_REBUILD=<new value>`, or a change to the core) to debug it. Only the `ios` core reads it.
         tags: tags of the generated targets.
         visibility: the visibility of every generated target.
         **kwargs: passed to the generated rule instances (`execution_requirements`).
@@ -309,9 +326,16 @@ def undra_core(
             ndk = ndk if platform == "android" else None,
             android_std = Label("@undra_android_std//:std") if platform == "android" else None,
             extra_path = extra_path,
+            keep_debug_objects = keep_debug_objects if platform == "ios" else False,  # only an iOS slice has a debug map
             # Xcode is the machine's, not Bazel's (ADR-061), and the NDK is a large download: both build when asked for by name.
             tags = tags + (["manual", "requires-darwin"] if platform == "ios" else []) + (["manual"] if platform == "android" else []),
-            target_compatible_with = ["@platforms//os:macos"] if platform == "ios" else [],
+            # The iOS core is built from a Mac, for iOS: also compatible with an iOS target platform, so the app (an
+            # `ios_application`, built for iOS) can depend on it. The rule builds the Apple slices itself, whatever its own is.
+            target_compatible_with = select({
+                "@platforms//os:macos": [],
+                "@platforms//os:ios": [],
+                "//conditions:default": ["@platforms//:incompatible"],
+            }) if platform == "ios" else [],
             visibility = visibility,
             **kwargs
         )

@@ -1,0 +1,2 @@
+# `bazel run //ios:xcodeproj` writes this: a build product, regenerated on demand.
+HelloApp.xcodeproj/

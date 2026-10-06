@@ -108,3 +108,6 @@ http_archive(
 # Node, which the TypeScript test runs on (the TypeScript compiler is undra_rules's: typescript.deps(version = "5.9.3")).
 node = use_extension("@rules_nodejs//nodejs:extensions.bzl", "node")
 node.toolchain(node_version = "24.18.0")
+
+# The Xcode project of the iOS app (//ios:xcodeproj), for debugging the core from Xcode and lldb (macOS; the target is `manual`).
+bazel_dep(name = "rules_xcodeproj", version = "4.1.0")
