@@ -1907,7 +1907,7 @@ bazel run //:bindings_check.update    # writes the trees into the source tree; c
 bazel test //:bindings_check          # fails, naming the line above, when they are out of date
 ```
 
-The comparison is the one `undra bindgen --check` makes: the same files, byte for byte, nothing normalised (not line endings, not trailing space). `undra bindgen --check --out generated` accepts the directory the update writes, and a file edited by hand fails both. The rule is stricter in one way: it compares the directory as a whole, so a file that you keep beside the generated ones fails the test (the CLI ignores files its manifest does not list), and the update removes it. Keep the directory for the bindings alone. A directory that does not exist yet fails analysis of the test with the update command in its message, so the first run of the update target creates it.
+The comparison is the one `undra bindgen --check` makes: the same files, byte for byte, nothing normalised (not line endings, not trailing space). `undra bindgen --check --out generated` accepts the directory the update writes, and a file edited by hand fails both. The rule is stricter in one way: it compares the directory as a whole, so a file that you keep beside the generated ones fails the test (the CLI ignores files its manifest does not list), and the update removes it. Keep the directory for the bindings alone, `BUILD.bazel` files included: a target that compiles the committed copy lives in the package around it and globs it (`glob(["generated/ts/**"])`). A directory that does not exist yet fails the test when it runs, with the update command in its message, and the rest of `bazel test //...` still runs; the first run of the update target creates it.
 
 ## Good to know
 

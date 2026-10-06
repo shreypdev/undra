@@ -21,8 +21,9 @@ Branch `wt/bindings-test`, one pull request. Implements ADR-064's second model: 
   scripts. Cases: identical trees pass (all languages, and TypeScript only); a changed file, an extra file, a missing file and a
   committed language the bindings no longer have each fail, and the output names `bazel run //tests:<case>.update` and the diff;
   the update target, run against a scratch workspace that starts with a leftover file, writes a directory equal to the expected
-  one (dotfiles included) and removes the leftover; a `committed` that does not exist fails analysis of the test with a message
-  that names the update target (`analysistest`, so the failure is asserted).
+  one (dotfiles included) and removes the leftover; a `committed` that does not exist fails the test when it runs with a message
+  that names the update target (`absent_fails_test`; review of 2026-10-05: it used to fail analysis); the laid-out directory
+  holds copies, not links into the execroot (`copies_test`, same review).
 * The guide (`site/docs/bazel.html`): the "What you get" row and the section "Committed bindings" (the rule, the two commands,
   when to choose which model, what is compared). `llms-full.txt` and `search-index.json` regenerated.
 
@@ -74,9 +75,10 @@ normalises is lost, because the CLI normalises nothing.
   the committed trees equal what the build generates at the bumped version. `docs/RELEASING.md` step 4 says so in one clause.
   The directory is still `committed/` (not `generated/`), which keeps it out of the `examples/*/generated/` glob; it is listed
   by name.
-* A `committed` that does not exist fails at analysis (`write_source_file`'s `fail_with_message_test` calls `fail`), which stops
-  a `bazel test //...` of the package until the update has been run once. That is `bazel_lib`'s behaviour and the reason
-  `bazel run <name>.update` still works: it is a different target. The message says so.
+* A `committed` that does not exist failed at analysis (`write_source_file`'s `fail_with_message_test` calls `fail`), which
+  stopped every target of a `bazel build //...` or `bazel test //...` until the update had run once. Since the review of
+  2026-10-05 the rule checks for the directory itself (the same glob `bazel_lib` uses), and when it is missing makes a test
+  that fails when it runs, with the same message; the update target is `write_source_file`'s either way.
 * The failure message is placed inside a double-quoted shell string by `bazel_lib`'s `diff_test`: it has no backquote, dollar
   sign or quotation mark.
 
