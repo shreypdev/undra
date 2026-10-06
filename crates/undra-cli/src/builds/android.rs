@@ -117,7 +117,7 @@ pub fn build(
             lib_name: crate::shim::shim_lib_name(&session.project.root),
             // The image's identity (what a panic report names it by) and the 16 KB pages, in the
             // unstripped library and in the stripped copy alike.
-            rustc_args: ndk::rustc_args(triple),
+            rustc_args: ndk::rustc_args(os, triple, cfg.min_sdk),
             cargo_config: symbols.cargo_config(profile, false),
             remap: session.remap_roots(),
         })?;

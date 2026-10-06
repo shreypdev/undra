@@ -67,6 +67,20 @@ pub fn clangxx(ndk: &Path, os: Os, triple: &str, api: u32) -> PathBuf {
     ))
 }
 
+/// What Cargo links with: the clang wrapper of [`clang`], except on Windows, where it is `clang.exe` itself and the API level
+/// travels as `--target=` ([`rustc_args`]). A `.cmd` wrapper as the linker is the old way Windows tools break: rustc passes the
+/// linker a long, quoted argument list, and cmd.exe (which runs a `.cmd`) reads quotes and `%` its own way, so a build that
+/// links through it can fail on a path or an argument the same build links on macOS and Linux. `clang.exe` takes the arguments
+/// as they are; it is what `cargo-ndk` linked with on Windows too.
+#[must_use]
+pub fn linker(ndk: &Path, os: Os, triple: &str, api: u32) -> PathBuf {
+    if os == Os::Windows {
+        toolchain_bin(ndk, os).join("clang.exe")
+    } else {
+        clang(ndk, os, triple, api)
+    }
+}
+
 /// The NDK's `llvm-ar`.
 #[must_use]
 pub fn ar(ndk: &Path, os: Os) -> PathBuf {
@@ -111,8 +125,8 @@ pub fn is_64_bit(triple: &str) -> bool {
 ///
 /// | Variable | Value |
 /// |---|---|
-/// | `CARGO_TARGET_<TRIPLE>_LINKER` | the NDK's `<triple><api>-clang` |
-/// | `CC_<triple>`, `CXX_<triple>` | the same clang and clang++ (for build scripts that compile C or C++) |
+/// | `CARGO_TARGET_<TRIPLE>_LINKER` | the NDK's `<triple><api>-clang` ([`linker`]: `clang.exe` on Windows) |
+/// | `CC_<triple>`, `CXX_<triple>` | the `<triple><api>-clang` and `-clang++` wrappers (for build scripts that compile C or C++) |
 /// | `AR_<triple>`, `RANLIB_<triple>` | `llvm-ar`, `llvm-ranlib` |
 /// | `ANDROID_NDK_HOME` | `ndk` |
 ///
@@ -122,13 +136,12 @@ pub fn is_64_bit(triple: &str) -> bool {
 pub fn environment(ndk: &Path, os: Os, triple: &str, api: u32) -> Vec<(String, String)> {
     let path = |p: PathBuf| p.to_string_lossy().into_owned();
     let cc_triple = cc_env_triple(triple);
-    let linker = clang(ndk, os, triple, api);
     vec![
         (
             format!("CARGO_TARGET_{}_LINKER", cargo_env_triple(triple)),
-            path(linker.clone()),
+            path(linker(ndk, os, triple, api)),
         ),
-        (format!("CC_{cc_triple}"), path(linker)),
+        (format!("CC_{cc_triple}"), path(clang(ndk, os, triple, api))),
         (
             format!("CXX_{cc_triple}"),
             path(clangxx(ndk, os, triple, api)),
@@ -139,17 +152,23 @@ pub fn environment(ndk: &Path, os: Os, triple: &str, api: u32) -> Vec<(String, S
     ]
 }
 
-/// The arguments for rustc itself (after `--`) of the Android library for `triple`: the GNU build
-/// id that names the image in a crash report (ADR-046), and, for a 64-bit library, the 16 KB page
-/// size ([`PAGE_SIZE_LINK_ARG`]).
+/// The arguments for rustc itself (after `--`) of the Android library for `triple` at `api` on `os`: the GNU build
+/// id that names the image in a crash report (ADR-046), for a 64-bit library the 16 KB page size ([`PAGE_SIZE_LINK_ARG`]),
+/// and on Windows the `--target=<triple><api>` the `.cmd` wrapper would have given `clang.exe` ([`linker`]).
 #[must_use]
-pub fn rustc_args(triple: &str) -> Vec<String> {
+pub fn rustc_args(os: Os, triple: &str, api: u32) -> Vec<String> {
     let mut args = vec![
         "-C".to_owned(),
         super::android::BUILD_ID_LINK_ARG.to_owned(),
     ];
     if is_64_bit(triple) {
         args.extend(["-C".to_owned(), PAGE_SIZE_LINK_ARG.to_owned()]);
+    }
+    if os == Os::Windows {
+        args.extend([
+            "-C".to_owned(),
+            format!("link-arg=--target={}{api}", clang_prefix(triple)),
+        ]);
     }
     args
 }
@@ -158,10 +177,16 @@ pub fn rustc_args(triple: &str) -> Vec<String> {
 /// the archiver. Empty when the NDK is whole.
 #[must_use]
 pub fn missing_tools(sys: &dyn Sys, ndk: &Path, os: Os, triple: &str, api: u32) -> Vec<PathBuf> {
-    [clang(ndk, os, triple, api), ar(ndk, os)]
-        .into_iter()
-        .filter(|tool| !sys.is_file(tool))
-        .collect()
+    // The wrapper of the API level is checked on every host: an NDK older than the level has none, and the C compiler of build
+    // scripts is that wrapper even where the linker is `clang.exe`.
+    let mut tools = vec![
+        clang(ndk, os, triple, api),
+        linker(ndk, os, triple, api),
+        ar(ndk, os),
+    ];
+    tools.dedup();
+    tools.retain(|tool| !sys.is_file(tool));
+    tools
 }
 
 #[cfg(test)]
@@ -250,24 +275,69 @@ mod tests {
     }
 
     #[test]
-    fn windows_uses_the_cmd_wrappers_and_exe_tools() {
+    fn windows_links_with_clang_exe_and_compiles_with_the_cmd_wrappers() {
         let env = environment(
             Path::new("C:/ndk"),
             Os::Windows,
             "aarch64-linux-android",
             26,
         );
+        // The linker is not a `.cmd` (cmd.exe would re-read the quoting of rustc's arguments), so the target comes as an argument.
         assert!(
             get(&env, "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER")
+                .ends_with("windows-x86_64/bin/clang.exe")
+        );
+        assert!(
+            get(&env, "CC_aarch64_linux_android")
                 .ends_with("windows-x86_64/bin/aarch64-linux-android26-clang.cmd")
         );
         assert!(get(&env, "AR_aarch64_linux_android").ends_with("windows-x86_64/bin/llvm-ar.exe"));
+        assert!(
+            rustc_args(Os::Windows, "aarch64-linux-android", 26)
+                .contains(&"link-arg=--target=aarch64-linux-android26".to_owned())
+        );
+        assert!(
+            rustc_args(Os::Windows, "armv7-linux-androideabi", 21)
+                .contains(&"link-arg=--target=armv7a-linux-androideabi21".to_owned()),
+            "the 32-bit ABI keeps the NDK's armv7a name"
+        );
+    }
+
+    #[test]
+    fn macos_and_linux_pass_no_target_the_wrapper_has_it() {
+        for os in [Os::Macos, Os::Linux] {
+            assert!(
+                !rustc_args(os, "aarch64-linux-android", 26)
+                    .iter()
+                    .any(|a| a.contains("--target")),
+                "{os:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn on_windows_both_the_exe_and_the_wrapper_of_the_level_are_required() {
+        let ndk = Path::new("C:/ndk");
+        let bin = "C:/ndk/toolchains/llvm/prebuilt/windows-x86_64/bin";
+        let has_exe = FakeSys {
+            os: Some(Os::Windows),
+            ..FakeSys::default()
+        }
+        .with_file(&format!("{bin}/clang.exe"))
+        .with_file(&format!("{bin}/llvm-ar.exe"));
+        // No wrapper for the level: the NDK is older than min_sdk.
+        assert_eq!(
+            missing_tools(&has_exe, ndk, Os::Windows, "aarch64-linux-android", 99),
+            [PathBuf::from(format!(
+                "{bin}/aarch64-linux-android99-clang.cmd"
+            ))]
+        );
     }
 
     #[test]
     fn a_64_bit_library_is_linked_for_16_kb_pages_and_a_build_id_and_a_32_bit_one_for_the_id() {
         assert_eq!(
-            rustc_args("aarch64-linux-android"),
+            rustc_args(Os::Linux, "aarch64-linux-android", 26),
             [
                 "-C",
                 "link-arg=-Wl,--build-id=sha1",
@@ -276,11 +346,11 @@ mod tests {
             ]
         );
         assert_eq!(
-            rustc_args("x86_64-linux-android"),
-            rustc_args("aarch64-linux-android")
+            rustc_args(Os::Linux, "x86_64-linux-android", 26),
+            rustc_args(Os::Linux, "aarch64-linux-android", 26)
         );
         assert_eq!(
-            rustc_args("armv7-linux-androideabi"),
+            rustc_args(Os::Linux, "armv7-linux-androideabi", 26),
             ["-C", "link-arg=-Wl,--build-id=sha1"]
         );
     }
