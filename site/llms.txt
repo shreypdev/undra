@@ -57,10 +57,11 @@ Undra is open source (MIT OR Apache-2.0) and ships an `undra` CLI (`undra init`,
 
 ## Roadmap
 
-- [Undra roadmap: shipped, next, later and exploring](https://shreypdev.github.io/undra/roadmap/): The Undra roadmap: what is in 1.0, what is planned next and later, and what is only being explored. Updated with the project record.
+- [Undra roadmap: shipped, next, later and exploring](https://shreypdev.github.io/undra/roadmap/): The Undra roadmap: what is in 1.0, 1.1 and 1.2, what is planned next and later, and what is only being explored. Updated with the project record.
 
 ## Blog
 
+- [Undra 1.2: no drift between three hosts | Undra blog](https://shreypdev.github.io/undra/blog/undra-1-2-no-drift/): One core made three hosts agree on logic. 1.2 adds a diff of one flow recorded per platform, a custom port that compiles on iOS, and a faster gate.
 - [Undra 1.0: one Rust core under native apps | Undra blog](https://shreypdev.github.io/undra/blog/undra-1-0/): What Undra is, who it is for, what is in 1.0, how to try it in five minutes, and what it is not.
 - [Fifteen levers: the JavaScript runtime at 16 KB | Undra blog](https://shreypdev.github.io/undra/blog/the-javascript-runtime-at-16-kb/): How what a hello-world page loads up front of @undra/runtime went from 22,100 to 15,774 bytes gzipped without removing a feature.
 - [A week of outside use: seven findings | Undra blog](https://shreypdev.github.io/undra/blog/a-week-of-outside-use/): A team tried Undra for a week and sent seven findings. Five are fixed, each with a decision record and a review; two were not taken on, and why.
