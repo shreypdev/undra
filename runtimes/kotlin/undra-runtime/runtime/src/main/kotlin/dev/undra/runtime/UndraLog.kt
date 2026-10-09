@@ -38,4 +38,4 @@ internal object Platform {
 }
 
 /** The version this runtime reports in `Hello`. */
-internal const val UNDRA_RUNTIME_VERSION: String = "1.1.0"
+internal const val UNDRA_RUNTIME_VERSION: String = "1.2.0"
