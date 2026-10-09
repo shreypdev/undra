@@ -18,7 +18,7 @@ import { join, resolve, basename } from "node:path";
 import { SITE, read, writeIfChanged, esc } from "./lib.mjs";
 
 const ROOT = resolve(SITE, "..");
-const PAGES = [join(SITE, "docs", "sample.html")];
+const PAGES = [join(SITE, "docs", "sample.html"), join(SITE, "docs", "ports.html")];
 const dir = join(SITE, "docs", "cookbook");
 if (existsSync(dir)) for (const f of readdirSync(dir).sort()) if (f.endsWith(".html")) PAGES.push(join(dir, f));
 

@@ -788,18 +788,92 @@ An unavailable port is a normal outcome, not a bug. A port nobody registered beh
 
 ## Writing your own port
 
-Mark a trait with `#[undra::port]`. The macro registers it in the schema and generates a proxy type, so the core calls your trait like any other, and the platform gets a protocol or interface to implement. This one is made up, to show the shape:
+Mark a trait with `#[undra::port]`. The macro registers it in the schema and generates a proxy type, so the core calls your trait like any other, and each platform gets a protocol or interface to implement and an adapter to register. The cookbook's `Haptics` port is the whole story on three platforms ([the recipe](https://shreypdev.github.io/undra/docs/cookbook/custom-port.html)); the code below is the code that compiles there.
 
-rust
+core/src/haptics.rs
 
 ```rust
+/// A tap the user feels: the platform's haptics engine.
 #[undra::port(sync)]
 pub trait Haptics {
+    /// One tap, `strength` from 0 (nothing) to 255 (the strongest the device has).
     fn tap(&self, strength: u8);
 }
 ```
 
-A port method's parameters must be wire types (`E0030`), and an `event` port's methods cannot return a value (`E0031`).
+core/src/haptics.rs
+
+```rust
+/// Confirms an action the user just took: one light tap through the [`Haptics`] port.
+#[undra::api]
+pub fn confirm(ctx: &Ctx) {
+    haptics(ctx).tap(LIGHT);
+}
+```
+
+A port method's parameters must be wire types (`E0030`), and an `event` port's methods cannot return a value (`E0031`). A port with no `Result` is a port every platform registers: a call on one nobody registered is `E0062` ([above](https://shreypdev.github.io/undra/docs/ports.html#when-a-port-is-missing)).
+
+### Swift: closures, or a class
+
+The generated `Ports.swift` holds three things for the port: the protocol (`public protocol Haptics: UndraPort, Sendable`, each requirement `nonisolated`), `hapticsPortImpl(_:)` for a class that conforms, and `hapticsPortImpl(tap:)`, which takes one closure per method. The core calls a port from its own thread. That is why a class that conforms is nonisolated, and why, under Xcode 26's default main-actor isolation (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, what Xcode 26 sets for a new project), the compiler refuses a `var` in it (`stored property 'store' of 'Sendable'-conforming class 'MyKv' is mutable`) and a read of main-actor state in a synchronous method (`call to main actor-isolated .. in a synchronous nonisolated context`). The closure form has no state to own and the same thread rule: a closure literal passed to a `@Sendable` parameter is nonisolated whatever the file's default, an async closure reads main-actor state with `await MainActor.run { .. }`, and a synchronous one is refused the read (`main actor-isolated property .. can not be referenced from a Sendable closure`). A closure for a method with a typed error names it in its clause (`{ req async throws(HttpError) in .. }`), since Swift infers `any Error` otherwise. The file that registers the port needs `import UndraRuntime`.
+
+swift
+
+```swift
+// From closures: nothing conforms, and the form that compiles unchanged under default main-actor isolation
+// (Xcode 26). The closure runs on the core's thread.
+let haptics = hapticsPortImpl(tap: { strength in Haptic.play(strength) })
+
+// Or a class. A class that conforms to a port protocol is nonisolated, since the core calls it from its own
+// thread: it keeps its state in `let`s or behind a lock, and reads main-actor state from an async port only,
+// with `await MainActor.run { .. }`.
+final class AppHaptics: Haptics {
+    func tap(strength: UInt8) { Haptic.play(strength) }
+}
+
+// Registered with the rest of the adapters, before the core loads: `load(.inproc(adapters: adapters))`.
+let adapters = Adapters.platformDefault
+    .replacing(PortImplAdapter(portId: UndraIds.Ports.Haptics.portId, impl: haptics))
+```
+
+### Kotlin
+
+An `object` (or any class) that implements the generated interface, registered after the platform defaults. A method of a sync port runs on the thread the core calls from; a `suspend` method of an async port is answered later, as a coroutine.
+
+kotlin
+
+```kotlin
+val haptics = object : Haptics {
+    override fun tap(strength: UByte) = vibrator.tap(strength)
+}
+
+// After AndroidPlatformDefaults.install(core, this): served from Kotlin, on the thread the core calls from.
+fun registerHaptics(core: UndraCore) {
+    core.registerPort(UndraIds.Ports.Haptics.PORT_ID, hapticsPortImpl(haptics))
+}
+```
+
+### TypeScript
+
+An object literal, passed in `ports` when the core loads. A sync port is answered where the core runs: with the core in a worker (`wasm-worker`), it goes in the worker module's `ports` instead ([workers](https://shreypdev.github.io/undra/docs/web.html)).
+
+ts
+
+```ts
+const haptics: Haptics = {
+  tap(strength) {
+    navigator.vibrate(strength > 128 ? 40 : 15);
+  },
+};
+
+// A sync port is answered where the core runs: with the core on the page, in `ports`; with the core in a
+// worker, in the worker module's `ports` (`worker.ports`).
+export const core = await UndraCookbook.load({
+  mode: "wasm-main",
+  wasm: new URL("cookbook.wasm", import.meta.url),
+  ports: { [UndraIds.Ports.Haptics.portId]: hapticsPortImpl(haptics) },
+});
+```
 
 ## Testing with fakes
 
@@ -2229,6 +2303,7 @@ Recipes for what every app does. Each is a module of one Rust crate that is comp
 
 - **An app with a login?** [Auth](https://shreypdev.github.io/undra/docs/cookbook/auth.html), then [offline-first](https://shreypdev.github.io/undra/docs/cookbook/offline.html).
 - **A big list that changes fast?** [Live leaderboard](https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html): 100,000 players, a snapshot and a delta stream, with the core lock held for under a microsecond.
+- **Something only the platform can do?** [Your own port](https://shreypdev.github.io/undra/docs/cookbook/custom-port.html): declared in Rust, implemented in Swift, Kotlin and TypeScript, with what Xcode 26's default main-actor isolation makes of a Swift conformer.
 - **An existing codebase?** [From Kotlin Multiplatform](https://shreypdev.github.io/undra/docs/cookbook/from-kmp.html) or [from UniFFI](https://shreypdev.github.io/undra/docs/cookbook/from-uniffi.html): three steps, the first one small.
 - **Want it all in one place?** [Fieldbook](https://shreypdev.github.io/undra/docs/sample.html), field notes with photos, uses the recipes together on the web, iOS and Android.
 
@@ -2559,6 +2634,109 @@ What your client decides stays yours: redirects, retries, the timeouts when a re
 - The Kotlin lines are compiled and tested with the `okhttp-adapters` module (they need OkHttp, which the other modules never carry); the Swift and TypeScript lines are checked like the rest of the cookbook.
 
 Source: [`okhttp-adapters/README.md`](https://github.com/shreypdev/undra/blob/main/runtimes/kotlin/undra-runtime/okhttp-adapters/README.md) and [ADR-060](https://github.com/shreypdev/undra/blob/main/.10x/adrs/ADR-060-app-network-stack-in-ports.md). The ports: [Your network stack inside](https://shreypdev.github.io/undra/docs/ports.html#your-network-stack-inside).
+
+---
+
+Source: https://shreypdev.github.io/undra/docs/cookbook/custom-port.html
+
+# Your own port, on three platforms
+
+Haptic feedback is something only the platform can give. The core declares the port and calls it like any other; each platform implements it the way it writes everything else and registers it with the rest of the adapters. The code on this page is the code that compiles: the Rust by `cargo test -p cookbook`, the platform lines by `examples/cookbook/snippets/check.sh`.
+
+## The port, in Rust
+
+A trait with `#[undra::port]`: `sync`, because a tap has nothing to wait for (an async port is the same trait with `async fn`s). The macro puts it in the schema and generates the accessor the core calls it through.
+
+core/src/haptics.rs
+
+```rust
+/// A tap the user feels: the platform's haptics engine.
+#[undra::port(sync)]
+pub trait Haptics {
+    /// One tap, `strength` from 0 (nothing) to 255 (the strongest the device has).
+    fn tap(&self, strength: u8);
+}
+```
+
+core/src/haptics.rs
+
+```rust
+/// Confirms an action the user just took: one light tap through the [`Haptics`] port.
+#[undra::api]
+pub fn confirm(ctx: &Ctx) {
+    haptics(ctx).tap(LIGHT);
+}
+```
+
+A port with no `Result` is a port every platform registers: a call on one nobody registered is `E0062` ([when a port is missing](https://shreypdev.github.io/undra/docs/ports.html#when-a-port-is-missing)). Give a port that a platform may lack a `Result`, and the core sees the platform's answer as a value.
+
+## Swift: closures, or a class
+
+The generated `Ports.swift` holds three things for the port: the protocol (`public protocol Haptics: UndraPort, Sendable`, each requirement `nonisolated`), `hapticsPortImpl(_:)` for a class that conforms, and `hapticsPortImpl(tap:)`, which takes one closure per method. The core calls a port from its own thread. That is why a class that conforms is nonisolated, and why, under Xcode 26's default main-actor isolation (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, what Xcode 26 sets for a new project), the compiler refuses a `var` in it (`stored property 'store' of 'Sendable'-conforming class 'MyKv' is mutable`) and a read of main-actor state in a synchronous method (`call to main actor-isolated .. in a synchronous nonisolated context`). Its state goes in `let`s or behind a lock. The closure form has no state to own and the same thread rule: a closure literal passed to a `@Sendable` parameter is nonisolated whatever the file's default, an async closure reads main-actor state with `await MainActor.run { .. }`, and a synchronous one is refused the read (`main actor-isolated property .. can not be referenced from a Sendable closure`). A closure for a method with a typed error names it in its clause (`{ req async throws(HttpError) in .. }`), since Swift infers `any Error` otherwise. The file that registers the port needs `import UndraRuntime`.
+
+swift
+
+```swift
+// From closures: nothing conforms, and the form that compiles unchanged under default main-actor isolation
+// (Xcode 26). The closure runs on the core's thread.
+let haptics = hapticsPortImpl(tap: { strength in Haptic.play(strength) })
+
+// Or a class. A class that conforms to a port protocol is nonisolated, since the core calls it from its own
+// thread: it keeps its state in `let`s or behind a lock, and reads main-actor state from an async port only,
+// with `await MainActor.run { .. }`.
+final class AppHaptics: Haptics {
+    func tap(strength: UInt8) { Haptic.play(strength) }
+}
+
+// Registered with the rest of the adapters, before the core loads: `load(.inproc(adapters: adapters))`.
+let adapters = Adapters.platformDefault
+    .replacing(PortImplAdapter(portId: UndraIds.Ports.Haptics.portId, impl: haptics))
+```
+
+## Kotlin
+
+An `object` (or any class) that implements the generated interface, registered after the platform defaults. A method of a sync port runs on the thread the core calls from; a `suspend` method of an async port is answered later, as a coroutine.
+
+kotlin
+
+```kotlin
+val haptics = object : Haptics {
+    override fun tap(strength: UByte) = vibrator.tap(strength)
+}
+
+// After AndroidPlatformDefaults.install(core, this): served from Kotlin, on the thread the core calls from.
+fun registerHaptics(core: UndraCore) {
+    core.registerPort(UndraIds.Ports.Haptics.PORT_ID, hapticsPortImpl(haptics))
+}
+```
+
+## TypeScript
+
+An object literal, passed in `ports` when the core loads. A sync port is answered where the core runs: with the core in a worker (`wasm-worker`), it goes in the worker module's `ports` instead ([workers](https://shreypdev.github.io/undra/docs/web.html)).
+
+ts
+
+```ts
+const haptics: Haptics = {
+  tap(strength) {
+    navigator.vibrate(strength > 128 ? 40 : 15);
+  },
+};
+
+// A sync port is answered where the core runs: with the core on the page, in `ports`; with the core in a
+// worker, in the worker module's `ports` (`worker.ports`).
+export const core = await UndraCookbook.load({
+  mode: "wasm-main",
+  wasm: new URL("cookbook.wasm", import.meta.url),
+  ports: { [UndraIds.Ports.Haptics.portId]: hapticsPortImpl(haptics) },
+});
+```
+
+## What the tests prove
+
+- `cargo test -p cookbook`: two confirmations are two light taps through a fake bound as the port (`core/src/haptics.rs`).
+- `examples/cookbook/snippets/check.sh swift kotlin ts`: the three snippets above compile against the generated bindings and the runtimes, the Swift in the Swift 6 language mode.
+- `cargo test -p undra-bindgen --test typecheck_swift`: a class per port and a closure registration per port compile against the `ports` golden, and, from Swift 6.2, in a target under `.defaultIsolation(MainActor.self)` (ADR-066).
 
 ---
 

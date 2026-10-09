@@ -4,9 +4,14 @@ import Foundation
 import UndraRuntime
 
 /// The platform uploads a request in the background.
+///
+/// The core calls these methods from its own thread, so a conforming class is nonisolated and
+/// `Sendable`: under default main-actor isolation (Xcode 26) it cannot keep mutable state without
+/// a lock or read main-actor state in a synchronous method. ``uploaderPortImpl(upload:)``
+/// takes closures instead, so nothing has to conform. Registering either needs `import UndraRuntime`.
 public protocol Uploader: UndraPort, Sendable {
     /// - Throws: ``HttpError``.
-    func upload(_ request: HttpRequest) async throws(HttpError) -> HttpResponse
+    nonisolated func upload(_ request: HttpRequest) async throws(HttpError) -> HttpResponse
 }
 
 /// Adapts an implementation of ``Uploader`` to `UndraCore.registerPort(UndraIds.Ports.Uploader.portId, _:)`.
@@ -18,6 +23,29 @@ public func uploaderPortImpl(_ impl: any Uploader) -> PortImpl {
             try r.finish()
             do {
                 let result = try await impl.upload(request)
+                return result.undraEncoded()
+            } catch let error as HttpError {
+                throw UndraPortError(body: error.undraEncoded())
+            }
+        },
+    ])
+}
+
+/// ``uploaderPortImpl(_:)`` from closures, one per method in the protocol's order, for an app that has no
+/// class to conform: under default main-actor isolation a closure literal passed here is nonisolated, so
+/// this form compiles unchanged. The closures run on the core's thread: read main-actor state in an
+/// async one with `await MainActor.run { .. }`, never in a synchronous one.
+/// A closure for a method with a typed error names it: `upload: { request async throws(HttpError) in .. }`.
+public func uploaderPortImpl(
+    upload: @escaping @Sendable (_ request: HttpRequest) async throws(HttpError) -> HttpResponse
+) -> PortImpl {
+    return .async([
+        UndraIds.Ports.Uploader.upload: { args in
+            var r = UndraReader(args)
+            let request = try HttpRequest.undraDecode(&r)
+            try r.finish()
+            do {
+                let result = try await upload(request)
                 return result.undraEncoded()
             } catch let error as HttpError {
                 throw UndraPortError(body: error.undraEncoded())

@@ -17,6 +17,7 @@
 //! | [`upload`] | a file from `Fs` in parts over `Http`, progress as a signal, retries through the offline queue |
 //! | [`offline`] | persisted queries, writes that queue, an outbox, and an update (`#[undra(default)]`, `#[undra::migrate]`) |
 //! | [`leaderboard`] | a 100,000-player ranking kept off the core: ingested on the blocking pool, published as a window of 60 rows in one transaction ([`standings`] is the structure) |
+//! | [`haptics`] | a port of the app's own (`#[undra::port]`), implemented and registered on each platform (the site's "Your own port" recipe) |
 //! | `realtime` | a WebSocket reconnecting in the core with backoff, server-sent events as the fallback (feature `realtime`: it needs the opt-in `WebSocket` and `Sse` ports) |
 
 #![forbid(unsafe_code)]
@@ -24,6 +25,7 @@
 
 pub mod auth;
 pub mod forms;
+pub mod haptics;
 pub mod leaderboard;
 pub mod net;
 pub mod offline;
@@ -37,6 +39,7 @@ pub mod upload;
 
 pub use auth::{Auth, AuthError, Profile, ProfileQuery, Session, authed, profile};
 pub use forms::{Field, FieldError, SignUp, SubmitError};
+pub use haptics::{Haptics, confirm};
 pub use leaderboard::{AROUND, Delta, Leaderboard, LeaderboardError, Row, Summary, TOP};
 pub use net::{NetError, ServerConfig, configure_server};
 pub use offline::{

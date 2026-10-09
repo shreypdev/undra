@@ -836,8 +836,10 @@ public final class Calculator: UndraObject, @unchecked Sendable {
     public func setFilter(_ f: Filter)                       // a command
     public func add(title: String) async throws -> Todo     // throws TodoError
 }
-// port
-public protocol Http: UndraPort { func request(_ req: HttpRequest) async throws(HttpError) -> HttpResponse }
+// port (ADR-066): the protocol, the adapter for a class that conforms, and the builder from closures
+public protocol Http: UndraPort, Sendable { nonisolated func request(_ req: HttpRequest) async throws(HttpError) -> HttpResponse }
+public func httpPortImpl(_ impl: any Http) -> PortImpl
+public func httpPortImpl(request: @escaping @Sendable (_ req: HttpRequest) async throws(HttpError) -> HttpResponse) -> PortImpl
 // the core's entry (Core.swift)
 public enum UndraPlaygroundCore {
     public static let namespace: String                                        // "playground_core"
@@ -846,6 +848,8 @@ public enum UndraPlaygroundCore {
 }
 ```
 Sync methods in `inproc` mode call the table's `call_sync`. Store initial values are decoded from the change-set emitted by `undra_observe` during `init`.
+
+**Ports: two ways in (ADR-066).** For every request/response port the file holds the protocol, every requirement `nonisolated`: the core calls a port from its own thread, and the modifier keeps that true when the file is compiled under default main-actor isolation (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, Swift 6.2 and later), which would otherwise infer `@MainActor` for the protocol; it is the per-requirement spelling because the package promises Swift 6.0 and SE-0449's `nonisolated protocol` needs 6.1. Beside the adapter `<name>PortImpl(_ impl: any <Name>) -> PortImpl` there is always a builder from closures, `<name>PortImpl(<method>: @escaping @Sendable (_ a: A, ..) [async] [throws(E)] -> R, ..) -> PortImpl`: one labelled parameter per method, in declaration order, each the method's signature as a `@Sendable` function type (`-> Void` for a unit return; `throws(E)` with typed throws, `throws` without), built on the same method table. A closure literal passed to it is nonisolated whatever the file's default, so an app under that mode registers a port without conforming to anything; the closures run on the core's thread, an async one reads main-actor state with `await MainActor.run { .. }`, and a closure for a method with a typed error names it in its clause (`{ req async throws(HttpError) in .. }`; Swift infers `any Error` otherwise). The protocol's doc comment says all of this and that registering needs `import UndraRuntime`. A class that conforms is nonisolated and `Sendable`, so it keeps state in `let`s or behind a lock.
 
 **Two store shapes: the iOS floor (ADR-045).** Observation is iOS 17 / macOS 14, so the generator has a second shape for apps that support iOS 15 or 16 (`Generator::swift_observation`, `SwiftObservation`). `undra bindgen` chooses it from `[ios] deployment_target`: below 17.0 the stores are `ObservableObject`s, from 17.0 `@Observable`; `[bindings] swift_observation = "observation" | "observable-object"` (and `--swift-observation`) overrides, and `observation` for a target below 17.0 is a CLI error naming both settings. The deployment target must be 15.0 or later (the Swift runtime's floor).
 
