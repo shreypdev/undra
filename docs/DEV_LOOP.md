@@ -248,6 +248,11 @@ iOS, Android and web alike, because the server sees the same envelopes from all 
 * **Secrets.** The calls of the `SecureStore` port are recorded with empty arguments and replies (the file's `source` says "SecureStore payloads left out");
   `--record-secrets` keeps them. HTTP headers and bodies, `Kv` values and files are recorded as they are: do not share a recording of a real account's session.
 * If the file cannot be written (a full disk, a removed directory) the runner logs one warning, stops recording and keeps serving; what was written before stays.
+* **Across platforms.** Record the same flow on each platform and `undra drift ios.json android.json web.json` reports where the hosts
+  diverged at the boundary (a call missing, extra or made with other arguments; a port answered differently by the platform's adapters; an
+  event pushed on one side only; a signal observed on one side only; a signal whose final value differs); `--exit-code` makes it a CI gate.
+  A server serves one client at a time, so run one per platform: `undra dev --addr 127.0.0.1:7444 --record android.json` for the second.
+  `docs/TESTING.md` ("Comparing sessions across platforms") has what is compared and what is ignored.
 
 ## The devtools page
 
