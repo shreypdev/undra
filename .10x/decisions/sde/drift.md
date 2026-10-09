@@ -96,6 +96,10 @@ with it. Exit status 0 unless `--exit-code` and a divergence was found, as `undr
 * `site/llms-full.txt` and `site/search-index.json` were not regenerated (the piece owns the two named site files only;
   `node site/scripts/build-all.mjs` does it).
 
+## Review
+
+`.10x/reviews/2026-10-09-drift-review.md` (2026-10-09, at `e43c8b2`; the fixes it made follow on the branch).
+
 ## Migration note
 
 For the 1.2.0 entry of `crates/undra-cli/src/migrations.rs`:
