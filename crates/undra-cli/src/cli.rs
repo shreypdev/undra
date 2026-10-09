@@ -310,8 +310,8 @@ extra, or made with other arguments; the sequence is diffed, so one skipped tap 
 platform's adapters), `events` (the host-pushed events, Connectivity and Lifecycle), `observes` (a signal observed on \
 one side only) and `state` (a signal whose final value differs). Handles are matched by constructor and order, so the \
 first `Todos` of one session is the first `Todos` of another; call ids, timer ids and `t` are never compared.\n\n\
-Always ignored, and said so in the header: the replies of `Clock.*` and `Rng.*`, the arguments of `Timer.*`, and the \
-value of an `Idempotency-Key` header inside `Http.request` arguments. --ignore adds dotted paths, matched after \
+Always ignored, and said so in the header: the replies of `Clock.*` and `Rng.*`, the arguments of `Timer.*`, and, with a \
+schema to find it, the value of an `Idempotency-Key` header inside `Http.request` arguments. --ignore adds dotted paths, matched after \
 decoding: `Todos.add.title` (a parameter), `Http.request.req.headers` (a field inside one), `Todos.add` (the whole \
 arguments), `Todos.todos` (a signal's final value).\n\n\
 The schema names the ids and decodes the bytes (`Todos.add`, `{\"title\":\"Buy milk\"}`): --schema FILE, else \

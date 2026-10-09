@@ -257,8 +257,11 @@ impl SchemaIndex {
         Some(format!("{}.{}", o.name, s.name))
     }
 
-    /// The value of a change-set entry: decoded for `full`; a patch or a lazy invalidation stays
-    /// bytes, named after the signal's type.
+    /// The value of a change-set entry: decoded for `full`; a patch stays bytes, named after the
+    /// signal's type. A `Lazy<T>` signal's value (`handle u64, len u32, version u64`, SPEC 3.1) is
+    /// `{"$lazy": "Lazy<T>", "len": n, "version": v}` and a lazy invalidation (`len u32,
+    /// version u64`) `{"$invalidated": "Lazy<T>", "len": n, "version": v}`: the page server's
+    /// handle is left out, being per session like every handle.
     #[must_use]
     pub fn decode_signal(&self, type_id: u32, signal: u32, op: ChangeOp, value: &[u8]) -> Value {
         let ty = self.objects.get(&type_id).and_then(|&i| {
@@ -271,13 +274,20 @@ impl SchemaIndex {
                 .map(|s| &s.ty)
         });
         match (op, ty) {
+            (ChangeOp::Full, Some(ty @ TypeRef::Lazy(_))) => {
+                let name = type_name(ty);
+                lazy_json("$lazy", &name, value.get(8..))
+                    .unwrap_or_else(|| undecoded(value, Some(&name)))
+            }
             (ChangeOp::Full, Some(ty)) => self.decode_value(ty, value),
             (ChangeOp::Full, None) => undecoded(value, None),
             (ChangeOp::KeyedPatch, ty) => {
                 undecoded(value, Some(&format!("patch of {}", type_text(ty))))
             }
             (ChangeOp::LazyInvalidated, ty) => {
-                undecoded(value, Some(&format!("invalidation of {}", type_text(ty))))
+                let name = type_text(ty);
+                lazy_json("$invalidated", &name, Some(value))
+                    .unwrap_or_else(|| undecoded(value, Some(&format!("invalidation of {name}"))))
             }
         }
     }
@@ -429,6 +439,22 @@ impl SchemaIndex {
         }
         Value::Object(out)
     }
+}
+
+/// `{tag: name, "len": n, "version": v}` from the `len u32, version u64` that `bytes` must be
+/// exactly (ADR-043), or `None` when they are not.
+fn lazy_json(tag: &str, name: &str, bytes: Option<&[u8]>) -> Option<Value> {
+    let bytes = bytes?;
+    if bytes.len() != 12 {
+        return None;
+    }
+    let len = u32::from_le_bytes(bytes[..4].try_into().ok()?);
+    let version = u64::from_le_bytes(bytes[4..].try_into().ok()?);
+    let mut out = Map::new();
+    out.insert(tag.into(), Value::String(name.to_owned()));
+    out.insert("len".into(), Value::from(len));
+    out.insert("version".into(), int_json(i128::from(version)));
+    Some(Value::Object(out))
 }
 
 fn type_text(ty: Option<&TypeRef>) -> String {
@@ -730,6 +756,15 @@ pub(crate) mod tests {
                         no_coalesce: false,
                         default: false,
                     },
+                    SignalDef {
+                        name: "archive".into(),
+                        signal_id: 2,
+                        ty: TypeRef::Lazy(Box::new(TypeRef::named("Todo"))),
+                        computed: false,
+                        key: Some("id".into()),
+                        no_coalesce: false,
+                        default: false,
+                    },
                 ],
             }),
             docs: String::new(),
@@ -973,6 +1008,38 @@ pub(crate) mod tests {
         assert_eq!(
             index.decode_signal(5, 0, ChangeOp::Full, &[1]),
             json!({"$bytes": "01"})
+        );
+    }
+
+    #[test]
+    fn a_lazy_signal_is_its_length_and_version_without_the_page_servers_handle() {
+        let index = SchemaIndex::new(&schema());
+        let todos = ids::type_id("Todos");
+        let full = bytes(|w| {
+            w.write_u64(0x0000_0001_0000_0003);
+            w.write_u32(3);
+            w.write_u64(1);
+        });
+        assert_eq!(
+            index.decode_signal(todos, 2, ChangeOp::Full, &full),
+            json!({"$lazy": "Lazy<Todo>", "len": 3, "version": 1})
+        );
+        let invalidated = bytes(|w| {
+            w.write_u32(4);
+            w.write_u64(2);
+        });
+        assert_eq!(
+            index.decode_signal(todos, 2, ChangeOp::LazyInvalidated, &invalidated),
+            json!({"$invalidated": "Lazy<Todo>", "len": 4, "version": 2})
+        );
+        // Cut short, the bytes stay bytes.
+        assert_eq!(
+            index.decode_signal(todos, 2, ChangeOp::Full, &full[..19]),
+            json!({"$bytes": hex::encode(&full[..19]), "$type": "Lazy<Todo>"})
+        );
+        assert_eq!(
+            index.decode_signal(todos, 2, ChangeOp::LazyInvalidated, &[1]),
+            json!({"$bytes": "01", "$type": "invalidation of Lazy<Todo>"})
         );
     }
 

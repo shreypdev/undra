@@ -10,7 +10,8 @@
 //! iOS session is the first `Todos` of an Android session. Then [`compare`] reports every
 //! [`Divergence`] of one session from the reference, under [`Rules`]: the built-in ignores (the
 //! replies of `Clock.*` and `Rng.*`, the arguments of `Timer.*`, the `Idempotency-Key` header of
-//! `Http.request`, `t`) and the user's dotted paths (`Http.request.req.headers`, `Todos.add.title`).
+//! `Http.request` when there is a schema to find it, `t`) and the user's dotted paths
+//! (`Http.request.req.headers`, `Todos.add.title`).
 //! With a schema ([`SchemaIndex`]) names and decoded values are reported; without one the
 //! comparison runs on ids and bytes.
 
@@ -338,9 +339,14 @@ pub struct Rules {
     ignores: Vec<Ignore>,
 }
 
-/// The line a report prints for the built-in ignores.
+/// The line a report prints for the built-in ignores when there is a schema.
 pub const BUILT_IN_IGNORES: &str = "the replies of Clock.* and Rng.*, the arguments of Timer.*, \
                                     the Idempotency-Key header of Http.request, and t";
+
+/// The line without a schema: the `Idempotency-Key` header cannot be found in bytes, so it is
+/// compared with the rest of the request.
+pub const BUILT_IN_IGNORES_RAW: &str =
+    "the replies of Clock.* and Rng.*, the arguments of Timer.*, and t";
 
 impl Rules {
     /// The built-in rules, naming and decoding with `schema` when there is one.
@@ -983,11 +989,18 @@ fn compare_state(view: &View<'_>, reference: &Session, other: &Session, out: &mu
                     view.signal_state(alias, signal, y),
                 );
                 if xv != yv {
+                    // A patched signal compares by its number of patches and the last one, not
+                    // by a value, and the line says so.
+                    let what = if x.op == ChangeOp::Full && y.op == ChangeOp::Full {
+                        "final value differs"
+                    } else {
+                        "changes differ"
+                    };
                     out.push(Divergence {
                         kind: Kind::State,
                         path,
                         text: format!(
-                            "final value differs: {} {}, {} {}",
+                            "{what}: {} {}, {} {}",
                             reference.label,
                             shown(xv.as_ref()),
                             other.label,
@@ -1072,13 +1085,22 @@ impl Report {
             }
             None => out.push('\n'),
         }
-        let _ = writeln!(out, "Ignored: {BUILT_IN_IGNORES}");
+        let _ = writeln!(
+            out,
+            "Ignored: {}",
+            if self.schema.is_some() {
+                BUILT_IN_IGNORES
+            } else {
+                BUILT_IN_IGNORES_RAW
+            }
+        );
         if !self.user_ignores.is_empty() {
             let _ = writeln!(out, "Also ignored: {}", self.user_ignores.join(", "));
         }
         if self.schema.is_none() {
             out.push_str(
-                "No schema: ids and bytes are compared, and only the standard ports are named \
+                "No schema: ids and bytes are compared, only the standard ports are named, and the \
+                 Idempotency-Key header of Http.request is compared with the rest of the request \
                  (give --schema FILE, or run inside a project that has a schema.json)\n",
             );
         }
@@ -1647,13 +1669,49 @@ mod tests {
         assert_eq!(
             d[0].text,
             format!(
-                "final value differs: ios {{\"last\":{{\"$bytes\":\"01\",\"$type\":\"{patch_of}\"}},\"ops\":1}}, \
+                "changes differ: ios {{\"last\":{{\"$bytes\":\"01\",\"$type\":\"{patch_of}\"}},\"ops\":1}}, \
                  web {{\"last\":{{\"$bytes\":\"02\",\"$type\":\"{patch_of}\"}},\"ops\":2}}"
             )
         );
         // Ignoring the signal by name drops the line.
         let d = compare(&sa, &sc, &rules().with_ignores(["Todos.items"]));
         assert!(d.is_empty(), "{d:?}");
+    }
+
+    #[test]
+    fn a_lazy_signal_compares_by_length_and_version_not_by_its_page_server_handle() {
+        let h = 0x0000_0001_0000_0000;
+        let lazy = |server: u64, len: u32| {
+            change(
+                h,
+                2,
+                ChangeOp::Full,
+                bytes(|w| {
+                    w.write_u64(server);
+                    w.write_u32(len);
+                    w.write_u64(1);
+                }),
+            )
+        };
+        // The page server's handle is issued per session (SPEC 3.3): another one is no drift.
+        let mut a = construct(1, h);
+        a.push(lazy(0x0000_0002_0000_0001, 3));
+        let mut b = construct(1, h);
+        b.push(lazy(0x0000_0009_0000_0001, 3));
+        let (sa, sb) = (session("ios", a), session("android", b));
+        assert!(compare(&sa, &sb, &rules()).is_empty());
+        // Another length is.
+        let mut c = construct(1, h);
+        c.push(lazy(0x0000_0009_0000_0001, 4));
+        let d = compare(&sa, &session("web", c), &rules());
+        assert_eq!(kinds(&d), [(Kind::State, "Todos#0.archive")]);
+        assert_eq!(
+            d[0].text,
+            "final value differs: ios {\"$lazy\":\"Lazy<Todo>\",\"len\":3,\"version\":1}, \
+             web {\"$lazy\":\"Lazy<Todo>\",\"len\":4,\"version\":1}"
+        );
+        // Without a schema the bytes, handle included, are all there is.
+        assert_eq!(compare(&sa, &sb, &Rules::new(None)).len(), 1);
     }
 
     #[test]
@@ -1739,8 +1797,11 @@ mod tests {
             text.starts_with("Drift: a.json (reference) against b.json\n"),
             "{text}"
         );
+        // Without a schema the header cannot be found in bytes, and the report does not claim it.
         assert!(
-            text.contains("No schema: ids and bytes are compared"),
+            text.contains("Ignored: the replies of Clock.* and Rng.*, the arguments of Timer.*, and t\n")
+                && !text.contains("Ignored: the replies of Clock.* and Rng.*, the arguments of Timer.*, the Idempotency-Key")
+                && text.contains("No schema: ids and bytes are compared, only the standard ports are named, and the Idempotency-Key header of Http.request is compared"),
             "{text}"
         );
         assert!(text.ends_with("\nno drift: 2 recordings agree\n"), "{text}");

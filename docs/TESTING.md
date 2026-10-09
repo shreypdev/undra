@@ -239,7 +239,7 @@ session, so the first `Todos` of one session is the first `Todos` of another (a 
 | `ports` | a port method called another number of times, the `n`th call made with other arguments, or the `n`th call answered differently by the platform's adapters (status and decoded body) |
 | `events` | a host-pushed event (`Connectivity.changed`, `Lifecycle.changed`) missing or extra, by the same sequence diff |
 | `observes` | a `(store, signal)` observed on one side only |
-| `state` | a signal whose final value differs: the last `full` value, or for a patched signal the number of patches and the last one |
+| `state` | a signal whose final value differs (`final value differs`: the last `full` value), or, for a patched signal, whose number of patches or last patch differs (`changes differ`) |
 
 ```text
 Drift: ios.json (reference) against android.json, web.json (schema 0x3c17cd5f59bb6f68)
@@ -254,10 +254,12 @@ web      calls     Todos.add on Todos#0 #6: extra on web ({"title":"Pay the rent
 ```
 
 Always ignored, and named in the header: the replies of `Clock.*` and `Rng.*` (a reading differs by nature), the arguments of `Timer.*`
-(absolute deadlines), the value of an `Idempotency-Key` header inside `Http.request` arguments (a fresh key per run), and `t`.
+(absolute deadlines), the value of an `Idempotency-Key` header inside `Http.request` arguments (a fresh key per run; the header is found
+in the decoded request, so without a schema it is compared with the rest of the bytes, and the header line says so), and `t`.
 `--ignore PATH` (repeatable) adds dotted paths matched after decoding: `Todos.add.title` (one parameter), `Http.request.req.headers` (a
-field inside one; a path into a list applies to every item), `Todos.add` (the whole arguments: the call still counts), `Todos.todos` (a
-signal's final value).
+field inside one; a path into a list applies to every item), `Todos.add` (the whole arguments: the call still counts), `Http.request` (a
+port method named whole is left out entirely, its count included), `Todos.todos` (a signal's final value). A path that names nothing is
+accepted and ignores nothing.
 
 The schema names the ids and decodes the bytes (`Todos.add`, `{"title":"Buy milk"}`): `--schema FILE`, else `schema.json` in the project
 directory, else the project's core is built and asked, as `undra schema export` does. Outside a project without `--schema` the comparison
@@ -270,7 +272,8 @@ In Rust the same comparison is `undra::testing::drift`: `Session::from_recording
 `undra::testing::decode::SchemaIndex` names and decodes any recording's ids and bytes as JSON: records as objects, enums as
 `{"$": "Variant", ..fields}` (a tuple variant's fields `"0"`, `"1"`), maps as `{"$map": [[k, v], ..]}`, bytes as hex, 64-bit integers
 as numbers up to 53 bits and strings past that, `Duration` as `{"$dur_ns": n}`, `Timestamp` as `{"$ts_ms": n}`, handles as
-`{"$handle": "0x.."}`, and what the schema cannot decode (a patch, a lazy list) as `{"$bytes": "..", "$type": ".."}`.
+`{"$handle": "0x.."}`, a lazy list's value as its length and version (`{"$lazy": "Lazy<Item>", "len": n, "version": v}`; the page
+server's handle is per session and left out), and what the schema cannot decode (a patch) as `{"$bytes": "..", "$type": ".."}`.
 `examples/playground/core/tests/drift.rs` records one flow as three platforms through the Rust `Recorder` and asserts the divergences
 by kind and path; its recordings are the CLI's fixtures (`crates/undra-cli/tests/fixtures/drift/`, `UNDRA_BLESS=1` rewrites them).
 
