@@ -5461,7 +5461,7 @@ web      calls     Todos.add on Todos#0 #6: extra on web ({"title":"Pay the rent
 3 divergences on 2 of 3 recordings
 ```
 
-The first file is the reference; every other file is compared with it. What is compared: the calls each host made and their order, with the arguments decoded through the project's schema; what each platform's port adapters answered, per port and method; the events each host pushed (connectivity, lifecycle); what was observed; and the state every store ended in. What legitimately differs between two runs is ignored and said so in the report: clock and random readings, timer ids, idempotency keys, timestamps. Handles are aligned by the constructor that made them and its ordinal, so a store created second on iOS is compared with the store created second on Android, whatever number each runtime gave it. With `--exit-code` the command fails on any divergence, which is how it goes into CI.
+The first file is the reference; every other file is compared with it. What is compared: the calls each host made and their order, with the arguments decoded through the project's schema; what each platform's port adapters answered, per port and method; the events each host pushed (connectivity, lifecycle); what was observed; and the state every store ended in. What legitimately differs between two runs is ignored and said so in the report: clock and random readings, timer deadlines, idempotency keys and each entry's time. Handles are aligned by the constructor that made them and its ordinal, so a store created second on iOS is compared with the store created second on Android, whatever number each runtime gave it. With `--exit-code` the command fails on any divergence, which is how it goes into CI.
 
 What a port drift looks like in the report: the `Http.request` each platform's core asked for is the same, and the answer is not. The API that refused a duplicate header on one platform answered that platform's call with a 400 and the others with a 200, which is one `ports` line naming the call and both replies; the wrong host is the same line with the wrong answer. The report shows what the core asked and what each platform answered; what the adapter put on the wire between the two is the next step (below). The record format is unchanged, so a recording made with 1.1 reads in 1.2.
 
@@ -5477,7 +5477,8 @@ swift
 import UndraRuntime
 
 let locale = localePortImpl(hello: { "Bonjour" })
-let core = try UndraPlaygroundCore.load(.inproc(adapters: .platformDefault.replacing(UndraIds.Ports.Locale.portId, locale)))
+let adapters = Adapters.platformDefault.replacing(PortImplAdapter(portId: UndraIds.Ports.Locale.portId, impl: locale))
+let core = try UndraPlaygroundCore.load(.inproc(adapters: adapters))
 ```
 
 The protocol form stays, for a port with state worth a type. A compile test in CI builds both forms, a plain class per port and a closure registration that reads main-actor state, under `-default-isolation MainActor`, so the shape cannot regress. The cookbook has the same port on three platforms, with each snippet compiled by CI, and the playground's iOS app implements its `Locale` port in the new form. The decision is [ADR-066](https://github.com/shreypdev/undra/blob/main/.10x/adrs/ADR-066-host-ports-under-default-main-actor-isolation.md).
