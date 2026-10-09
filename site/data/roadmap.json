@@ -1,15 +1,36 @@
 {
-  "updated": "2026-10-06",
+  "updated": "2026-10-09",
   "source": "https://github.com/shreypdev/undra/blob/main/.10x/status.md",
   "note": "Rendered by site/scripts/build-roadmap.mjs into site/roadmap/index.html, and the items with \"teaser\": true into the landing page's \"What is still open\". Shipped is what is on main. Next, Later and Exploring come only from what the repository records as planned or open; each item's `source` names the record (it is not rendered). Status chips use one scale, defined once in assets/base.css (.st-shipped, .st-next, .st-later, .st-exploring, .st-no).",
   "sections": [
     {
       "id": "shipped",
       "status": "Shipped",
-      "title": "In 1.0 and 1.1",
+      "title": "In 1.0, 1.1 and 1.2",
       "when": "on main",
       "intro": "What you can build on today, grouped. Each line has its page in the docs and its decision record in the repository.",
       "groups": [
+        {
+          "title": "No drift (1.2)",
+          "items": [
+            {
+              "title": "undra drift",
+              "text": "Recordings of one flow made on iOS, Android and the web, compared at the boundary: calls and their order, port answers, events, what was observed, the state each store ended in; --exit-code for CI."
+            },
+            {
+              "title": "Host ports under default main-actor isolation (ADR-066)",
+              "text": "A custom port compiles on iOS on the first try: a closure form beside the protocol, and a compile test under Swift's default main-actor isolation in CI."
+            },
+            {
+              "title": "Your own port, on three platforms",
+              "text": "A cookbook recipe whose Swift, Kotlin and TypeScript snippets compile in CI, with the registration line per platform."
+            },
+            {
+              "title": "The merge gate in half the time",
+              "text": "The four longest jobs split into halves that run side by side, the Bazel jobs over a disk cache; every job still runs on every change."
+            }
+          ]
+        },
         {
           "title": "Bazel-first (1.1)",
           "items": [
@@ -274,6 +295,12 @@
       "intro": "Each of these is recorded as open in the repository, with the work done around it. A plan, not a promise; the order may change.",
       "items": [
         {
+          "title": "Adapter conformance across platforms",
+          "text": "The five SSE adapters merge the core's headers differently, and the JDK Http adapter drops restricted headers where Swift passes them. One vector file recorded against one server and diffed in CI, like the fakes' conformance file, after a rule in the specification says which header wins.",
+          "teaser": true,
+          "source": ".10x/specs/2026-10-09-no-drift-design.md, Non-goals; .10x/decisions/architect/no-drift.md"
+        },
+        {
           "title": "Benchmarks on physical phones",
           "text": "Every device row so far is from a simulator, an emulator or headless Chromium. Real-phone rows next, then budgets for them and a CI job.",
           "teaser": true,
@@ -282,7 +309,6 @@
         {
           "title": "Maven Central and the npm registry",
           "text": "The conventional registries, after launch, beside GitHub: the Kotlin runtime on Maven Central and the npm packages on the registry. undra upgrade moves a project over. crates.io follows, under a registry-safe prefix.",
-          "teaser": true,
           "source": ".10x/adrs/ADR-063-launch-distribution-from-github.md (registries later, additive); .10x/specs/2026-09-30-launch-v2-design.md §2 Next (crates.io, Maven Central)"
         },
         {

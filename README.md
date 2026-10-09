@@ -180,8 +180,8 @@ In a Bazel monorepo? The rules in [`bazel/`](bazel/) build the core and generate
 committed bindings guarded by a test and the NDK as a declared input: [the Bazel guide](https://shreypdev.github.io/undra/docs/bazel.html).
 
 A new project depends on the release of the `undra` that created it, all from this repository (ADR-063): the crates
-by its git tag, the Swift package at its root (`.package(url: "https://github.com/shreypdev/undra", from: "1.0.0")`),
-the Kotlin runtime from JitPack (`com.github.shreypdev.undra:runtime:v1.0.0`) and `@undra/runtime` as the GitHub
+by its git tag, the Swift package at its root (`.package(url: "https://github.com/shreypdev/undra", from: "1.2.0")`),
+the Kotlin runtime from JitPack (`com.github.shreypdev.undra:runtime:v1.2.0`) and `@undra/runtime` as the GitHub
 Release's asset. No registry account, no token. To work on Undra itself, a project can use a checkout's crates and
 runtimes by path instead:
 
@@ -231,6 +231,14 @@ And, each with its page:
   errors: [Shipping an update](https://shreypdev.github.io/undra/docs/updates.html).
 * **A testing kit.** Previews that run your real core with scripted ports and a manual clock, and recorded sessions
   that replay in tests on Swift, Kotlin, TypeScript and Rust: [docs/TESTING.md](docs/TESTING.md).
+* **No drift between hosts (1.2).** `undra drift ios.json android.json web.json` compares recordings of one flow made
+  on each platform at the boundary: the calls each UI made and their order, what each platform's port adapters
+  answered, the events each host pushed, what was observed and the state every store ended in, decoded through the
+  schema; `--exit-code` fails CI on a divergence: [docs/TESTING.md](docs/TESTING.md#drift).
+* **A custom port that compiles on every platform (1.2).** The generated Swift offers a closure form beside the
+  protocol and compiles under Swift's default main-actor isolation, proven by a compile test in CI; the cookbook's
+  recipe shows the same port on Swift, Kotlin and TypeScript:
+  [Your own port, on three platforms](https://shreypdev.github.io/undra/docs/cookbook/custom-port.html).
 * **iOS 15 and 16.** A lower deployment target generates `ObservableObject` stores; proven by compilation and a
   runtime probe on iOS 26.5, not yet on an iOS 15 or 16 runtime: [docs/IOS_15_16.md](docs/IOS_15_16.md).
 * **Generics.** A generic record, enum, function, method, object or store crosses as the instantiations you list:
@@ -252,6 +260,9 @@ Open, with the work done around it (the same list as the [roadmap](https://shrey
 * The `undra-compose`, `android-adapters` and `android-work` tests in CI (they pass locally and on the emulator);
   Android under Bazel, built and tested; a byte-reproducible `undra build`.
 * A cancelled port call reaching the platform (today it is abandoned in the core); a Windows CLI; Dart and Flutter.
+* A conformance file for the platform default adapters: the five SSE adapters merge the core's headers differently,
+  and the JDK Http adapter drops restricted headers where Swift passes them (recorded in the roadmap, with the rule
+  the specification needs first).
 
 Undra is one team's work with no production users yet.
 
