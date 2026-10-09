@@ -99,6 +99,16 @@ fn check_name(case: &str) -> String {
     format!("{}Check", target_name(case))
 }
 
+/// The host side of a case, as an app writes it against the generated code (ADR-066): the files of
+/// `tests/fixtures/swift-isolation`, compiled as the target `<Target>App` of the default build and,
+/// under default main-actor isolation, of the pass below.
+const APPS: &[(&str, &[&str])] = &[("ports", &["ports-protocol.swift", "ports-closures.swift"])];
+
+/// The target of a case's app files.
+fn app_name(case: &str) -> String {
+    format!("{}App", target_name(case))
+}
+
 /// The C module of a case's core (`GoldenRecordsCoreFFI`, `PlaygroundCoreFFI`), as generated.
 fn ffi_module(case: &str) -> String {
     common::generator_for(case, &common::case(case))
@@ -136,11 +146,25 @@ fn unavailable() -> Option<&'static str> {
     }
 }
 
+/// What one scratch package holds: the generated cases, the execution checks, the app files of
+/// `APPS`, and how the manifest compiles them.
+struct Layout<'a> {
+    cases: &'a [&'a str],
+    checks: &'a [(&'a str, &'a str)],
+    apps: &'a [(&'a str, &'a [&'a str])],
+    /// What follows the dependencies of every app target: nothing, or `, swiftSettings: [..]`.
+    app_settings: &'a str,
+    /// The manifest's `swift-tools-version`.
+    tools: &'a str,
+}
+
 /// The manifest of the scratch package: per case, the C module of its core and its Swift target;
-/// per check, the stand-in for the core and the executable; all on the real runtime.
-fn manifest(runtime: &Path, cases: &[&str], checks: &[(&str, &str)], platforms: &str) -> String {
+/// per check, the stand-in for the core and the executable; per app, its target on the case's
+/// module; all on the real runtime.
+fn manifest(runtime: &Path, layout: &Layout, platforms: &str) -> String {
     let runtime_product = ".product(name: \"UndraRuntime\", package: \"UndraRuntime\")";
-    let mut targets: String = cases
+    let mut targets: String = layout
+        .cases
         .iter()
         .map(|case| {
             let ffi = ffi_module(case);
@@ -151,7 +175,7 @@ fn manifest(runtime: &Path, cases: &[&str], checks: &[(&str, &str)], platforms: 
             )
         })
         .collect();
-    for (case, _) in checks {
+    for (case, _) in layout.checks {
         targets.push_str(&format!(
             "        .target(name: \"{stub}\", path: \"Sources/{stub}\"),\n        \
              .executableTarget(name: \"{}\", dependencies: [\"{}\", {runtime_product}, \"{stub}\"]),\n",
@@ -160,8 +184,16 @@ fn manifest(runtime: &Path, cases: &[&str], checks: &[(&str, &str)], platforms: 
             stub = stub_name(case)
         ));
     }
+    for (case, _) in layout.apps {
+        targets.push_str(&format!(
+            "        .target(name: \"{}\", dependencies: [\"{}\", {runtime_product}]{}),\n",
+            app_name(case),
+            target_name(case),
+            layout.app_settings
+        ));
+    }
     format!(
-        "// swift-tools-version: 6.0\n\
+        "// swift-tools-version: {}\n\
          import PackageDescription\n\n\
          let package = Package(\n    \
              name: \"GoldenSwift\",\n    \
@@ -170,13 +202,15 @@ fn manifest(runtime: &Path, cases: &[&str], checks: &[(&str, &str)], platforms: 
              targets: [\n{targets}    ],\n    \
              swiftLanguageModes: [.v6]\n\
          )\n",
+        layout.tools,
         runtime.display()
     )
 }
 
-/// Writes the generated Swift of `cases` as the targets of one package in `root`.
-fn lay_out(root: &Path, runtime: &Path, cases: &[&str], variant: &Variant, platforms: &str) {
-    for case in cases {
+/// Writes the generated Swift of `layout.cases`, the checks and the app files as the targets of one
+/// package in `root`.
+fn lay_out(root: &Path, runtime: &Path, layout: &Layout, variant: &Variant, platforms: &str) {
+    for case in layout.cases {
         let schema = common::case(case);
         let mut generator = common::generator_for(case, &schema);
         generator.swift_observation = variant.observation;
@@ -206,8 +240,7 @@ fn lay_out(root: &Path, runtime: &Path, cases: &[&str], variant: &Variant, platf
         );
         GeneratedFile::write_all(&renamed, root).unwrap();
     }
-    let checks: &[(&str, &str)] = if variant.checks { CHECKS } else { &[] };
-    for (case, fixture) in checks {
+    for (case, fixture) in layout.checks {
         let stub = root.join("Sources").join(stub_name(case));
         fs::create_dir_all(stub.join("include")).unwrap();
         fs::write(stub.join("core_stub.c"), stub_source(case)).unwrap();
@@ -221,9 +254,22 @@ fn lay_out(root: &Path, runtime: &Path, cases: &[&str], variant: &Variant, platf
         )
         .unwrap();
     }
+    for (case, files) in layout.apps {
+        let dir = root.join("Sources").join(app_name(case));
+        fs::create_dir_all(&dir).unwrap();
+        for file in *files {
+            fs::copy(
+                manifest_dir()
+                    .join("tests/fixtures/swift-isolation")
+                    .join(file),
+                dir.join(file),
+            )
+            .unwrap();
+        }
+    }
     fs::write(
         root.join("Package.swift"),
-        manifest(runtime, cases, checks, platforms),
+        manifest(runtime, layout, platforms),
     )
     .unwrap();
 }
@@ -308,17 +354,26 @@ fn compile(variant: &Variant) {
         .canonicalize()
         .expect("the Swift runtime package exists");
     let root = scratch(variant.name);
-    lay_out(&root, &runtime, common::CASES, variant, platforms);
+    // The checks and the app files need the host (the floors build for the simulator).
+    let layout = Layout {
+        cases: common::CASES,
+        checks: if variant.checks { CHECKS } else { &[] },
+        apps: if variant.checks { APPS } else { &[] },
+        app_settings: "",
+        tools: "6.0",
+    };
+    lay_out(&root, &runtime, &layout, variant, platforms);
     match build(&root, ios) {
         Ok(output) => {
             assert!(
                 output.contains("Build complete"),
                 "swift build did not report a complete build:\n{output}"
             );
-            // Every case was compiled into a module of its own.
+            // Every case was compiled into a module of its own, and every app too.
             let missing: Vec<String> = common::CASES
                 .iter()
                 .map(|case| target_name(case))
+                .chain(layout.apps.iter().map(|(case, _)| app_name(case)))
                 .filter(|target| !has_module(&root, target))
                 .collect();
             assert!(missing.is_empty(), "no compiled module for {missing:?}");
@@ -366,12 +421,14 @@ fn every_case_compiles_at_the_ios_16_floor() {
 #[test]
 fn the_scratch_package_names_one_target_per_case_and_one_executable_per_check() {
     // Needs no Swift toolchain: the layout is plain text.
-    let manifest = manifest(
-        Path::new("/runtime"),
-        common::CASES,
-        CHECKS,
-        DEFAULT.host_platforms,
-    );
+    let layout = Layout {
+        cases: common::CASES,
+        checks: CHECKS,
+        apps: APPS,
+        app_settings: ", swiftSettings: [.defaultIsolation(MainActor.self)]",
+        tools: "6.2",
+    };
+    let manifest = manifest(Path::new("/runtime"), &layout, DEFAULT.host_platforms);
     for case in common::CASES {
         let ffi = ffi_module(case);
         assert!(manifest.contains(&format!(
@@ -403,7 +460,91 @@ fn the_scratch_package_names_one_target_per_case_and_one_executable_per_check() 
         );
         assert!(common::CASES.contains(case), "{case} is not a golden case");
     }
+    for (case, files) in APPS {
+        assert!(manifest.contains(&format!(
+            ".target(name: \"{}\", dependencies: [\"{}\", .product(name: \"UndraRuntime\", package: \"UndraRuntime\")], swiftSettings: [.defaultIsolation(MainActor.self)])",
+            app_name(case),
+            target_name(case)
+        )));
+        for file in *files {
+            assert!(
+                manifest_dir()
+                    .join("tests/fixtures/swift-isolation")
+                    .join(file)
+                    .exists(),
+                "{file} is missing"
+            );
+        }
+        assert!(common::CASES.contains(case), "{case} is not a golden case");
+    }
+    assert!(manifest.starts_with("// swift-tools-version: 6.2\n"));
     assert!(manifest.contains("swiftLanguageModes: [.v6]"));
     assert!(manifest.contains(".package(path: \"/runtime\")"));
     assert!(manifest.contains("platforms: [.macOS(.v14)]"));
+}
+
+/// `swift --version`'s `Swift version 6.3.3` as (major, minor), when it can be read.
+fn swift_version() -> Option<(u32, u32)> {
+    let output = Command::new("swift").arg("--version").output().ok()?;
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let rest = text.split("Swift version ").nth(1)?;
+    let mut parts = rest
+        .split(|c: char| !c.is_ascii_digit())
+        .take(2)
+        .map(|part| part.parse::<u32>().ok());
+    Some((parts.next()??, parts.next()??))
+}
+
+/// ADR-066: against the `ports` golden as SwiftPM builds it, a plain class per port and a closure
+/// registration per port (`tests/fixtures/swift-isolation`) compile in an app target under default
+/// main-actor isolation (`.defaultIsolation(MainActor.self)`: Swift 6.2 and later, what Xcode 26
+/// sets for a new project). The default build above compiles the same two files without the setting.
+#[test]
+fn the_ports_golden_is_implementable_under_default_main_actor_isolation() {
+    if let Some(why) = unavailable() {
+        skip(&format!("no Swift toolchain: {why}"));
+        return;
+    }
+    match swift_version() {
+        Some(version) if version >= (6, 2) => {}
+        version => {
+            eprintln!(
+                "skipping the default main-actor isolation pass: it needs Swift 6.2 or newer, found {version:?}"
+            );
+            return;
+        }
+    }
+    let runtime: PathBuf = repo_root()
+        .join("runtimes/swift/UndraRuntime")
+        .canonicalize()
+        .expect("the Swift runtime package exists");
+    let root = scratch("swift-generated-main-actor");
+    let layout = Layout {
+        cases: &["ports"],
+        checks: &[],
+        apps: APPS,
+        app_settings: ", swiftSettings: [.defaultIsolation(MainActor.self)]",
+        tools: "6.2",
+    };
+    lay_out(&root, &runtime, &layout, &DEFAULT, DEFAULT.host_platforms);
+    match build(&root, None) {
+        Ok(output) => {
+            assert!(
+                output.contains("Build complete"),
+                "swift build did not report a complete build:\n{output}"
+            );
+            assert!(
+                has_module(&root, &app_name("ports")),
+                "no compiled module for the app"
+            );
+        }
+        Err(output) => panic!(
+            "the host side of the `ports` golden does not compile under default main-actor isolation:\n{}\n\nfull output:\n{output}",
+            errors(&output)
+        ),
+    }
 }

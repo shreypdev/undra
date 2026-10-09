@@ -522,6 +522,15 @@ impl Types<'_> {
     }
 }
 
+/// Whose code a port's method table calls: an implementation of the generated protocol
+/// (`impl.<method>(label: value, ..)`) or, in the builder, the closure named like the method
+/// (`<method>(value, ..)`); ADR-066.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PortTarget {
+    Protocol,
+    Closures,
+}
+
 impl SwiftGen<'_> {
     fn types(&self) -> Types<'_> {
         Types {
@@ -1847,7 +1856,27 @@ impl SwiftGen<'_> {
     fn port(&self, w: &mut CodeWriter, p: &PortDef) {
         let t = self.types();
         let sync = p.kind == PortKind::Sync;
-        doc(w, &p.docs, &[]);
+        let fn_name = format!("{}PortImpl", naming::camel(&p.name));
+        let labels: String = p
+            .methods
+            .iter()
+            .map(|m| format!("{}:", id(&m.name)))
+            .collect();
+        // What a conformer is under Xcode 26's default main-actor isolation, and the other way in
+        // (ADR-066): a Swift engineer reading only this file learns why a plain class is nonisolated.
+        let mut about = vec![
+            "The core calls these methods from its own thread, so a conforming class is nonisolated and"
+                .to_owned(),
+            "`Sendable`: under default main-actor isolation (Xcode 26) it cannot keep mutable state without"
+                .to_owned(),
+            format!("a lock or read main-actor state in a synchronous method. ``{fn_name}({labels})``"),
+            "takes closures instead, so nothing has to conform. Registering either needs `import UndraRuntime`."
+                .to_owned(),
+        ];
+        if !p.docs.is_empty() {
+            about.insert(0, String::new());
+        }
+        doc(w, &p.docs, &about);
         w.block(
             format!("public protocol {}: UndraPort, Sendable", p.name),
             |w| {
@@ -1869,8 +1898,12 @@ impl SwiftGen<'_> {
                         }
                         _ => String::new(),
                     };
+                    // `nonisolated` keeps the requirement callable from the core's thread when the
+                    // file is compiled under default main-actor isolation, which would otherwise
+                    // infer `@MainActor` for the protocol; every Swift 6 compiler accepts it on a
+                    // requirement (SE-0449's `nonisolated protocol` needs 6.1).
                     w.call(
-                        format!("func {}", id(&m.name)),
+                        format!("nonisolated func {}", id(&m.name)),
                         &params,
                         format!("{asyncw}{throws}{returns}"),
                         false,
@@ -1887,73 +1920,177 @@ impl SwiftGen<'_> {
             ),
             &[],
         );
-        let fn_name = format!("{}PortImpl", naming::camel(&p.name));
         w.block(
             format!("public func {fn_name}(_ impl: any {}) -> PortImpl", p.name),
-            |w| {
-                let factory = if sync { ".sync" } else { ".async" };
-                w.line(format!("return {factory}(["));
-                w.indented(|w| {
-                    for m in &p.methods {
-                        self.port_method(w, p, m, sync);
-                    }
-                });
-                w.line("])");
-            },
+            |w| self.port_table(w, p, sync, PortTarget::Protocol),
+        );
+        w.blank();
+        let mut about = vec![
+            "class to conform: under default main-actor isolation a closure literal passed here is nonisolated, so"
+                .to_owned(),
+            "this form compiles unchanged. The closures run on the core's thread: read main-actor state in an"
+                .to_owned(),
+            "async one with `await MainActor.run { .. }`, never in a synchronous one.".to_owned(),
+        ];
+        // Swift infers `any Error` for a closure that throws unless its clause names the type, so a
+        // method with a typed error gets the clause spelled out once, on the port's first such method.
+        if let Some(m) = p.methods.iter().find(|m| {
+            Ret::classify(&m.returns)
+                .unwrap_or(Ret::Plain(&m.returns))
+                .error()
+                .is_some()
+        }) {
+            let ret = Ret::classify(&m.returns).unwrap_or(Ret::Plain(&m.returns));
+            let names: Vec<String> = m.params.iter().map(|a| id(&a.name)).collect();
+            let head = if names.is_empty() {
+                "()".to_owned()
+            } else {
+                names.join(", ")
+            };
+            let asyncw = if m.is_async { " async" } else { "" };
+            about.push(format!(
+                "A closure for a method with a typed error names it: `{}: {{ {head}{asyncw} {} in .. }}`.",
+                id(&m.name),
+                self.port_throws_clause(ret.error()).trim_start()
+            ));
+        }
+        doc(
+            w,
+            &format!(
+                "``{fn_name}(_:)`` from closures, one per method in the protocol's order, for an app that has no"
+            ),
+            &about,
+        );
+        let params: Vec<String> = p
+            .methods
+            .iter()
+            .map(|m| self.port_closure_param(m))
+            .collect();
+        w.call_block(
+            format!("public func {fn_name}"),
+            &params,
+            " -> PortImpl",
+            false,
+            |w| self.port_table(w, p, sync, PortTarget::Closures),
         );
     }
 
-    fn port_method(&self, w: &mut CodeWriter, p: &PortDef, m: &MethodDef, sync: bool) {
+    /// The builder's parameter for a port method:
+    /// `<name>: @escaping @Sendable (_ a: A, ..) [async] [throws(E)] -> R`.
+    fn port_closure_param(&self, m: &MethodDef) -> String {
+        let t = self.types();
+        let ret = Ret::classify(&m.returns).unwrap_or(Ret::Plain(&m.returns));
+        let params: Vec<String> = m
+            .params
+            .iter()
+            .map(|a| format!("_ {}: {}", id(&a.name), t.ty(&a.ty)))
+            .collect();
+        let asyncw = if m.is_async { " async" } else { "" };
+        let throws = self.port_throws_clause(ret.error());
+        let returns = match &ret {
+            Ret::Plain(ty) | Ret::Result { ok: ty, .. } if !matches!(ty, TypeRef::Unit) => t.ty(ty),
+            _ => "Void".to_owned(),
+        };
+        format!(
+            "{}: @escaping @Sendable ({}){asyncw}{throws} -> {returns}",
+            id(&m.name),
+            params.join(", ")
+        )
+    }
+
+    /// The method table of a port, `.sync([..])` or `.async([..])`, with one entry per method.
+    fn port_table(&self, w: &mut CodeWriter, p: &PortDef, sync: bool, target: PortTarget) {
+        let factory = if sync { ".sync" } else { ".async" };
+        w.line(format!("return {factory}(["));
+        w.indented(|w| {
+            for m in &p.methods {
+                self.port_method(w, p, m, sync, target);
+            }
+        });
+        w.line("])");
+    }
+
+    /// One entry of a port's method table: decodes the arguments, calls the method of `target`
+    /// and encodes what it returns (a typed error becomes `UndraPortError`).
+    fn port_method(
+        &self,
+        w: &mut CodeWriter,
+        p: &PortDef,
+        m: &MethodDef,
+        sync: bool,
+        target: PortTarget,
+    ) {
         let t = self.types();
         let ret = Ret::classify(&m.returns).unwrap_or(Ret::Plain(&m.returns));
         let member = id(&m.name);
         let key = format!("UndraIds.Ports.{}.{member}", p.name);
+        // In the builder the closure is named like the method, so nothing the entry declares may
+        // shadow it; in the protocol form no argument may shadow `impl`.
+        let local = |name: &str| match target {
+            PortTarget::Protocol => name.to_owned(),
+            PortTarget::Closures => naming::avoid(name, &[member.as_str()]),
+        };
+        let (args, r, result, error) = (local("args"), local("r"), local("result"), local("error"));
+        let mut reserved = vec![r.as_str(), args.as_str(), result.as_str(), error.as_str()];
+        reserved.push(match target {
+            PortTarget::Protocol => "impl",
+            PortTarget::Closures => member.as_str(),
+        });
         let taken: Vec<String> = m.params.iter().map(|a| id(&a.name)).collect();
-        let idents: Vec<String> = taken
-            .iter()
-            .map(|n| naming::avoid(n, &["r", "args", "impl", "error", "result"]))
-            .collect();
-        let params = if m.params.is_empty() { "_" } else { "args" };
+        let idents: Vec<String> = taken.iter().map(|n| naming::avoid(n, &reserved)).collect();
+        let params = if m.params.is_empty() {
+            "_"
+        } else {
+            args.as_str()
+        };
         w.line(format!("{key}: {{ {params} in"));
         w.indented(|w| {
             if !m.params.is_empty() {
-                w.line("var r = UndraReader(args)");
+                w.line(format!("var {r} = UndraReader({args})"));
                 for (a, ident) in m.params.iter().zip(&idents) {
-                    w.line(format!("let {ident} = try {}", t.read_expr(&a.ty, "r")));
+                    w.line(format!("let {ident} = try {}", t.read_expr(&a.ty, &r)));
                 }
-                w.line("try r.finish()");
+                w.line(format!("try {r}.finish()"));
             }
             let awaited = if m.is_async && !sync { "await " } else { "" };
             let tried = if ret.error().is_some() { "try " } else { "" };
-            let unlabeled = self.unlabeled(&m.params);
-            let call_args: Vec<String> = taken
-                .iter()
-                .zip(&idents)
-                .map(|(label, ident)| {
-                    if unlabeled {
-                        ident.clone()
-                    } else {
-                        format!("{label}: {ident}")
-                    }
-                })
-                .collect();
-            let call = format!("{tried}{awaited}impl.{member}({})", call_args.join(", "));
+            let (callee, call_args): (String, Vec<String>) = match target {
+                PortTarget::Protocol => {
+                    let unlabeled = self.unlabeled(&m.params);
+                    let labelled = taken
+                        .iter()
+                        .zip(&idents)
+                        .map(|(label, ident)| {
+                            if unlabeled {
+                                ident.clone()
+                            } else {
+                                format!("{label}: {ident}")
+                            }
+                        })
+                        .collect();
+                    (format!("impl.{member}"), labelled)
+                }
+                PortTarget::Closures => (member.clone(), idents.clone()),
+            };
+            let call = format!("{tried}{awaited}{callee}({})", call_args.join(", "));
             let finish = |w: &mut CodeWriter, ok: &TypeRef| {
                 if matches!(ok, TypeRef::Unit) {
                     w.line(call.clone());
                     w.line("return []");
                 } else {
-                    w.line(format!("let result = {call}"));
-                    w.line(format!("return {}", t.encoded(ok, "result")));
+                    w.line(format!("let {result} = {call}"));
+                    w.line(format!("return {}", t.encoded(ok, &result)));
                 }
             };
             match &ret {
                 Ret::Result { ok, err } => {
                     w.line("do {");
                     w.indented(|w| finish(w, ok));
-                    w.line(format!("}} catch let error as {err} {{"));
+                    w.line(format!("}} catch let {error} as {err} {{"));
                     w.indented(|w| {
-                        w.line("throw UndraPortError(body: error.undraEncoded())");
+                        w.line(format!(
+                            "throw UndraPortError(body: {error}.undraEncoded())"
+                        ));
                     });
                     w.line("}");
                 }

@@ -4,10 +4,15 @@ import Foundation
 import UndraRuntime
 
 /// Looks users up on the host.
+///
+/// The core calls these methods from its own thread, so a conforming class is nonisolated and
+/// `Sendable`: under default main-actor isolation (Xcode 26) it cannot keep mutable state without
+/// a lock or read main-actor state in a synchronous method. ``directoryPortImpl(find:)``
+/// takes closures instead, so nothing has to conform. Registering either needs `import UndraRuntime`.
 public protocol Directory: UndraPort, Sendable {
     /// The user called `nickname`.
     /// - Throws: ``BoardError``.
-    func find(_ nickname: Nickname) async throws(BoardError) -> UserId
+    nonisolated func find(_ nickname: Nickname) async throws(BoardError) -> UserId
 }
 
 /// Adapts an implementation of ``Directory`` to `UndraCore.registerPort(UndraIds.Ports.Directory.portId, _:)`.
@@ -19,6 +24,29 @@ public func directoryPortImpl(_ impl: any Directory) -> PortImpl {
             try r.finish()
             do {
                 let result = try await impl.find(nickname)
+                return result.undraEncoded()
+            } catch let error as BoardError {
+                throw UndraPortError(body: error.undraEncoded())
+            }
+        },
+    ])
+}
+
+/// ``directoryPortImpl(_:)`` from closures, one per method in the protocol's order, for an app that has no
+/// class to conform: under default main-actor isolation a closure literal passed here is nonisolated, so
+/// this form compiles unchanged. The closures run on the core's thread: read main-actor state in an
+/// async one with `await MainActor.run { .. }`, never in a synchronous one.
+/// A closure for a method with a typed error names it: `find: { nickname async throws(BoardError) in .. }`.
+public func directoryPortImpl(
+    find: @escaping @Sendable (_ nickname: Nickname) async throws(BoardError) -> UserId
+) -> PortImpl {
+    return .async([
+        UndraIds.Ports.Directory.find: { args in
+            var r = UndraReader(args)
+            let nickname = try Nickname.undraDecode(&r)
+            try r.finish()
+            do {
+                let result = try await find(nickname)
                 return result.undraEncoded()
             } catch let error as BoardError {
                 throw UndraPortError(body: error.undraEncoded())
