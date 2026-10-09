@@ -15,8 +15,8 @@ fails on a value.
 rules), the port adapters' answers per port and method, the host-pushed events, the set of observed signals and the
 state each store ended in. Not compared: `t`, host call ids, the core's port-call ids, txn ids, timer ids; handles are
 aligned by (constructor type, ordinal of its reply) across sessions. Built-in ignores, named in the report's header:
-Clock and Rng replies, Timer arguments, the Idempotency-Key header's value, timestamps and uuids where the schema says
-a field is one.
+Clock and Rng replies, Timer arguments, the Idempotency-Key header's value (found in the decoded request, so with a
+schema), and each entry's `t`. A `Timestamp` or `Uuid` field is compared like any other value; `--ignore` names one.
 
 **The Swift shape.** The core calls a port from its own thread, so a `@MainActor` protocol is not an option. The
 reproduction (Xcode 26.6) corrected the hypothesis: under default main-actor isolation a class conforming to the

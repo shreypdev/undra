@@ -54,8 +54,9 @@ above and the rules below; an adversarial review by a model that did not write t
 
 Rules every piece follows: no em-dash anywhere; no test depends on machine speed; `cargo fmt`, clippy clean, docs on
 every `pub` item; the recording format, the wire, the ABI and the schema are unchanged (a recording of 1.1 reads in
-1.2 and the reverse); nothing about where a requirement came from is written down beyond this file's first
-paragraph: the records describe the work as Undra's own direction.
+1.2 and the reverse); where a requirement came from is written as this file's first paragraph writes it (a team on
+1.1, the three findings), in ADR-066's context, the CTO record and the post, and nowhere with a name, a company or a
+product: the records describe the work as Undra's own direction.
 
 ## Risks
 
