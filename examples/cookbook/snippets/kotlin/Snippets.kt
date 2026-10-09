@@ -5,6 +5,7 @@
 package dev.undra.cookbook.snippets
 
 import dev.undra.cookbook.core.*
+import dev.undra.runtime.UndraCore
 import dev.undra.runtime.UndraException
 import kotlinx.coroutines.flow.StateFlow
 
@@ -92,5 +93,23 @@ class LeaderboardScreen(private val board: Leaderboard, private val myId: UInt) 
     suspend fun findMe() = board.follow(myId)
 
     fun isMine(row: Row): Boolean = row.id == myId
+}
+// docs:end
+
+/** Scaffolding: the engine the app already has. */
+class Vibrator {
+    var last: UByte = 0u
+    fun tap(strength: UByte) { last = strength }
+}
+val vibrator = Vibrator()
+
+// docs:begin custom-port-kotlin
+val haptics = object : Haptics {
+    override fun tap(strength: UByte) = vibrator.tap(strength)
+}
+
+// After AndroidPlatformDefaults.install(core, this): served from Kotlin, on the thread the core calls from.
+fun registerHaptics(core: UndraCore) {
+    core.registerPort(UndraIds.Ports.Haptics.PORT_ID, hapticsPortImpl(haptics))
 }
 // docs:end

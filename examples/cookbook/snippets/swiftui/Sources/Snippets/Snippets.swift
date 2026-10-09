@@ -187,3 +187,25 @@ func appAdapters(configuration: URLSessionConfiguration, delegate: AppSessionDel
         .replacing(URLSessionSseAdapter(session: streams))
 }
 // docs:end
+
+// MARK: custom port
+
+/// Scaffolding: the engine the app already has.
+enum Haptic { static func play(_ strength: UInt8) {} }
+
+// docs:begin custom-port-swift
+// From closures: nothing conforms, and the form that compiles unchanged under default main-actor isolation
+// (Xcode 26). The closure runs on the core's thread.
+let haptics = hapticsPortImpl(tap: { strength in Haptic.play(strength) })
+
+// Or a class. A class that conforms to a port protocol is nonisolated, since the core calls it from its own
+// thread: it keeps its state in `let`s or behind a lock, and reads main-actor state from an async port only,
+// with `await MainActor.run { .. }`.
+final class AppHaptics: Haptics {
+    func tap(strength: UInt8) { Haptic.play(strength) }
+}
+
+// Registered with the rest of the adapters, before the core loads: `load(.inproc(adapters: adapters))`.
+let adapters = Adapters.platformDefault
+    .replacing(PortImplAdapter(portId: UndraIds.Ports.Haptics.portId, impl: haptics))
+// docs:end
