@@ -608,14 +608,16 @@ pub async fn create_remote_todo(ctx: &amp;Ctx, list: String, title: String) -&gt
     <h2 class="h2 reveal">Three hosts. <em>No drift.</em></h2>
     <p class="lede reveal" data-d="1">One flow, recorded per platform; what differs is the host.</p>
     <div class="code reveal" data-d="1"><div class="code-bar"><span><span class="lang">shell</span></span></div><pre><code>$ undra drift ios.json android.json web.json
-Drift: ios.json (reference) against android.json, web.json (schema 0x437ce0973ce54a88)
+Drift: ios.json (reference) against android.json, web.json (schema 0x3c17cd5f59bb6f68)
+Ignored: the replies of Clock.* and Rng.*, the arguments of Timer.*, the Idempotency-Key header of Http.request, and t
 
-android  calls     Todos.add #2: missing on android (ios sent {"title": "Walk the dog"})
-web      ports     Http.request #1 req.headers: accept appears twice on web
+android  calls     Todos.toggle on Todos#0 #5: missing on android ({"id":"00000000-0000-0001-0000-000000000000"})
+android  ports     Http.request #1: reply differs: ios {"body":{"status":200,...},"status":"ok"}, android {"body":{"status":500,...},"status":"ok"}
+web      calls     Todos.add on Todos#0 #6: extra on web ({"title":"Pay the rent"})
 
-2 divergences on 2 of 3 recordings</code></pre></div>
+3 divergences on 2 of 3 recordings</code></pre></div>
     <div class="cards4 cards3">
-      <a class="card reveal" href="docs/testing.html#drift"><h3>Record, then compare</h3><span class="go" aria-hidden="true"><i>→</i></span></a>
+      <a class="card reveal" href="docs/testing.html#compare-platforms"><h3>Record, then compare</h3><span class="go" aria-hidden="true"><i>→</i></span></a>
       <a class="card reveal" href="docs/ports.html#writing-your-own-port" data-d="1"><h3>A port that compiles everywhere</h3><span class="go" aria-hidden="true"><i>→</i></span></a>
       <a class="card reveal" href="blog/undra-1-2-no-drift/" data-d="2"><h3>The 1.2 post</h3><span class="go" aria-hidden="true"><i>→</i></span></a>
     </div>

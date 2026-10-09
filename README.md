@@ -234,7 +234,7 @@ And, each with its page:
 * **No drift between hosts (1.2).** `undra drift ios.json android.json web.json` compares recordings of one flow made
   on each platform at the boundary: the calls each UI made and their order, what each platform's port adapters
   answered, the events each host pushed, what was observed and the state every store ended in, decoded through the
-  schema; `--exit-code` fails CI on a divergence: [docs/TESTING.md](docs/TESTING.md#drift).
+  schema; `--exit-code` fails CI on a divergence: [docs/TESTING.md](docs/TESTING.md#comparing-sessions-across-platforms-undra-drift).
 * **A custom port that compiles on every platform (1.2).** The generated Swift offers a closure form beside the
   protocol and compiles under Swift's default main-actor isolation, proven by a compile test in CI; the cookbook's
   recipe shows the same port on Swift, Kotlin and TypeScript:

@@ -89,18 +89,19 @@
 <section id="drift">
 <h2>undra drift</h2>
 <p>Undra's testing kit already records a session as one JSON document, the same format on every platform: the calls the host made, the replies, every change-set, every port call and its answer, every event the host pushed. <code>undra dev --record</code> writes one for the app it is serving. 1.2 adds the comparison:</p>
-<div class="code"><div class="code-bar"><span><span class="lang">shell</span></span></div><pre><code>$ undra dev --record ios.json          # the iOS app connected
-$ undra dev --addr 127.0.0.1:7444 --record android.json   # the Android app, on a second server
+<div class="code"><div class="code-bar"><span><span class="lang">shell</span></span></div><pre><code>$ undra dev --record ios.json                              # the iOS app connected
+$ undra dev --addr 127.0.0.1:7444 --record android.json    # the Android app, on a second server
 $ undra drift ios.json android.json web.json
-Drift: ios.json (reference) against android.json, web.json (schema 0x437ce0973ce54a88)
-ignored: Clock and Rng replies, Timer arguments, Idempotency-Key headers
+Drift: ios.json (reference) against android.json, web.json (schema 0x3c17cd5f59bb6f68)
+Ignored: the replies of Clock.* and Rng.*, the arguments of Timer.*, the Idempotency-Key header of Http.request, and t
 
-android  calls     Todos.add #2: missing on android (ios sent {"title": "Walk the dog"})
-web      ports     Http.request #1 req.headers: accept appears twice on web
+android  calls     Todos.toggle on Todos#0 #5: missing on android ({"id":"00000000-0000-0001-0000-000000000000"})
+android  ports     Http.request #1: reply differs: ios {"body":{"status":200,...},"status":"ok"}, android {"body":{"status":500,...},"status":"ok"}
+web      calls     Todos.add on Todos#0 #6: extra on web ({"title":"Pay the rent"})
 
-2 divergences on 2 of 3 recordings</code></pre></div>
+3 divergences on 2 of 3 recordings</code></pre></div>
 <p>The first file is the reference; every other file is compared with it. What is compared: the calls each host made and their order, with the arguments decoded through the project's schema; what each platform's port adapters answered, per port and method; the events each host pushed (connectivity, lifecycle); what was observed; and the state every store ended in. What legitimately differs between two runs is ignored and said so in the report: clock and random readings, timer ids, idempotency keys, timestamps. Handles are aligned by the constructor that made them and its ordinal, so a store created second on iOS is compared with the store created second on Android, whatever number each runtime gave it. With <code>--exit-code</code> the command fails on any divergence, which is how it goes into CI.</p>
-<p>The duplicate <code>Accept</code> and the wrong host are both port drift: the <code>Http.request</code> each platform's core asked for was the same, and the comparison of what the adapters sent is where they would have shown. The record format is unchanged, so a recording made with 1.1 reads in 1.2.</p>
+<p>What a port drift looks like in the report: the <code>Http.request</code> each platform's core asked for is the same, and the answer is not. The API that refused a duplicate header on one platform answered that platform's call with a 400 and the others with a 200, which is one <code>ports</code> line naming the call and both replies; the wrong host is the same line with the wrong answer. The report shows what the core asked and what each platform answered; what the adapter put on the wire between the two is the next step (below). The record format is unchanged, so a recording made with 1.1 reads in 1.2.</p>
 </section>
 <section id="ports">
 <h2>A port that compiles on every platform</h2>
@@ -123,7 +124,7 @@ let core = try UndraPlaygroundCore.load(.inproc(adapters: .platformDefault.repla
 </section>
 <section id="upgrade">
 <h2>Upgrading</h2>
-<p><code>undra upgrade</code> moves a project's pins to 1.2.0 and prints the release's migration notes. Nothing on the wire, the ABI or the schema changed; bindings regenerate to the same public shapes plus the new Swift port builders. The <a href="../../docs/testing.html#drift">testing page</a> has the drift command, <a href="../../docs/ports.html#writing-your-own-port">the ports page</a> the three-platform port, and the <a href="../../roadmap/">roadmap</a> what shipped and what is open.</p>
+<p><code>undra upgrade</code> moves a project's pins to 1.2.0 and prints the release's migration notes. Nothing on the wire, the ABI or the schema changed; bindings regenerate to the same public shapes plus the new Swift port builders. The <a href="../../docs/testing.html#compare-platforms">testing page</a> has the drift command, <a href="../../docs/ports.html#writing-your-own-port">the ports page</a> the three-platform port, and the <a href="../../roadmap/">roadmap</a> what shipped and what is open.</p>
 </section>
 </article></main>
 <footer class="site-footer">
