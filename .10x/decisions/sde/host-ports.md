@@ -119,3 +119,7 @@ Note {
     text: "Every requirement of a generated Swift port protocol is `nonisolated`, so the file also compiles in a module under default main-actor isolation. A class that conforms compiles as before: it is nonisolated and `Sendable`, keeps its state in `let`s or behind a lock, and reads main-actor state from an async method only (ADR-066).",
 },
 ```
+
+## Review
+
+`.10x/reviews/2026-10-09-host-ports-review.md` (2026-10-09, at `ed77a71`; fixes `8b16e11`, `2e66b02`, `27dac1f`).
