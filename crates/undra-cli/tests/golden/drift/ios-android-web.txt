@@ -1,0 +1,14 @@
+Drift: ios.json (reference) against android.json, web.json (schema 0x3c17cd5f59bb6f68)
+Ignored: the replies of Clock.* and Rng.*, the arguments of Timer.*, the Idempotency-Key header of Http.request, and t
+
+android  calls     Todos.toggle on Todos#0 #5: missing on android ({"id":"00000000-0000-0001-0000-000000000000"})
+android  ports     Http.request #1: reply differs: ios {"body":{"body":"7b226964223a372c227469746c65223a2257616c6b222c22646f6e65223a66616c73657d","headers":[],"status":200},"status":"ok"}, android {"body":{"body":"74727920616761696e206c61746572","headers":[],"status":500},"status":"ok"}
+android  state     Todos#0.todos: final value differs: ios {"last":{"$bytes":"0100000002000000000000000000000001000000000000000008000000427579206d696c6b01","$type":"patch of Vec<Todo>"},"ops":5}, android {"last":{"$bytes":"010000000002000000000000000000000300000000000000000e00000057726974652074686520646f637300","$type":"patch of Vec<Todo>"},"ops":4}
+android  state     Todos#0.visible: final value differs: ios {"last":{"$bytes":"0100000002000000000000000000000001000000000000000008000000427579206d696c6b01","$type":"patch of Vec<Todo>"},"ops":5}, android {"last":{"$bytes":"010000000002000000000000000000000300000000000000000e00000057726974652074686520646f637300","$type":"patch of Vec<Todo>"},"ops":4}
+android  state     Todos#0.remaining: final value differs: ios 2, android 3
+web      calls     Todos.add on Todos#0 #6: extra on web ({"title":"Pay the rent"})
+web      state     Todos#0.todos: final value differs: ios {"last":{"$bytes":"0100000002000000000000000000000001000000000000000008000000427579206d696c6b01","$type":"patch of Vec<Todo>"},"ops":5}, web {"last":{"$bytes":"010000000003000000000000000000000400000000000000000c000000506179207468652072656e7400","$type":"patch of Vec<Todo>"},"ops":6}
+web      state     Todos#0.visible: final value differs: ios {"last":{"$bytes":"0100000002000000000000000000000001000000000000000008000000427579206d696c6b01","$type":"patch of Vec<Todo>"},"ops":5}, web {"last":{"$bytes":"010000000003000000000000000000000400000000000000000c000000506179207468652072656e7400","$type":"patch of Vec<Todo>"},"ops":6}
+web      state     Todos#0.remaining: final value differs: ios 2, web 3
+
+9 divergences on 2 of 3 recordings
