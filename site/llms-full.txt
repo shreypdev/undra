@@ -1384,6 +1384,19 @@ A recording is one canonical JSON document, `undra.recording` version 1: payload
 
 A `Replayer` answers a core&rsquo;s port calls from a recording, in order per port. A call that differs is a typed `mismatch`, an extra one is `exhausted`, a recorded call with no reply in the file is `unanswered`, and a recorded call never made is `unconsumed`. A deviation consumes nothing, so one wrong call does not shift every later answer.
 
+## Compare platforms
+
+Record the same flow on each platform, then `undra drift ios.json android.json web.json` prints where the hosts diverged: a call missing, extra or made with other arguments; a port answered differently by the platform&rsquo;s adapters; an event pushed on one side only; a signal observed on one side only; a signal whose final value differs. The core is deterministic, so the difference is in what the hosts put in. Clock and random readings, timer deadlines and the `Idempotency-Key` header are ignored; `--ignore Todos.add.title` adds your own. `--exit-code` makes it a CI gate; [the CLI page](https://shreypdev.github.io/undra/docs/cli.html#undra-drift) has every flag.
+
+bash
+
+```bash
+undra dev --record ios.json                              # the iOS app runs the flow against this server
+undra dev --addr 127.0.0.1:7444 --record android.json    # a second server for the Android app (a server serves one client at a time)
+undra drift ios.json android.json                        # the first file is the reference
+undra drift ios.json android.json --exit-code            # CI
+```
+
 ## In the playground
 
 - **iOS:** three SwiftUI `#Preview`s, built with the app.
@@ -2724,6 +2737,7 @@ undra [-C <dir>] <command>
   schema    compare the public API of two schemas (breaking or additive), or export the core's schema
   build     build the core for iOS, Android, the web or this machine
   dev       serve the core over a WebSocket to running apps, rebuilding on change
+  drift     compare recordings of one flow made on different platforms: where the hosts diverged
   doctor    check toolchains and SDKs against what the project needs, with the fix for each gap
   adopt     add an Undra core to an existing app, without touching its project files
   upgrade   move a project to this undra's version: every pin, the bindings, the migration notes
@@ -2880,6 +2894,26 @@ How each platform connects (the banner prints these with the real port):
 Every platform runtime exposes what the connection is doing (`connecting`, `connected`, `reconnecting(attempt)`, `closed(reason)`) and observes its stores again after a reconnect. A call made while the connection is down fails at once with `UndraCallError.Unavailable` instead of waiting, and a command that fails that way is not handed to `onError`, because the connection state already reports the drop. [docs/DEV_LOOP.md](https://github.com/shreypdev/undra/blob/main/docs/DEV_LOOP.md) has the details and a troubleshooting table.
 
 **No authentication.** The server has none. Keep the loopback default unless a device has to reach it.
+
+## undra drift
+
+bash
+
+```bash
+undra drift ios.json android.json web.json          # where the three hosts diverged; the first file is the reference
+undra drift ios.json android.json --exit-code       # exit 1 on any divergence (CI)
+undra drift --schema schema.json ios.json web.json  # name and decode with this schema (outside the project)
+undra drift --ignore Todos.add.title a.json b.json  # leave a parameter out of the comparison
+```
+
+Compares recordings of one user flow made on different platforms ([`undra dev --record`](https://shreypdev.github.io/undra/docs/cli.html#undra-dev), one server per platform) and prints where the hosts diverged at the boundary, one line per divergence: `calls` (a host call missing, extra, or made with other arguments; the sequence is diffed, so one skipped tap does not shift every later line), `ports` (a port method called another number of times, with other arguments, or answered differently by the platform's adapters), `events` (a host-pushed event missing or extra), `observes` (a signal observed on one side only) and `state` (a signal whose final value differs). The core is deterministic, so with the same inputs every platform gets the same change-sets: the drift that matters is in the inputs. Handles are matched by constructor and order (`Todos#0`); call ids, timer ids and `t` are never compared. Always ignored, and named in the header: the replies of `Clock.*` and `Rng.*`, the arguments of `Timer.*`, and the `Idempotency-Key` header of `Http.request`. The exit status is 0 whatever is found unless `--exit-code`. [Testing your app](https://shreypdev.github.io/undra/docs/testing.html#compare-platforms) has the recording steps.
+
+| Flag | Meaning |
+| --- | --- |
+| `REFERENCE OTHER...` | the reference recording, then every recording to compare with it; each must carry the reference's schema hash (`C0009` otherwise) |
+| `--schema <file>` | the schema that names the ids and decodes the bytes; default `schema.json` in the project directory, else the project's core is built and asked; outside a project, ids and bytes are compared and the header says so |
+| `--ignore <path>` | leave this out (repeatable): `Todos.add.title` a parameter, `Http.request.req.headers` a field inside one, `Todos.add` the whole arguments, `Todos.todos` a signal's final value |
+| `--exit-code` | exit with status 1 when any divergence was found; the output is the same |
 
 ## undra doctor
 
