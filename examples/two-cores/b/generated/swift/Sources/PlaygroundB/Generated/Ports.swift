@@ -6,9 +6,14 @@ import UndraRuntime
 /// The app's own synchronous port (ADR-049 decision 2): how the platform says hello in the
 /// user's language. In the TypeScript `wasm-worker` mode a synchronous port is answered in the
 /// worker, so the web app registers it in `worker.ports`.
+///
+/// The core calls these methods from its own thread, so a conforming class is nonisolated and
+/// `Sendable`: under default main-actor isolation (Xcode 26) it cannot keep mutable state without
+/// a lock or read main-actor state in a synchronous method. ``localePortImpl(hello:)``
+/// takes closures instead, so nothing has to conform. Registering either needs `import UndraRuntime`.
 public protocol Locale: UndraPort, Sendable {
     /// "Hello" in the user's language.
-    func hello() -> String
+    nonisolated func hello() -> String
 }
 
 /// Adapts an implementation of ``Locale`` to `UndraCore.registerPort(UndraIds.Ports.Locale.portId, _:)`.
@@ -16,6 +21,19 @@ public func localePortImpl(_ impl: any Locale) -> PortImpl {
     return .sync([
         UndraIds.Ports.Locale.hello: { _ in
             let result = impl.hello()
+            return result.undraEncoded()
+        },
+    ])
+}
+
+/// ``localePortImpl(_:)`` from closures, one per method in the protocol's order, for an app that has no
+/// class to conform: under default main-actor isolation a closure literal passed here is nonisolated, so
+/// this form compiles unchanged. The closures run on the core's thread: read main-actor state in an
+/// async one with `await MainActor.run { .. }`, never in a synchronous one.
+public func localePortImpl(hello: @escaping @Sendable () -> String) -> PortImpl {
+    return .sync([
+        UndraIds.Ports.Locale.hello: { _ in
+            let result = hello()
             return result.undraEncoded()
         },
     ])
