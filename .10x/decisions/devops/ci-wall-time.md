@@ -35,7 +35,14 @@ no `--disk_cache`.
 Launch rehearsal (one macOS job, 10 minutes) and, when its paths match, RN devices (an iOS simulator job of 45 minutes
 or more). Running those two on `main` only, or after the Gate, would give the Gate the whole pool; so would less macOS
 work per job (the Two cores Release cores and the Xcode projects each build the CLI again). Both are decisions for the
-founder, not a piece. The second Gate run on the branch is the measurement of what stays.
+founder, not a piece.
+
+**The second Gate run on the branch (37907728632), what stays, measured:** green in 23 minutes (1,380 s) with the same
+two workflows beside it on the pool. The Rust halves took 8 and 12 minutes (the one job 17 to 21 before), the Linux Bazel
+halves 10 and 9 (17 before); the critical path was the macOS Bazel example (28 s queued, 22 minutes) and the Swift
+runtime job (21 minutes, the ADR-066 step included: it selected Swift 6.2.4 and its one test passed, the first proof
+of the pass in the Gate). Three to six minutes shorter than the three runs of 2026-10-06, not half: the macOS pool is
+the rest.
 
 **Not done, and why.** A persisted Bazel disk cache (actions/cache) grows without bound and evicts the Rust caches (10
 GB per repository). `cargo nextest` would run the test binaries in parallel but changes process isolation for tests
