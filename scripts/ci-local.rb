@@ -57,10 +57,10 @@ module CiLocal
     [%r{\Aci/(kotlin|contracts)\z}, /\AFetch kotlinx-coroutines\z/, "provisioning: scripts/env.sh sets UNDRA_KOTLINX_COROUTINES and UNDRA_SQLITE_JDBC"],
     [%r{\Atwo-cores/jvm-and-node\z}, /\AInstall kotlinc and kotlinx-coroutines\z/, "provisioning: scripts/env.sh puts kotlinc and the jars on PATH"],
     [%r{\Aci/react-native\z}, /\Aclang 18 and its sanitizer runtime\z/, "provisioning: apt and sysctl on the runner; macOS's clang has the sanitizers (CXX falls back to clang++)"],
-    [%r{\Atwo-cores/ios(-release)?\z}, /\AThe newest stable Xcode\z/, "provisioning: sudo xcode-select; this machine's Xcode is used (DEVELOPER_DIR from scripts/env.sh)"],
+    [%r{\Atwo-cores/ios\z}, /\AThe newest stable Xcode\z/, "provisioning: sudo xcode-select; this machine's Xcode is used (DEVELOPER_DIR from scripts/env.sh)"],
     [%r{\Asite/build\z}, /\AInstall binaryen\z/, "provisioning: apt on the runner (checked: wasm-opt is on PATH)"],
     [%r{\Abench/size\z}, /\AInstall binaryen version_133\z/, "provisioning: the Linux tarball of binaryen version_133 (the Size gate checks wasm-opt reports 133)"],
-    [%r{\Aci/bazel-(example(-macos)?(-minimums)?|android)\z}, /\AInstall Bazelisk\z/, "provisioning: `brew install bazelisk` once (checked: bazel is on PATH); the job's own pin is .bazelversion"],
+    [%r{\Aci/bazel-(example(-macos|-minimums)?|android)\z}, /\AInstall Bazelisk\z/, "provisioning: `brew install bazelisk` once (checked: bazel is on PATH); the job's own pin is .bazelversion"],
     [%r{\Aci/bazel-example(-minimums)?\z}, /\Allvm-symbolizer for the symbols test\z/, "provisioning: apt on the runner; on macOS the symbols test reads the dSYM with atos"]
   ].freeze
 

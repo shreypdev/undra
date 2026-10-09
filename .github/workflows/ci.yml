@@ -28,16 +28,16 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
-  # The macOS runner pool is the Gate's critical path (five macOS jobs run at once; the rest queue), so the macOS jobs come
-  # first in this file, longest first, and none of them is longer than it has to be: the four longest jobs of the Gate were
-  # split into halves that run side by side (the two Bazel jobs, the Swift runtime and the Xcode projects, the two halves of
-  # the Rust job, the Debug and Release cores of Two cores). Every job still runs on every change: a job that can be skipped
-  # cannot be part of the roll-up (.10x/decisions/devops/ci-wall-time.md).
+  # The macOS runner pool is the Gate's critical path (three to five macOS jobs run at once, the rest queue, and the pool is
+  # shared with every other workflow a pull request starts), so the macOS jobs come first in this file, longest first. Splitting
+  # the macOS jobs into halves was measured and reverted: it added setup work to a pool that was already full. The two longest
+  # Linux jobs are split (the Rust job's workspace and CLI halves, the Bazel example's recent rulesets and minimums). Every job
+  # still runs on every change: a job that can be skipped cannot be part of the roll-up (.10x/decisions/devops/ci-wall-time.md).
   #
   # What only macOS can run, where rules_swift and the iOS core have Xcode: the Swift consumer runs the core in process, the
   # XCFramework (device and simulator slices) builds in a Bazel action, and the example's iOS app, built to debug (`-c dbg`), has a
-  # dSYM that resolves the Rust core (`keep_debug_objects`). The Kotlin and TypeScript targets are the Linux job's. The ruleset
-  # minimums run in the job after this one; the ADR-061 comment at `bazel-example` says how the Bazel matrix is laid out.
+  # dSYM that resolves the Rust core (`keep_debug_objects`). The Kotlin and TypeScript targets are the Linux job's; the ADR-061
+  # comment at `bazel-example` says how the Bazel matrix is laid out.
   bazel-example-macos:
     name: "Bazel example (macOS, Swift and iOS)"
     timeout-minutes: 60
@@ -54,49 +54,31 @@ jobs:
       - name: The Swift consumer, the iOS core and the iOS app's dSYM
         working-directory: examples/bazel
         run: |
-          bazel test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
-          bazel build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+          bazel test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+          bazel build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
           bazel test //ios:symbols_test --ios_multi_cpus=sim_arm64 -c dbg --apple_generate_dsym \
-            --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
-      - name: The Swift consumer and the iOS core on Bazel 9.x
-        working-directory: examples/bazel
-        env:
-          USE_BAZEL_VERSION: "9.2.0"
-        run: |
-          bazel test //swift/... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
-          bazel build //:mobile_ios --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
-
-  bazel-example-macos-minimums:
-    # The Swift consumer and the iOS core with every ruleset at the lowest version the rules declare, on Bazel 8.8.1 and on the
-    # newest 9.x (rules_swift and rules_apple are exercised only on macOS, so their minimums are too). Its own job for the
-    # same reason as the Linux one, and because the macOS runner pool is the Gate's bottleneck: two short jobs on it finish
-    # before one long one.
-    name: "Bazel example (macOS, ruleset minimums)"
-    timeout-minutes: 60
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Bazelisk
-        run: brew install bazelisk
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/bazel-repository
-          key: bazel-repository-${{ runner.os }}-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
-          restore-keys: bazel-repository-${{ runner.os }}-
+            --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
       # rules_swift and rules_apple are only exercised here, so their minimums are too: the same targets with every ruleset at the
       # version undra_rules declares, then all of it on the newest 9.x (rules_swift is the ruleset a new Bazel breaks first).
       - name: The Swift consumer and the iOS core at the ruleset minimums
         working-directory: examples/bazel
         run: |
-          scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
-          scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+          scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+          scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
+      - name: The Swift consumer and the iOS core on Bazel 9.x
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: |
+          bazel test //swift/... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+          bazel build //:mobile_ios --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
       - name: The Swift consumer and the iOS core on Bazel 9.x at the ruleset minimums
         working-directory: examples/bazel
         env:
           USE_BAZEL_VERSION: "9.2.0"
         run: |
-          scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
-          scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+          scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
+          scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
 
   macos:
     name: Swift runtime + C ABI (macOS)
@@ -118,10 +100,6 @@ jobs:
           cargo test -p undra-cli --test swift_manifests
       - name: Generated Swift compiles against the runtime (every golden case; ADR-024 amendment)
         run: UNDRA_REQUIRE_TOOLCHAINS=1 cargo test -p undra-bindgen --test typecheck_swift
-      # ADR-066: the pass that compiles the ports golden's conformer and closure files in an app target under
-      # `.defaultIsolation(MainActor.self)` needs Swift 6.2, and the image's default Xcode (16.4, Swift 6.1) makes the test
-      # skip it; the newest stable Xcode on the image runs it. The step above keeps every golden on the default, the oldest
-      # compiler CI has. A machine without an `Xcode_*.app` (a developer's Mac, through ci-local) uses its own Swift.
       - name: The ports golden under default main-actor isolation (the newest stable Xcode; ADR-066)
         run: |
           newest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -v -i -E 'beta|candidate|_rc' | sort -V | tail -n 1 || true)"
@@ -141,35 +119,20 @@ jobs:
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
           cargo check -p undra-ffi --target aarch64-apple-ios
           cargo check -p undra-ffi --target aarch64-apple-ios-sim
-
-  macos-apps:
-    # The Xcode projects: `undra init`'s app building its core in the Run Script phase, the cookbook's Swift lines, Fieldbook's and
-    # the playground's iOS apps. Split from `macos` (the runtime and the C ABI) so neither waits for the other: the macOS runner
-    # pool is the Gate's bottleneck, and one long job on it is a longer Gate than two short ones.
-    name: Xcode projects (macOS)
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99.0
-        with:
-          targets: aarch64-apple-ios, aarch64-apple-ios-sim
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: The undra CLI
-        run: cargo build -p undra-cli
       - name: Xcode builds the core in its Run Script phase (undra init's project; Debug, Release, Debug)
         run: UNDRA_REQUIRE_TOOLCHAINS=1 cargo test -p undra-cli --test build_systems -- xcode --nocapture
       - name: Cookbook Swift lines compile (Swift 6, over the generated bindings)
         run: bash examples/cookbook/snippets/check.sh swift
       - name: Fieldbook's iOS app builds (the Run Script phase builds the core)
         run: |
+          rustup target add aarch64-apple-ios-sim
+          cargo build -p undra-cli
           PATH="$GITHUB_WORKSPACE/target/debug:$PATH" xcodebuild -project examples/fieldbook/ios/Fieldbook.xcodeproj \
             -scheme Fieldbook -destination 'generic/platform=iOS Simulator' build
       # The playground's SwiftUI previews (#Preview over UndraTestKit) are compiled with the app: a Debug build of it.
       - name: The playground's iOS app builds, SwiftUI previews and the testing kit included
         run: |
+          cargo build -p undra-cli
           target/debug/undra build -C examples/playground --platform ios
           xcodebuild -quiet -project examples/playground/ios/PlaygroundApp.xcodeproj -scheme PlaygroundApp \
             -configuration Debug -destination 'generic/platform=iOS Simulator' build
@@ -307,18 +270,22 @@ jobs:
   rust-cli:
     # The other half of the Rust job: the CLI's own tests (`undra init`, `build`, `dev`, a reload, `upgrade`, `adopt`, the
     # devtools, symbolication), and every step that runs the built CLI over the examples. Split from `rust` because `cargo test
-    # --workspace` was the longest step of the Gate; the two halves take about the same time now, side by side.
+    # --workspace` was the longest step of the Gate: measured on the first run, 14 minutes for this half beside 6 for the
+    # other, where the one job took 17 to 21.
     name: Rust (Linux), the CLI
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
+          components: clippy, rustfmt
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      # The CLI's tests run rustfmt and clippy over the projects they make (the core job of the CI workflow `undra init`
+      # writes), so the toolchain needs both components, as the other half's does.
       - name: The CLI's tests
         run: cargo test -p undra-cli
       # The cookbook (examples/cookbook) and Fieldbook (examples/fieldbook): their bindings are what the
@@ -352,15 +319,14 @@ jobs:
   # library, compiles the Kotlin and TypeScript consumers and runs them against the real core (JNI, Node), and runs ktlint over the
   # generated Kotlin with and without the exclusions `undra bindgen` writes. Bazel is pinned by .bazelversion (Bazelisk; the example's
   # is a link to bazel/'s): 8.8.1, the lowest the rules support, and every step runs again on the newest 9.x through
-  # USE_BAZEL_VERSION (Bazelisk's own override), so both ends of "Bazel 8.8 and 9.x" are tested, in the same job, over one
-  # disk cache. The rulesets are tested at both
+  # USE_BAZEL_VERSION (Bazelisk's own override), so both ends of "Bazel 8.8 and 9.x" are tested. The rulesets are tested at both
   # ends too: the example's MODULE.bazel pins recent versions (what most applications run), and examples/bazel/scripts/at-minimums.sh
   # runs the same targets with every ruleset at the lowest version undra_rules declares (bazel/MODULE.bazel), failing if anything
   # in the graph raises one. The lock files are committed as Bazel 8.8.1 writes them. They are not run with
   # --lockfile_mode=error here: a lock records what the machine that wrote it resolved, per OS, and a Linux runner would fail on
   # every entry a macOS developer made. The 9.x steps and the minimums run with --lockfile_mode=off: 9.x records other registry
   # files than 8.8.1, and the minimums are another graph, so neither reads or rewrites the committed lock. Bump the 9.x pin
-  # (USE_BAZEL_VERSION, in the 9.x steps of the five Bazel jobs and in examples/bazel/README.md) when a newer 9.x
+  # (USE_BAZEL_VERSION, in the 9.x steps of the four Bazel jobs and in examples/bazel/README.md) when a newer 9.x
   # release is out and passes.
   bazel-example:
     name: Bazel example
@@ -380,9 +346,7 @@ jobs:
           chmod +x "$RUNNER_TEMP/bin/bazel"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       # What the rulesets download (the Rust toolchain, the JDK, Node, binaryen, the crates): Bazel's repository cache, keyed by the
-      # lock files that name them. Every bazel command of the Bazel jobs also writes a disk cache (--disk_cache, on the runner's
-      # own disk, not persisted): the 9.x run of a job reads what its 8.8.1 run built, since an action's key does not change
-      # with the Bazel version. The minimums are another graph and run in a job of their own.
+      # lock files that name them. The ruleset minimums are another graph and run in the job after this one.
       - uses: actions/cache@v4
         with:
           path: ~/.cache/bazel-repository
@@ -398,10 +362,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends llvm
       - name: The rules' own tests (the Cargo.lock reader)
         working-directory: bazel
-        run: bazel test //tests/... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+        run: bazel test //tests/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
       - name: bazel test //... (host and web cores, bindings, Kotlin and TypeScript consumers, ktlint)
         working-directory: examples/bazel
-        run: bazel test //... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+        run: bazel test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
       - name: at-minimums.sh puts MODULE.bazel back whatever the command does
         working-directory: examples/bazel
         run: bash scripts/at-minimums.test.sh
@@ -409,17 +373,18 @@ jobs:
         working-directory: bazel
         env:
           USE_BAZEL_VERSION: "9.2.0"
-        run: bazel test //tests/... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+        run: bazel test //tests/... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
       - name: bazel test //... on Bazel 9.x
         working-directory: examples/bazel
         env:
           USE_BAZEL_VERSION: "9.2.0"
-        run: bazel test //... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+        run: bazel test //... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
 
   bazel-example-minimums:
     # The same example with every ruleset at the lowest version the rules declare (examples/bazel/scripts/at-minimums.sh), on
     # Bazel 8.8.1 and on the newest 9.x. Its own job: the minimums are another dependency graph, so a run of them shares little
-    # with the recent-rulesets run, and the two side by side halve the longest Linux job of the Gate.
+    # with the recent-rulesets run, and the two side by side halve the longest Linux job of the Gate (measured on the first run:
+    # 8 and 9 minutes where the one job took 17).
     name: Bazel example (ruleset minimums)
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -448,12 +413,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends llvm
       - name: bazel test //... at the ruleset minimums
         working-directory: examples/bazel
-        run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+        run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
       - name: bazel test //... on Bazel 9.x at the ruleset minimums
         working-directory: examples/bazel
         env:
           USE_BAZEL_VERSION: "9.2.0"
-        run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+        run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
 
   # The Android core and the Kotlin bindings as an Android library, built by Bazel on Linux (ADR-065). The core's NDK is a declared
   # input of its action: the example pins the archives (MODULE.bazel), and this job gives the build the NDK that sdkmanager installs
@@ -492,7 +457,7 @@ jobs:
           # where Bazel would otherwise download the 664 MB archive.
           flags="$(android/use-installed-ndk.sh "$ANDROID_HOME/ndk/$NDK_VERSION")"
           echo "NDK_FLAGS=$flags" >> "$GITHUB_ENV"
-          bazel build //:mobile_android $flags --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+          bazel build //:mobile_android $flags --repository_cache="$HOME/.cache/bazel-repository"
           # The build used the installed NDK and not the archive: an NDK repository of the output base links into it. (Were the
           # override to stop working, Bazel would download the archive and this job would be green for the wrong reason.)
           ndk_real="$(cd "$ANDROID_HOME/ndk/$NDK_VERSION" && pwd -P)"
@@ -504,28 +469,28 @@ jobs:
           [ "$used" = 1 ] || { echo "the build did not use the installed NDK: no NDK repository of the output base links into $ndk_real" >&2; exit 1; }
       - name: The Kotlin bindings as an Android library (//android:hello)
         working-directory: examples/bazel
-        run: bazel build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+        run: bazel build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
       # Both at the ruleset minimums and on the newest 9.x, as the other two Bazel jobs run their targets (the same script and
       # pin; a newer 9.x moves with theirs).
       - name: The Android core and library at the ruleset minimums
         working-directory: examples/bazel
         run: |
-          scripts/at-minimums.sh build //:mobile_android $NDK_FLAGS --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
-          scripts/at-minimums.sh build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+          scripts/at-minimums.sh build //:mobile_android $NDK_FLAGS --repository_cache="$HOME/.cache/bazel-repository"
+          scripts/at-minimums.sh build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
       - name: The Android core and library on Bazel 9.x
         working-directory: examples/bazel
         env:
           USE_BAZEL_VERSION: "9.2.0"
         run: |
-          bazel build //:mobile_android $NDK_FLAGS --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
-          bazel build //android:hello --config=android --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+          bazel build //:mobile_android $NDK_FLAGS --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
+          bazel build //android:hello --config=android --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
       - name: The Android core and library on Bazel 9.x at the ruleset minimums
         working-directory: examples/bazel
         env:
           USE_BAZEL_VERSION: "9.2.0"
         run: |
-          scripts/at-minimums.sh build //:mobile_android $NDK_FLAGS --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
-          scripts/at-minimums.sh build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+          scripts/at-minimums.sh build //:mobile_android $NDK_FLAGS --repository_cache="$HOME/.cache/bazel-repository"
+          scripts/at-minimums.sh build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
 
   android:
     name: Android cross-build
@@ -908,7 +873,7 @@ jobs:
   complete:
     name: Complete
     if: always()
-    needs: [bazel-example-macos, bazel-example-macos-minimums, macos, macos-apps, ios-floor, contracts-swift, ffi-miri, rust, rust-cli, bazel-example, bazel-example-minimums, bazel-android, android, contracts, react-native, leaf-features, kotlin, ts, wasm-ffi, ffi-asan, playground-web]
+    needs: [bazel-example-macos, macos, ios-floor, contracts-swift, ffi-miri, rust, rust-cli, bazel-example, bazel-example-minimums, bazel-android, android, contracts, react-native, leaf-features, kotlin, ts, wasm-ffi, ffi-asan, playground-web]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
