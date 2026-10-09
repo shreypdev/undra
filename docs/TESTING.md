@@ -215,6 +215,68 @@ replayer.install(t.host());                 // the RecordingHost's default port 
 replayer.finish().expect("the core made the calls it made when it was recorded");
 ```
 
+## Comparing sessions across platforms: `undra drift`
+
+The core is deterministic: given the same inputs, every platform gets the same change-sets. So when the iOS app and the Android app end a
+flow in different states, the difference is in what each host put in: the calls it made and their order, what its port adapters answered,
+the events it pushed. `undra drift` finds that difference between recordings of one flow:
+
+```bash
+undra dev --record ios.json                              # the iOS app runs the flow against this server
+undra dev --addr 127.0.0.1:7444 --record android.json    # a second server for the Android app (a server serves one client at a time)
+undra drift ios.json android.json web.json               # the first file is the reference; every other file is compared with it
+undra drift ios.json android.json --exit-code            # CI: exit 1 on any divergence
+```
+
+Each recording is put in a normal form first: a handle becomes `Type#n`, the `n`th object a constructor of that type returned in the
+session, so the first `Todos` of one session is the first `Todos` of another (a handle that never came from a constructor is
+`#unknown-n` by first appearance); call ids, timer ids and `t` are dropped. Then the report has one line per divergence,
+`<platform>  <kind>  <path>: <text>`, and a summary (`9 divergences on 2 of 3 recordings`, or `no drift: 3 recordings agree`):
+
+| Kind | What it says |
+|---|---|
+| `calls` | a host call missing on one side, extra, or made with other arguments; the sequence is diffed by a longest common subsequence over (target, decoded arguments), so one skipped tap does not shift every later line |
+| `ports` | a port method called another number of times, the `n`th call made with other arguments, or the `n`th call answered differently by the platform's adapters (status and decoded body) |
+| `events` | a host-pushed event (`Connectivity.changed`, `Lifecycle.changed`) missing or extra, by the same sequence diff |
+| `observes` | a `(store, signal)` observed on one side only |
+| `state` | a signal whose final value differs (`final value differs`: the last `full` value), or, for a patched signal, whose number of patches or last patch differs (`changes differ`) |
+
+```text
+Drift: ios.json (reference) against android.json, web.json (schema 0x3c17cd5f59bb6f68)
+Ignored: the replies of Clock.* and Rng.*, the arguments of Timer.*, the Idempotency-Key header of Http.request, and t
+
+android  calls     Todos.toggle on Todos#0 #5: missing on android ({"id":"00000000-0000-0001-0000-000000000000"})
+android  ports     Http.request #1: reply differs: ios {"body":{"body":"7b22..","headers":[],"status":200},"status":"ok"}, android {"body":{..,"status":500},"status":"ok"}
+android  state     Todos#0.remaining: final value differs: ios 2, android 3
+web      calls     Todos.add on Todos#0 #6: extra on web ({"title":"Pay the rent"})
+
+9 divergences on 2 of 3 recordings
+```
+
+Always ignored, and named in the header: the replies of `Clock.*` and `Rng.*` (a reading differs by nature), the arguments of `Timer.*`
+(absolute deadlines), the value of an `Idempotency-Key` header inside `Http.request` arguments (a fresh key per run; the header is found
+in the decoded request, so without a schema it is compared with the rest of the bytes, and the header line says so), and `t`.
+`--ignore PATH` (repeatable) adds dotted paths matched after decoding: `Todos.add.title` (one parameter), `Http.request.req.headers` (a
+field inside one; a path into a list applies to every item), `Todos.add` (the whole arguments: the call still counts), `Http.request` (a
+port method named whole is left out entirely, its count included), `Todos.todos` (a signal's final value). A path that names nothing is
+accepted and ignores nothing.
+
+The schema names the ids and decodes the bytes (`Todos.add`, `{"title":"Buy milk"}`): `--schema FILE`, else `schema.json` in the project
+directory, else the project's core is built and asked, as `undra schema export` does. Outside a project without `--schema` the comparison
+runs on ids and bytes, only the standard ports are named, and the header says so. Every file must carry the reference's schema hash (and
+the schema's); another one is refused (`C0009`, naming both hashes), because ids and bytes of another schema compare as noise. The exit
+status is 0 whatever is found, so the report can be read freely; `--exit-code` makes it 1 when any line was printed.
+
+In Rust the same comparison is `undra::testing::drift`: `Session::from_recording`, `Rules::new(Some(SchemaIndex::new(&schema))).with_ignores(..)`,
+`compare(&reference, &other, &rules)` (a `Vec<Divergence>` with a `kind`, a `path` and a `text`) and `Report::render`.
+`undra::testing::decode::SchemaIndex` names and decodes any recording's ids and bytes as JSON: records as objects, enums as
+`{"$": "Variant", ..fields}` (a tuple variant's fields `"0"`, `"1"`), maps as `{"$map": [[k, v], ..]}`, bytes as hex, 64-bit integers
+as numbers up to 53 bits and strings past that, `Duration` as `{"$dur_ns": n}`, `Timestamp` as `{"$ts_ms": n}`, handles as
+`{"$handle": "0x.."}`, a lazy list's value as its length and version (`{"$lazy": "Lazy<Item>", "len": n, "version": v}`; the page
+server's handle is per session and left out), and what the schema cannot decode (a patch) as `{"$bytes": "..", "$type": ".."}`.
+`examples/playground/core/tests/drift.rs` records one flow as three platforms through the Rust `Recorder` and asserts the divergences
+by kind and path; its recordings are the CLI's fixtures (`crates/undra-cli/tests/fixtures/drift/`, `UNDRA_BLESS=1` rewrites them).
+
 ## The fakes
 
 `undra::ports::fakes` is the reference. A core behind the C ABI or wasm cannot have Rust fakes installed in it (there is no entry for that, and a

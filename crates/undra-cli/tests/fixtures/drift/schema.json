@@ -1,0 +1,8799 @@
+{
+  "undra_version": "1.0.0",
+  "crate_name": "playground-core",
+  "records": [
+    {
+      "name": "Account",
+      "type_id": 1509466876,
+      "fields": [
+        {
+          "name": "id",
+          "ty": {
+            "kind": "named",
+            "of": "AccountId"
+          },
+          "default": false
+        },
+        {
+          "name": "owner",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "AccountId",
+      "type_id": 602824913,
+      "fields": [
+        {
+          "name": "value",
+          "ty": {
+            "kind": "uuid"
+          },
+          "default": false
+        }
+      ],
+      "transparent": true
+    },
+    {
+      "name": "BackgroundReport",
+      "type_id": 1572775411,
+      "fields": [
+        {
+          "name": "finished",
+          "ty": {
+            "kind": "bool"
+          },
+          "default": false
+        },
+        {
+          "name": "replayed",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        },
+        {
+          "name": "refetched",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        },
+        {
+          "name": "still_pending",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "Cents",
+      "type_id": 1783372180,
+      "fields": [
+        {
+          "name": "value",
+          "ty": {
+            "kind": "i64"
+          },
+          "default": false
+        }
+      ],
+      "transparent": true
+    },
+    {
+      "name": "Composite",
+      "type_id": 4224231508,
+      "fields": [
+        {
+          "name": "name",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "tags",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "string"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "figure",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "named",
+              "of": "Figure"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "history",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "Figure"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "scores",
+          "ty": {
+            "kind": "map",
+            "of": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "i32"
+              }
+            ]
+          },
+          "default": false
+        },
+        {
+          "name": "names",
+          "ty": {
+            "kind": "map",
+            "of": [
+              {
+                "kind": "u32"
+              },
+              {
+                "kind": "string"
+              }
+            ]
+          },
+          "default": false
+        },
+        {
+          "name": "limit",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "u32"
+            }
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "DbCells",
+      "type_id": 4002197668,
+      "fields": [
+        {
+          "name": "int",
+          "ty": {
+            "kind": "i64"
+          },
+          "default": false
+        },
+        {
+          "name": "real",
+          "ty": {
+            "kind": "f64"
+          },
+          "default": false
+        },
+        {
+          "name": "text",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "blob",
+          "ty": {
+            "kind": "bytes"
+          },
+          "default": false
+        },
+        {
+          "name": "none",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "string"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "types",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "string"
+            }
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "DbExecuted",
+      "type_id": 1101112230,
+      "fields": [
+        {
+          "name": "changes",
+          "ty": {
+            "kind": "u64"
+          },
+          "default": false
+        },
+        {
+          "name": "last_insert_id",
+          "ty": {
+            "kind": "i64"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "DbMigration",
+      "type_id": 917707045,
+      "fields": [
+        {
+          "name": "version",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        },
+        {
+          "name": "sql",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "DbOpened",
+      "type_id": 2943747086,
+      "fields": [
+        {
+          "name": "db",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        },
+        {
+          "name": "version",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "DbRows",
+      "type_id": 4291899182,
+      "fields": [
+        {
+          "name": "columns",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "string"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "rows",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "vec",
+              "of": {
+                "kind": "named",
+                "of": "DbValue"
+              }
+            }
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "Entry",
+      "type_id": 2629823795,
+      "fields": [
+        {
+          "name": "account",
+          "ty": {
+            "kind": "named",
+            "of": "AccountId"
+          },
+          "default": false
+        },
+        {
+          "name": "amount",
+          "ty": {
+            "kind": "named",
+            "of": "Price"
+          },
+          "default": false
+        },
+        {
+          "name": "memo",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "at",
+          "ty": {
+            "kind": "timestamp"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "EntrySlice",
+      "type_id": 8194459,
+      "fields": [
+        {
+          "name": "items",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "Entry"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "next",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "u32"
+            }
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "Header",
+      "type_id": 290429312,
+      "fields": [
+        {
+          "name": "name",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "value",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "HttpRequest",
+      "type_id": 3149688402,
+      "fields": [
+        {
+          "name": "method",
+          "ty": {
+            "kind": "named",
+            "of": "HttpMethod"
+          },
+          "default": false
+        },
+        {
+          "name": "url",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "headers",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "Header"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "body",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "bytes"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "timeout_ms",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "u32"
+            }
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "HttpResponse",
+      "type_id": 3427097086,
+      "fields": [
+        {
+          "name": "status",
+          "ty": {
+            "kind": "u16"
+          },
+          "default": false
+        },
+        {
+          "name": "headers",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "Header"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "body",
+          "ty": {
+            "kind": "bytes"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "Item",
+      "type_id": 526680070,
+      "fields": [
+        {
+          "name": "id",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        },
+        {
+          "name": "label",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "version",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "Note",
+      "type_id": 339788125,
+      "fields": [
+        {
+          "name": "id",
+          "ty": {
+            "kind": "i64"
+          },
+          "default": false
+        },
+        {
+          "name": "title",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "done",
+          "ty": {
+            "kind": "bool"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "PanicFrame",
+      "type_id": 430217169,
+      "fields": [
+        {
+          "name": "address",
+          "ty": {
+            "kind": "u64"
+          },
+          "default": false
+        },
+        {
+          "name": "symbol",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "string"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "file",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "string"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "line",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "u32"
+            }
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "PanicReport",
+      "type_id": 3498923062,
+      "fields": [
+        {
+          "name": "message",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "location",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "operation",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "thread",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "frames",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "PanicFrame"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "namespace",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "core_version",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "schema_hash",
+          "ty": {
+            "kind": "u64"
+          },
+          "default": false
+        },
+        {
+          "name": "image_id",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "Price",
+      "type_id": 3711879114,
+      "fields": [
+        {
+          "name": "value",
+          "ty": {
+            "kind": "decimal"
+          },
+          "default": false
+        }
+      ],
+      "transparent": true
+    },
+    {
+      "name": "Primitives",
+      "type_id": 2000745855,
+      "fields": [
+        {
+          "name": "flag",
+          "ty": {
+            "kind": "bool"
+          },
+          "default": false
+        },
+        {
+          "name": "tiny",
+          "ty": {
+            "kind": "i8"
+          },
+          "default": false
+        },
+        {
+          "name": "small",
+          "ty": {
+            "kind": "i16"
+          },
+          "default": false
+        },
+        {
+          "name": "int",
+          "ty": {
+            "kind": "i32"
+          },
+          "default": false
+        },
+        {
+          "name": "long",
+          "ty": {
+            "kind": "i64"
+          },
+          "default": false
+        },
+        {
+          "name": "byte",
+          "ty": {
+            "kind": "u8"
+          },
+          "default": false
+        },
+        {
+          "name": "word",
+          "ty": {
+            "kind": "u16"
+          },
+          "default": false
+        },
+        {
+          "name": "dword",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        },
+        {
+          "name": "qword",
+          "ty": {
+            "kind": "u64"
+          },
+          "default": false
+        },
+        {
+          "name": "single",
+          "ty": {
+            "kind": "f32"
+          },
+          "default": false
+        },
+        {
+          "name": "double",
+          "ty": {
+            "kind": "f64"
+          },
+          "default": false
+        },
+        {
+          "name": "text",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "blob",
+          "ty": {
+            "kind": "bytes"
+          },
+          "default": false
+        },
+        {
+          "name": "span",
+          "ty": {
+            "kind": "duration"
+          },
+          "default": false
+        },
+        {
+          "name": "at",
+          "ty": {
+            "kind": "timestamp"
+          },
+          "default": false
+        },
+        {
+          "name": "id",
+          "ty": {
+            "kind": "uuid"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "ProbeCounters",
+      "type_id": 728580836,
+      "fields": [
+        {
+          "name": "started",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        },
+        {
+          "name": "completed",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        },
+        {
+          "name": "cancelled",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        },
+        {
+          "name": "produced",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "Receipt",
+      "type_id": 462495971,
+      "fields": [
+        {
+          "name": "id",
+          "ty": {
+            "kind": "uuid"
+          },
+          "default": false
+        },
+        {
+          "name": "issued",
+          "ty": {
+            "kind": "timestamp"
+          },
+          "default": false
+        },
+        {
+          "name": "valid_for",
+          "ty": {
+            "kind": "duration"
+          },
+          "default": false
+        },
+        {
+          "name": "total",
+          "ty": {
+            "kind": "decimal"
+          },
+          "default": false
+        },
+        {
+          "name": "signature",
+          "ty": {
+            "kind": "bytes"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "RemoteConfig",
+      "type_id": 3681253457,
+      "fields": [
+        {
+          "name": "base_url",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "RemoteTodo",
+      "type_id": 1568572499,
+      "fields": [
+        {
+          "name": "id",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        },
+        {
+          "name": "title",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "done",
+          "ty": {
+            "kind": "bool"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "SseEvent",
+      "type_id": 2828544206,
+      "fields": [
+        {
+          "name": "id",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "string"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "event",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "data",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "retry_ms",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "u32"
+            }
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "SseFollow",
+      "type_id": 1021823,
+      "fields": [
+        {
+          "name": "events",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "SseEvent"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "ended",
+          "ty": {
+            "kind": "bool"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "StorageStatus",
+      "type_id": 3347361192,
+      "fields": [
+        {
+          "name": "pending",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        },
+        {
+          "name": "dead_letters",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "string"
+            }
+          },
+          "default": false
+        },
+        {
+          "name": "queue_readable",
+          "ty": {
+            "kind": "bool"
+          },
+          "default": false
+        },
+        {
+          "name": "write_failed",
+          "ty": {
+            "kind": "u64"
+          },
+          "default": false
+        },
+        {
+          "name": "dropped",
+          "ty": {
+            "kind": "u64"
+          },
+          "default": false
+        },
+        {
+          "name": "migrated",
+          "ty": {
+            "kind": "u64"
+          },
+          "default": false
+        },
+        {
+          "name": "dead_lettered",
+          "ty": {
+            "kind": "u64"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "Todo",
+      "type_id": 2995082141,
+      "fields": [
+        {
+          "name": "id",
+          "ty": {
+            "kind": "uuid"
+          },
+          "default": false
+        },
+        {
+          "name": "title",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        },
+        {
+          "name": "done",
+          "ty": {
+            "kind": "bool"
+          },
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "WsOpened",
+      "type_id": 2472805986,
+      "fields": [
+        {
+          "name": "conn",
+          "ty": {
+            "kind": "u32"
+          },
+          "default": false
+        },
+        {
+          "name": "protocol",
+          "ty": {
+            "kind": "string"
+          },
+          "default": false
+        }
+      ]
+    }
+  ],
+  "enums": [
+    {
+      "name": "AppState",
+      "type_id": 3484835985,
+      "is_error": false,
+      "variants": [
+        {
+          "name": "Active",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Inactive",
+          "index": 1,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Background",
+          "index": 2,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        }
+      ]
+    },
+    {
+      "name": "DbConstraint",
+      "type_id": 2238646528,
+      "is_error": false,
+      "variants": [
+        {
+          "name": "Unique",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "NotNull",
+          "index": 1,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "ForeignKey",
+          "index": 2,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Check",
+          "index": 3,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Other",
+          "index": 4,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        }
+      ]
+    },
+    {
+      "name": "DbError",
+      "type_id": 503055211,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "Busy",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": "the database is busy"
+        },
+        {
+          "name": "Constraint",
+          "index": 1,
+          "fields": [
+            {
+              "name": "kind",
+              "ty": {
+                "kind": "named",
+                "of": "DbConstraint"
+              },
+              "default": false
+            },
+            {
+              "name": "message",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": "constraint failed: {message}"
+        },
+        {
+          "name": "Corrupt",
+          "index": 2,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "the database is corrupt: {0}"
+        },
+        {
+          "name": "Full",
+          "index": 3,
+          "fields": [],
+          "tuple": false,
+          "message": "the database is full"
+        },
+        {
+          "name": "Unavailable",
+          "index": 4,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "the database is unavailable: {0}"
+        },
+        {
+          "name": "Sql",
+          "index": 5,
+          "fields": [
+            {
+              "name": "message",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": "SQL error: {message}"
+        },
+        {
+          "name": "Migration",
+          "index": 6,
+          "fields": [
+            {
+              "name": "version",
+              "ty": {
+                "kind": "u32"
+              },
+              "default": false
+            },
+            {
+              "name": "message",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": "migration {version} failed: {message}"
+        }
+      ]
+    },
+    {
+      "name": "DbValue",
+      "type_id": 1224166080,
+      "is_error": false,
+      "variants": [
+        {
+          "name": "Null",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Integer",
+          "index": 1,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "i64"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": null
+        },
+        {
+          "name": "Real",
+          "index": 2,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "f64"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": null
+        },
+        {
+          "name": "Text",
+          "index": 3,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": null
+        },
+        {
+          "name": "Blob",
+          "index": 4,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "bytes"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": null
+        }
+      ]
+    },
+    {
+      "name": "Figure",
+      "type_id": 2814005033,
+      "is_error": false,
+      "variants": [
+        {
+          "name": "Circle",
+          "index": 0,
+          "fields": [
+            {
+              "name": "radius",
+              "ty": {
+                "kind": "f64"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Rect",
+          "index": 1,
+          "fields": [
+            {
+              "name": "width",
+              "ty": {
+                "kind": "f64"
+              },
+              "default": false
+            },
+            {
+              "name": "height",
+              "ty": {
+                "kind": "f64"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Label",
+          "index": 2,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": null
+        },
+        {
+          "name": "Empty",
+          "index": 3,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        }
+      ]
+    },
+    {
+      "name": "Filter",
+      "type_id": 4104765591,
+      "is_error": false,
+      "variants": [
+        {
+          "name": "All",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Active",
+          "index": 1,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Done",
+          "index": 2,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        }
+      ]
+    },
+    {
+      "name": "FsError",
+      "type_id": 3512648200,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "NotFound",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": "not found"
+        },
+        {
+          "name": "Denied",
+          "index": 1,
+          "fields": [],
+          "tuple": false,
+          "message": "access denied"
+        },
+        {
+          "name": "Io",
+          "index": 2,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "I/O error: {0}"
+        },
+        {
+          "name": "Full",
+          "index": 3,
+          "fields": [],
+          "tuple": false,
+          "message": "the disk is full"
+        },
+        {
+          "name": "Unavailable",
+          "index": 4,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "the file system is unavailable: {0}"
+        }
+      ]
+    },
+    {
+      "name": "HttpError",
+      "type_id": 3999515121,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "Network",
+          "index": 0,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "network error: {0}"
+        },
+        {
+          "name": "Timeout",
+          "index": 1,
+          "fields": [],
+          "tuple": false,
+          "message": "the request timed out"
+        },
+        {
+          "name": "Cancelled",
+          "index": 2,
+          "fields": [],
+          "tuple": false,
+          "message": "the request was cancelled"
+        },
+        {
+          "name": "InvalidUrl",
+          "index": 3,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "invalid URL: {0}"
+        }
+      ]
+    },
+    {
+      "name": "HttpMethod",
+      "type_id": 2009007696,
+      "is_error": false,
+      "variants": [
+        {
+          "name": "Get",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Post",
+          "index": 1,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Put",
+          "index": 2,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Delete",
+          "index": 3,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Patch",
+          "index": 4,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Head",
+          "index": 5,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Options",
+          "index": 6,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        }
+      ]
+    },
+    {
+      "name": "LabError",
+      "type_id": 557656578,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "Empty",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": "nothing was given"
+        },
+        {
+          "name": "TooLong",
+          "index": 1,
+          "fields": [
+            {
+              "name": "max",
+              "ty": {
+                "kind": "u32"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": "longer than {max} characters"
+        },
+        {
+          "name": "NotANumber",
+          "index": 2,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "`{0}` is not a number"
+        },
+        {
+          "name": "Rejected",
+          "index": 3,
+          "fields": [
+            {
+              "name": "code",
+              "ty": {
+                "kind": "i32"
+              },
+              "default": false
+            },
+            {
+              "name": "reason",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": "rejected with code {code}: {reason}"
+        }
+      ]
+    },
+    {
+      "name": "LedgerError",
+      "type_id": 2025560858,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "NoSuchAccount",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": "no such account"
+        },
+        {
+          "name": "OutOfRange",
+          "index": 1,
+          "fields": [],
+          "tuple": false,
+          "message": "the amount is out of range"
+        }
+      ]
+    },
+    {
+      "name": "ListError",
+      "type_id": 829628197,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "OutOfRange",
+          "index": 0,
+          "fields": [
+            {
+              "name": "index",
+              "ty": {
+                "kind": "u32"
+              },
+              "default": false
+            },
+            {
+              "name": "len",
+              "ty": {
+                "kind": "u32"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": "position {index} is outside a list of {len} items"
+        }
+      ]
+    },
+    {
+      "name": "LoadableEntries",
+      "type_id": 448337647,
+      "is_error": false,
+      "variants": [
+        {
+          "name": "Loading",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Loaded",
+          "index": 1,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "named",
+                "of": "EntrySlice"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": null
+        },
+        {
+          "name": "Failed",
+          "index": 2,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": null
+        }
+      ]
+    },
+    {
+      "name": "NetKind",
+      "type_id": 57766314,
+      "is_error": false,
+      "variants": [
+        {
+          "name": "Wifi",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Cellular",
+          "index": 1,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Wired",
+          "index": 2,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Unknown",
+          "index": 3,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "None",
+          "index": 4,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        }
+      ]
+    },
+    {
+      "name": "Parity",
+      "type_id": 2630211188,
+      "is_error": false,
+      "variants": [
+        {
+          "name": "Even",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Odd",
+          "index": 1,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        }
+      ]
+    },
+    {
+      "name": "RemoteError",
+      "type_id": 936073275,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "NotConfigured",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": "the remote server is not configured"
+        },
+        {
+          "name": "Http",
+          "index": 1,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "named",
+                "of": "HttpError"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "network: {0}"
+        },
+        {
+          "name": "Status",
+          "index": 2,
+          "fields": [
+            {
+              "name": "code",
+              "ty": {
+                "kind": "u16"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": "the server answered {code}"
+        },
+        {
+          "name": "BadBody",
+          "index": 3,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "the response is not what was expected: {0}"
+        }
+      ]
+    },
+    {
+      "name": "ReportError",
+      "type_id": 2758846451,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "Declined",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": "the user declined"
+        },
+        {
+          "name": "Unavailable",
+          "index": 1,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "the reporter is not available: {0}"
+        }
+      ]
+    },
+    {
+      "name": "SseError",
+      "type_id": 779616756,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "Refused",
+          "index": 0,
+          "fields": [
+            {
+              "name": "status",
+              "ty": {
+                "kind": "option",
+                "of": {
+                  "kind": "u16"
+                }
+              },
+              "default": false
+            },
+            {
+              "name": "message",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": "the event stream was refused: {message}"
+        },
+        {
+          "name": "Network",
+          "index": 1,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "event stream network error: {0}"
+        },
+        {
+          "name": "Protocol",
+          "index": 2,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "event stream protocol error: {0}"
+        },
+        {
+          "name": "Ended",
+          "index": 3,
+          "fields": [],
+          "tuple": false,
+          "message": "the server ended the event stream"
+        }
+      ]
+    },
+    {
+      "name": "StorageError",
+      "type_id": 1027649552,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "Unavailable",
+          "index": 0,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "storage is unavailable: {0}"
+        },
+        {
+          "name": "Full",
+          "index": 1,
+          "fields": [],
+          "tuple": false,
+          "message": "the storage is full"
+        },
+        {
+          "name": "Locked",
+          "index": 2,
+          "fields": [],
+          "tuple": false,
+          "message": "the storage is locked"
+        },
+        {
+          "name": "Corrupt",
+          "index": 3,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "stored data is corrupt: {0}"
+        },
+        {
+          "name": "Io",
+          "index": 4,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "storage I/O error: {0}"
+        }
+      ]
+    },
+    {
+      "name": "StressError",
+      "type_id": 3684030897,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "RateOutOfRange",
+          "index": 0,
+          "fields": [
+            {
+              "name": "rate",
+              "ty": {
+                "kind": "u32"
+              },
+              "default": false
+            },
+            {
+              "name": "max",
+              "ty": {
+                "kind": "u32"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": "{rate} updates per second is outside 1..={max}"
+        }
+      ]
+    },
+    {
+      "name": "StressMode",
+      "type_id": 3312233714,
+      "is_error": false,
+      "variants": [
+        {
+          "name": "Firehose",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        },
+        {
+          "name": "Progress",
+          "index": 1,
+          "fields": [],
+          "tuple": false,
+          "message": null
+        }
+      ]
+    },
+    {
+      "name": "TickError",
+      "type_id": 1045426418,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "Failing",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": "the ticker is failing on purpose"
+        }
+      ]
+    },
+    {
+      "name": "TodoError",
+      "type_id": 787313993,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "EmptyTitle",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": "the title cannot be empty"
+        }
+      ]
+    },
+    {
+      "name": "WorkshopError",
+      "type_id": 4027505562,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "NoName",
+          "index": 0,
+          "fields": [],
+          "tuple": false,
+          "message": "a shelf needs a name"
+        }
+      ]
+    },
+    {
+      "name": "WsError",
+      "type_id": 3303525519,
+      "is_error": true,
+      "variants": [
+        {
+          "name": "Refused",
+          "index": 0,
+          "fields": [
+            {
+              "name": "status",
+              "ty": {
+                "kind": "option",
+                "of": {
+                  "kind": "u16"
+                }
+              },
+              "default": false
+            },
+            {
+              "name": "message",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": "the WebSocket was refused: {message}"
+        },
+        {
+          "name": "Network",
+          "index": 1,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "WebSocket network error: {0}"
+        },
+        {
+          "name": "Protocol",
+          "index": 2,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": "WebSocket protocol error: {0}"
+        },
+        {
+          "name": "Closed",
+          "index": 3,
+          "fields": [
+            {
+              "name": "code",
+              "ty": {
+                "kind": "u16"
+              },
+              "default": false
+            },
+            {
+              "name": "reason",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": false,
+          "message": "the WebSocket was closed ({code}): {reason}"
+        }
+      ]
+    },
+    {
+      "name": "WsMessage",
+      "type_id": 2670566302,
+      "is_error": false,
+      "variants": [
+        {
+          "name": "Text",
+          "index": 0,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "string"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": null
+        },
+        {
+          "name": "Binary",
+          "index": 1,
+          "fields": [
+            {
+              "name": "0",
+              "ty": {
+                "kind": "bytes"
+              },
+              "default": false
+            }
+          ],
+          "tuple": true,
+          "message": null
+        }
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "name": "Bench",
+      "type_id": 879416409,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 914398305,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "Bench"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "bench_add",
+          "method_id": 3875085017,
+          "params": [
+            {
+              "name": "a",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "b",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "u32"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "bench_echo_bytes",
+          "method_id": 1736358247,
+          "params": [
+            {
+              "name": "data",
+              "ty": {
+                "kind": "bytes"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "bytes"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "bench_touch_signals",
+          "method_id": 1069562015,
+          "params": [
+            {
+              "name": "k",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "bench_list_insert",
+          "method_id": 2437648002,
+          "params": [
+            {
+              "name": "i",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "bench_list_update_burst",
+          "method_id": 1947335939,
+          "params": [
+            {
+              "name": "n",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "bench_list_reset",
+          "method_id": 201829042,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "rows",
+            "signal_id": 0,
+            "ty": {
+              "kind": "vec",
+              "of": {
+                "kind": "named",
+                "of": "Item"
+              }
+            },
+            "computed": false,
+            "key": "id"
+          },
+          {
+            "name": "s000",
+            "signal_id": 1,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s001",
+            "signal_id": 2,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s002",
+            "signal_id": 3,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s003",
+            "signal_id": 4,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s004",
+            "signal_id": 5,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s005",
+            "signal_id": 6,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s006",
+            "signal_id": 7,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s007",
+            "signal_id": 8,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s008",
+            "signal_id": 9,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s009",
+            "signal_id": 10,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s010",
+            "signal_id": 11,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s011",
+            "signal_id": 12,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s012",
+            "signal_id": 13,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s013",
+            "signal_id": 14,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s014",
+            "signal_id": 15,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s015",
+            "signal_id": 16,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s016",
+            "signal_id": 17,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s017",
+            "signal_id": 18,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s018",
+            "signal_id": 19,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s019",
+            "signal_id": 20,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s020",
+            "signal_id": 21,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s021",
+            "signal_id": 22,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s022",
+            "signal_id": 23,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s023",
+            "signal_id": 24,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s024",
+            "signal_id": 25,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s025",
+            "signal_id": 26,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s026",
+            "signal_id": 27,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s027",
+            "signal_id": 28,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s028",
+            "signal_id": 29,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s029",
+            "signal_id": 30,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s030",
+            "signal_id": 31,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s031",
+            "signal_id": 32,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s032",
+            "signal_id": 33,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s033",
+            "signal_id": 34,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s034",
+            "signal_id": 35,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s035",
+            "signal_id": 36,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s036",
+            "signal_id": 37,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s037",
+            "signal_id": 38,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s038",
+            "signal_id": 39,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s039",
+            "signal_id": 40,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s040",
+            "signal_id": 41,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s041",
+            "signal_id": 42,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s042",
+            "signal_id": 43,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s043",
+            "signal_id": 44,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s044",
+            "signal_id": 45,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s045",
+            "signal_id": 46,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s046",
+            "signal_id": 47,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s047",
+            "signal_id": 48,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s048",
+            "signal_id": 49,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s049",
+            "signal_id": 50,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s050",
+            "signal_id": 51,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s051",
+            "signal_id": 52,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s052",
+            "signal_id": 53,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s053",
+            "signal_id": 54,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s054",
+            "signal_id": 55,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s055",
+            "signal_id": 56,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s056",
+            "signal_id": 57,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s057",
+            "signal_id": 58,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s058",
+            "signal_id": 59,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s059",
+            "signal_id": 60,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s060",
+            "signal_id": 61,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s061",
+            "signal_id": 62,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s062",
+            "signal_id": 63,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s063",
+            "signal_id": 64,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s064",
+            "signal_id": 65,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s065",
+            "signal_id": 66,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s066",
+            "signal_id": 67,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s067",
+            "signal_id": 68,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s068",
+            "signal_id": 69,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s069",
+            "signal_id": 70,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s070",
+            "signal_id": 71,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s071",
+            "signal_id": 72,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s072",
+            "signal_id": 73,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s073",
+            "signal_id": 74,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s074",
+            "signal_id": 75,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s075",
+            "signal_id": 76,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s076",
+            "signal_id": 77,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s077",
+            "signal_id": 78,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s078",
+            "signal_id": 79,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s079",
+            "signal_id": 80,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s080",
+            "signal_id": 81,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s081",
+            "signal_id": 82,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s082",
+            "signal_id": 83,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s083",
+            "signal_id": 84,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s084",
+            "signal_id": 85,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s085",
+            "signal_id": 86,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s086",
+            "signal_id": 87,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s087",
+            "signal_id": 88,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s088",
+            "signal_id": 89,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s089",
+            "signal_id": 90,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s090",
+            "signal_id": 91,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s091",
+            "signal_id": 92,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s092",
+            "signal_id": 93,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s093",
+            "signal_id": 94,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s094",
+            "signal_id": 95,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s095",
+            "signal_id": 96,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s096",
+            "signal_id": 97,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s097",
+            "signal_id": 98,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s098",
+            "signal_id": 99,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s099",
+            "signal_id": 100,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s100",
+            "signal_id": 101,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s101",
+            "signal_id": 102,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s102",
+            "signal_id": 103,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s103",
+            "signal_id": 104,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s104",
+            "signal_id": 105,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s105",
+            "signal_id": 106,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s106",
+            "signal_id": 107,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s107",
+            "signal_id": 108,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s108",
+            "signal_id": 109,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s109",
+            "signal_id": 110,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s110",
+            "signal_id": 111,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s111",
+            "signal_id": 112,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s112",
+            "signal_id": 113,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s113",
+            "signal_id": 114,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s114",
+            "signal_id": 115,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s115",
+            "signal_id": 116,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s116",
+            "signal_id": 117,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s117",
+            "signal_id": 118,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s118",
+            "signal_id": 119,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s119",
+            "signal_id": 120,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s120",
+            "signal_id": 121,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s121",
+            "signal_id": 122,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s122",
+            "signal_id": 123,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s123",
+            "signal_id": 124,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s124",
+            "signal_id": 125,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s125",
+            "signal_id": 126,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s126",
+            "signal_id": 127,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "s127",
+            "signal_id": 128,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "BigList",
+      "type_id": 999453125,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 4125401373,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "BigList"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "insert_at",
+          "method_id": 2401454340,
+          "params": [
+            {
+              "name": "index",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "label",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "u32"
+              },
+              {
+                "kind": "named",
+                "of": "ListError"
+              }
+            ]
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "update_at",
+          "method_id": 241169536,
+          "params": [
+            {
+              "name": "index",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "label",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "ListError"
+              }
+            ]
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "move_item",
+          "method_id": 1487326174,
+          "params": [
+            {
+              "name": "from",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "to",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "ListError"
+              }
+            ]
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "remove_at",
+          "method_id": 305649583,
+          "params": [
+            {
+              "name": "index",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "ListError"
+              }
+            ]
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "reset",
+          "method_id": 1694907164,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "items",
+            "signal_id": 0,
+            "ty": {
+              "kind": "vec",
+              "of": {
+                "kind": "named",
+                "of": "Item"
+              }
+            },
+            "computed": false,
+            "key": "id"
+          },
+          {
+            "name": "count",
+            "signal_id": 1,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": true,
+            "key": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "Counter",
+      "type_id": 4228854723,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 3488615991,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "Counter"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "increment",
+          "method_id": 92587692,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "decrement",
+          "method_id": 3864607428,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "add",
+          "method_id": 2329722626,
+          "params": [
+            {
+              "name": "amount",
+              "ty": {
+                "kind": "i32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "reset",
+          "method_id": 207278678,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "count",
+            "signal_id": 0,
+            "ty": {
+              "kind": "i32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "changes",
+            "signal_id": 1,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "parity",
+            "signal_id": 2,
+            "ty": {
+              "kind": "named",
+              "of": "Parity"
+            },
+            "computed": true,
+            "key": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "Device",
+      "type_id": 3184243731,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 1063667367,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "Device"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [],
+      "store": {
+        "signals": [
+          {
+            "name": "online",
+            "signal_id": 0,
+            "ty": {
+              "kind": "bool"
+            },
+            "computed": false,
+            "key": null,
+            "no_coalesce": true
+          },
+          {
+            "name": "net_kind",
+            "signal_id": 1,
+            "ty": {
+              "kind": "named",
+              "of": "NetKind"
+            },
+            "computed": false,
+            "key": null,
+            "no_coalesce": true
+          },
+          {
+            "name": "app_state",
+            "signal_id": 2,
+            "ty": {
+              "kind": "named",
+              "of": "AppState"
+            },
+            "computed": false,
+            "key": null,
+            "no_coalesce": true
+          },
+          {
+            "name": "connectivity_reports",
+            "signal_id": 3,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null,
+            "no_coalesce": true
+          },
+          {
+            "name": "lifecycle_reports",
+            "signal_id": 4,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null,
+            "no_coalesce": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Ledger",
+      "type_id": 881825452,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 323782864,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "Ledger"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "open",
+          "method_id": 768932518,
+          "params": [
+            {
+              "name": "owner",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "named",
+            "of": "AccountId"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "rename",
+          "method_id": 311787520,
+          "params": [
+            {
+              "name": "id",
+              "ty": {
+                "kind": "named",
+                "of": "AccountId"
+              }
+            },
+            {
+              "name": "owner",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "close_account",
+          "method_id": 116901442,
+          "params": [
+            {
+              "name": "id",
+              "ty": {
+                "kind": "named",
+                "of": "AccountId"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "accounts",
+            "signal_id": 0,
+            "ty": {
+              "kind": "vec",
+              "of": {
+                "kind": "named",
+                "of": "Account"
+              }
+            },
+            "computed": false,
+            "key": "id"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Legacy",
+      "type_id": 89884798,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 349613070,
+          "params": [
+            {
+              "name": "score",
+              "ty": {
+                "kind": "i32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "named",
+            "of": "Legacy"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "methods": [
+        {
+          "name": "describe",
+          "method_id": 1680240825,
+          "params": [],
+          "returns": {
+            "kind": "string"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "score",
+            "signal_id": 0,
+            "ty": {
+              "kind": "i32"
+            },
+            "computed": false,
+            "key": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "Library",
+      "type_id": 2824020592,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 4181809604,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "Library"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "count",
+          "method_id": 1157885265,
+          "params": [],
+          "returns": {
+            "kind": "u32"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "add_rows",
+          "method_id": 1290868655,
+          "params": [
+            {
+              "name": "count",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "rename",
+          "method_id": 1607189700,
+          "params": [
+            {
+              "name": "index",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "label",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "ListError"
+              }
+            ]
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "remove_at",
+          "method_id": 3836199718,
+          "params": [
+            {
+              "name": "index",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "ListError"
+              }
+            ]
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "reset",
+          "method_id": 1102848221,
+          "params": [
+            {
+              "name": "count",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "drop_source",
+          "method_id": 1458868517,
+          "params": [
+            {
+              "name": "count",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "books",
+            "signal_id": 0,
+            "ty": {
+              "kind": "lazy",
+              "of": {
+                "kind": "named",
+                "of": "Item"
+              }
+            },
+            "computed": false,
+            "key": "id"
+          },
+          {
+            "name": "source",
+            "signal_id": 1,
+            "ty": {
+              "kind": "vec",
+              "of": {
+                "kind": "named",
+                "of": "Item"
+              }
+            },
+            "computed": false,
+            "key": "id"
+          },
+          {
+            "name": "evens",
+            "signal_id": 2,
+            "ty": {
+              "kind": "lazy",
+              "of": {
+                "kind": "named",
+                "of": "Item"
+              }
+            },
+            "computed": false,
+            "key": "id"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Live",
+      "type_id": 2283561935,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 4278346627,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "Live"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "connect",
+          "method_id": 2833119047,
+          "params": [
+            {
+              "name": "url",
+              "ty": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "protocols",
+              "ty": {
+                "kind": "vec",
+                "of": {
+                  "kind": "string"
+                }
+              }
+            },
+            {
+              "name": "headers",
+              "ty": {
+                "kind": "vec",
+                "of": {
+                  "kind": "named",
+                  "of": "Header"
+                }
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "string"
+              },
+              {
+                "kind": "named",
+                "of": "WsError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "send",
+          "method_id": 3140615973,
+          "params": [
+            {
+              "name": "message",
+              "ty": {
+                "kind": "named",
+                "of": "WsMessage"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "WsError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "read",
+          "method_id": 3360937095,
+          "params": [
+            {
+              "name": "count",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "vec",
+                "of": {
+                  "kind": "named",
+                  "of": "WsMessage"
+                }
+              },
+              {
+                "kind": "named",
+                "of": "WsError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "pulls",
+          "method_id": 373944381,
+          "params": [],
+          "returns": {
+            "kind": "u64"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "disconnect",
+          "method_id": 3028052057,
+          "params": [
+            {
+              "name": "code",
+              "ty": {
+                "kind": "u16"
+              }
+            },
+            {
+              "name": "reason",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "WsError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "abandon",
+          "method_id": 442968552,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": null
+    },
+    {
+      "name": "NoteSelection",
+      "type_id": 1600009373,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 2690657493,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "NoteSelection"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "toggle",
+          "method_id": 3459740201,
+          "params": [
+            {
+              "name": "row",
+              "ty": {
+                "kind": "named",
+                "of": "Note"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "select_all",
+          "method_id": 3144822257,
+          "params": [
+            {
+              "name": "rows",
+              "ty": {
+                "kind": "vec",
+                "of": {
+                  "kind": "named",
+                  "of": "Note"
+                }
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "clear",
+          "method_id": 3003433310,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "rows",
+            "signal_id": 0,
+            "ty": {
+              "kind": "vec",
+              "of": {
+                "kind": "named",
+                "of": "Note"
+              }
+            },
+            "computed": false,
+            "key": "id"
+          },
+          {
+            "name": "count",
+            "signal_id": 1,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": true,
+            "key": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "Notes",
+      "type_id": 267393898,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 1501663274,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "Notes"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "open",
+          "method_id": 1569583372,
+          "params": [
+            {
+              "name": "name",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "u32"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "add",
+          "method_id": 4154856983,
+          "params": [
+            {
+              "name": "title",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "named",
+                "of": "Note"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "add_with_id",
+          "method_id": 548719592,
+          "params": [
+            {
+              "name": "id",
+              "ty": {
+                "kind": "i64"
+              }
+            },
+            {
+              "name": "title",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "named",
+                "of": "Note"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "add_all",
+          "method_id": 3560460123,
+          "params": [
+            {
+              "name": "titles",
+              "ty": {
+                "kind": "vec",
+                "of": {
+                  "kind": "option",
+                  "of": {
+                    "kind": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "u32"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "toggle",
+          "method_id": 3784847992,
+          "params": [
+            {
+              "name": "id",
+              "ty": {
+                "kind": "i64"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "remove",
+          "method_id": 1850416348,
+          "params": [
+            {
+              "name": "id",
+              "ty": {
+                "kind": "i64"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "count",
+          "method_id": 969879859,
+          "params": [],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "u32"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "close_database",
+          "method_id": 291798064,
+          "params": [],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "notes",
+            "signal_id": 0,
+            "ty": {
+              "kind": "vec",
+              "of": {
+                "kind": "named",
+                "of": "Note"
+              }
+            },
+            "computed": false,
+            "key": "id"
+          },
+          {
+            "name": "version",
+            "signal_id": 1,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "Probe",
+      "type_id": 1339895889,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 3091442585,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "Probe"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "hang",
+          "method_id": 2565934241,
+          "params": [],
+          "returns": {
+            "kind": "u32"
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "wait",
+          "method_id": 1806385080,
+          "params": [
+            {
+              "name": "ms",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "u32"
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "ticks",
+          "method_id": 2661647757,
+          "params": [
+            {
+              "name": "count",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "stream",
+            "of": {
+              "kind": "u32"
+            }
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "ticks_then_fail",
+          "method_id": 2760534722,
+          "params": [
+            {
+              "name": "count",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "fail_at",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "code",
+              "ty": {
+                "kind": "i32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "stream",
+                "of": {
+                  "kind": "u32"
+                }
+              },
+              {
+                "kind": "named",
+                "of": "LabError"
+              }
+            ]
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "counters",
+          "method_id": 3281356056,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "ProbeCounters"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "reset",
+          "method_id": 3459920632,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": null
+    },
+    {
+      "name": "Profile",
+      "type_id": 3440849550,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 3985944190,
+          "params": [
+            {
+              "name": "name",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "named",
+            "of": "Profile"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "methods": [
+        {
+          "name": "visit",
+          "method_id": 2684943787,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "describe",
+          "method_id": 2689735081,
+          "params": [],
+          "returns": {
+            "kind": "string"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "name",
+            "signal_id": 0,
+            "ty": {
+              "kind": "string"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "visits",
+            "signal_id": 1,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "RecentTodos",
+      "type_id": 4082581847,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 4037664779,
+          "params": [
+            {
+              "name": "limit",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "named",
+            "of": "RecentTodos"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "methods": [
+        {
+          "name": "open",
+          "method_id": 1256058311,
+          "params": [
+            {
+              "name": "row",
+              "ty": {
+                "kind": "named",
+                "of": "Todo"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "rows",
+          "method_id": 2004171670,
+          "params": [],
+          "returns": {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "Todo"
+            }
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "latest",
+          "method_id": 3669697336,
+          "params": [],
+          "returns": {
+            "kind": "option",
+            "of": {
+              "kind": "named",
+              "of": "Todo"
+            }
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": null
+    },
+    {
+      "name": "Shelf",
+      "type_id": 2954451427,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 1318930775,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "Shelf"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "methods": [
+        {
+          "name": "stock",
+          "method_id": 3171842043,
+          "params": [
+            {
+              "name": "count",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "clear",
+          "method_id": 2360355720,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "label",
+            "signal_id": 0,
+            "ty": {
+              "kind": "string"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "items",
+            "signal_id": 1,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "Stress",
+      "type_id": 2946861445,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 1738086493,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "Stress"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "burst",
+          "method_id": 4105678085,
+          "params": [
+            {
+              "name": "mode",
+              "ty": {
+                "kind": "named",
+                "of": "StressMode"
+              }
+            },
+            {
+              "name": "transactions",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "start",
+          "method_id": 3071327107,
+          "params": [
+            {
+              "name": "mode",
+              "ty": {
+                "kind": "named",
+                "of": "StressMode"
+              }
+            },
+            {
+              "name": "per_second",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "StressError"
+              }
+            ]
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "stop",
+          "method_id": 3049840913,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "value",
+            "signal_id": 0,
+            "ty": {
+              "kind": "u64"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "progress",
+            "signal_id": 1,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null,
+            "no_coalesce": true
+          },
+          {
+            "name": "generated",
+            "signal_id": 2,
+            "ty": {
+              "kind": "u64"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "running",
+            "signal_id": 3,
+            "ty": {
+              "kind": "bool"
+            },
+            "computed": false,
+            "key": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "TodoSelection",
+      "type_id": 3633018333,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 4211495573,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "TodoSelection"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "toggle",
+          "method_id": 1516553193,
+          "params": [
+            {
+              "name": "row",
+              "ty": {
+                "kind": "named",
+                "of": "Todo"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "select_all",
+          "method_id": 2439932337,
+          "params": [
+            {
+              "name": "rows",
+              "ty": {
+                "kind": "vec",
+                "of": {
+                  "kind": "named",
+                  "of": "Todo"
+                }
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "clear",
+          "method_id": 374891038,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "rows",
+            "signal_id": 0,
+            "ty": {
+              "kind": "vec",
+              "of": {
+                "kind": "named",
+                "of": "Todo"
+              }
+            },
+            "computed": false,
+            "key": "id"
+          },
+          {
+            "name": "count",
+            "signal_id": 1,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": true,
+            "key": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "Todos",
+      "type_id": 4125302698,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 898850282,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "Todos"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "add",
+          "method_id": 3510467287,
+          "params": [
+            {
+              "name": "title",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "named",
+                "of": "Todo"
+              },
+              {
+                "kind": "named",
+                "of": "TodoError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "toggle",
+          "method_id": 482630968,
+          "params": [
+            {
+              "name": "id",
+              "ty": {
+                "kind": "uuid"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "remove",
+          "method_id": 2843166620,
+          "params": [
+            {
+              "name": "id",
+              "ty": {
+                "kind": "uuid"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "set_filter",
+          "method_id": 125311379,
+          "params": [
+            {
+              "name": "filter",
+              "ty": {
+                "kind": "named",
+                "of": "Filter"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "clear_done",
+          "method_id": 671066178,
+          "params": [],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "fill",
+          "method_id": 485055221,
+          "params": [
+            {
+              "name": "count",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "todos",
+            "signal_id": 0,
+            "ty": {
+              "kind": "vec",
+              "of": {
+                "kind": "named",
+                "of": "Todo"
+              }
+            },
+            "computed": false,
+            "key": "id"
+          },
+          {
+            "name": "filter",
+            "signal_id": 1,
+            "ty": {
+              "kind": "named",
+              "of": "Filter"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "visible",
+            "signal_id": 2,
+            "ty": {
+              "kind": "vec",
+              "of": {
+                "kind": "named",
+                "of": "Todo"
+              }
+            },
+            "computed": true,
+            "key": "id"
+          },
+          {
+            "name": "remaining",
+            "signal_id": 3,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": true,
+            "key": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "Watch",
+      "type_id": 3961941704,
+      "constructors": [],
+      "methods": [
+        {
+          "name": "id",
+          "method_id": 544587039,
+          "params": [],
+          "returns": {
+            "kind": "u32"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": null
+    },
+    {
+      "name": "Workshop",
+      "type_id": 3794521132,
+      "constructors": [
+        {
+          "name": "new",
+          "method_id": 1037473360,
+          "params": [],
+          "returns": {
+            "kind": "named",
+            "of": "Workshop"
+          },
+          "is_async": false,
+          "takes_ctx": true
+        }
+      ],
+      "methods": [
+        {
+          "name": "shelf",
+          "method_id": 4209846726,
+          "params": [
+            {
+              "name": "name",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "object",
+            "of": "Shelf"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "find",
+          "method_id": 2229381889,
+          "params": [
+            {
+              "name": "name",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "option",
+            "of": {
+              "kind": "object",
+              "of": "Shelf"
+            }
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "shelves",
+          "method_id": 2502942702,
+          "params": [],
+          "returns": {
+            "kind": "vec",
+            "of": {
+              "kind": "object",
+              "of": "Shelf"
+            }
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "open",
+          "method_id": 2770877222,
+          "params": [
+            {
+              "name": "name",
+              "ty": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "delay_ms",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "object",
+                "of": "Shelf"
+              },
+              {
+                "kind": "named",
+                "of": "WorkshopError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "merge",
+          "method_id": 2644472726,
+          "params": [
+            {
+              "name": "from",
+              "ty": {
+                "kind": "object",
+                "of": "Shelf"
+              }
+            },
+            {
+              "name": "onto",
+              "ty": {
+                "kind": "object",
+                "of": "Shelf"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "total",
+          "method_id": 3465418504,
+          "params": [
+            {
+              "name": "shelves",
+              "ty": {
+                "kind": "vec",
+                "of": {
+                  "kind": "object",
+                  "of": "Shelf"
+                }
+              }
+            }
+          ],
+          "returns": {
+            "kind": "u32"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "describe",
+          "method_id": 3469204015,
+          "params": [
+            {
+              "name": "shelf",
+              "ty": {
+                "kind": "option",
+                "of": {
+                  "kind": "object",
+                  "of": "Shelf"
+                }
+              }
+            }
+          ],
+          "returns": {
+            "kind": "string"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "run",
+          "method_id": 1376311391,
+          "params": [
+            {
+              "name": "steps",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "reporter",
+              "ty": {
+                "kind": "callback",
+                "of": "Reporter"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "u32"
+              },
+              {
+                "kind": "named",
+                "of": "ReportError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "burst",
+          "method_id": 2101281460,
+          "params": [
+            {
+              "name": "steps",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "reporter",
+              "ty": {
+                "kind": "callback",
+                "of": "Reporter"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "watch",
+          "method_id": 434397925,
+          "params": [
+            {
+              "name": "reporter",
+              "ty": {
+                "kind": "callback",
+                "of": "Reporter"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "object",
+            "of": "Watch"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "announce",
+          "method_id": 3979009973,
+          "params": [
+            {
+              "name": "line",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "u32"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "tally",
+          "method_id": 1453766884,
+          "params": [
+            {
+              "name": "shelf",
+              "ty": {
+                "kind": "object",
+                "of": "Shelf"
+              }
+            },
+            {
+              "name": "steps",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "stream",
+            "of": {
+              "kind": "u32"
+            }
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "walk",
+          "method_id": 201669039,
+          "params": [
+            {
+              "name": "steps",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "reporter",
+              "ty": {
+                "kind": "callback",
+                "of": "Reporter"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "stream",
+            "of": {
+              "kind": "u32"
+            }
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "watching",
+          "method_id": 1991894171,
+          "params": [],
+          "returns": {
+            "kind": "u32"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ],
+      "store": {
+        "signals": [
+          {
+            "name": "jobs",
+            "signal_id": 0,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          },
+          {
+            "name": "notes",
+            "signal_id": 1,
+            "ty": {
+              "kind": "u32"
+            },
+            "computed": false,
+            "key": null
+          }
+        ]
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "add",
+      "method_id": 1706347864,
+      "params": [
+        {
+          "name": "a",
+          "ty": {
+            "kind": "i32"
+          }
+        },
+        {
+          "name": "b",
+          "ty": {
+            "kind": "i32"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "i32"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "add_later",
+      "method_id": 3318355689,
+      "params": [
+        {
+          "name": "a",
+          "ty": {
+            "kind": "i32"
+          }
+        },
+        {
+          "name": "b",
+          "ty": {
+            "kind": "i32"
+          }
+        },
+        {
+          "name": "delay_ms",
+          "ty": {
+            "kind": "u32"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "i32"
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "area",
+      "method_id": 692042456,
+      "params": [
+        {
+          "name": "figure",
+          "ty": {
+            "kind": "named",
+            "of": "Figure"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "f64"
+          },
+          {
+            "kind": "named",
+            "of": "LabError"
+          }
+        ]
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "balances",
+      "method_id": 789933004,
+      "params": [],
+      "returns": {
+        "kind": "map",
+        "of": [
+          {
+            "kind": "named",
+            "of": "AccountId"
+          },
+          {
+            "kind": "named",
+            "of": "Price"
+          }
+        ]
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "configure_remote",
+      "method_id": 2844908838,
+      "params": [
+        {
+          "name": "config",
+          "ty": {
+            "kind": "named",
+            "of": "RemoteConfig"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "unit"
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "create_remote_todo",
+      "method_id": 1063473413,
+      "params": [
+        {
+          "name": "list",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "title",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "named",
+            "of": "RemoteTodo"
+          },
+          {
+            "kind": "named",
+            "of": "RemoteError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "db_cells",
+      "method_id": 835268517,
+      "params": [
+        {
+          "name": "int",
+          "ty": {
+            "kind": "i64"
+          }
+        },
+        {
+          "name": "real",
+          "ty": {
+            "kind": "f64"
+          }
+        },
+        {
+          "name": "text",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "blob",
+          "ty": {
+            "kind": "bytes"
+          }
+        },
+        {
+          "name": "none",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "string"
+            }
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "named",
+            "of": "DbCells"
+          },
+          {
+            "kind": "named",
+            "of": "DbError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "db_migrate",
+      "method_id": 790307173,
+      "params": [
+        {
+          "name": "name",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "broken",
+          "ty": {
+            "kind": "bool"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "u32"
+          },
+          {
+            "kind": "named",
+            "of": "DbError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "db_run",
+      "method_id": 2352929949,
+      "params": [
+        {
+          "name": "name",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "sql",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "u64"
+          },
+          {
+            "kind": "named",
+            "of": "DbError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "deposit",
+      "method_id": 318882633,
+      "params": [
+        {
+          "name": "account",
+          "ty": {
+            "kind": "named",
+            "of": "AccountId"
+          }
+        },
+        {
+          "name": "amount",
+          "ty": {
+            "kind": "named",
+            "of": "Price"
+          }
+        },
+        {
+          "name": "memo",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "at",
+          "ty": {
+            "kind": "timestamp"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "named",
+            "of": "Price"
+          },
+          {
+            "kind": "named",
+            "of": "LedgerError"
+          }
+        ]
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "draft<Note>",
+      "method_id": 518259234,
+      "params": [
+        {
+          "name": "title",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "Note"
+      },
+      "is_async": false,
+      "takes_ctx": false,
+      "generic": {
+        "of": "draft",
+        "args": [
+          {
+            "param": "T",
+            "ty": {
+              "kind": "named",
+              "of": "Note"
+            },
+            "inferred": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "draft<Todo>",
+      "method_id": 202629358,
+      "params": [
+        {
+          "name": "title",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "Todo"
+      },
+      "is_async": false,
+      "takes_ctx": false,
+      "generic": {
+        "of": "draft",
+        "args": [
+          {
+            "param": "T",
+            "ty": {
+              "kind": "named",
+              "of": "Todo"
+            },
+            "inferred": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "echo_account",
+      "method_id": 1930108020,
+      "params": [
+        {
+          "name": "id",
+          "ty": {
+            "kind": "named",
+            "of": "AccountId"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "AccountId"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "echo_cents",
+      "method_id": 2363256380,
+      "params": [
+        {
+          "name": "cents",
+          "ty": {
+            "kind": "named",
+            "of": "Cents"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "Cents"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "echo_composite",
+      "method_id": 1990046956,
+      "params": [
+        {
+          "name": "value",
+          "ty": {
+            "kind": "named",
+            "of": "Composite"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "Composite"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "echo_decimal",
+      "method_id": 2055217876,
+      "params": [
+        {
+          "name": "value",
+          "ty": {
+            "kind": "decimal"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "decimal"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "echo_figure",
+      "method_id": 4004675073,
+      "params": [
+        {
+          "name": "value",
+          "ty": {
+            "kind": "named",
+            "of": "Figure"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "Figure"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "echo_price",
+      "method_id": 3166448754,
+      "params": [
+        {
+          "name": "price",
+          "ty": {
+            "kind": "named",
+            "of": "Price"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "Price"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "echo_primitives",
+      "method_id": 1505392615,
+      "params": [
+        {
+          "name": "value",
+          "ty": {
+            "kind": "named",
+            "of": "Primitives"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "Primitives"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "echo_receipt",
+      "method_id": 95925355,
+      "params": [
+        {
+          "name": "receipt",
+          "ty": {
+            "kind": "named",
+            "of": "Receipt"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "Receipt"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "explode",
+      "method_id": 1267632338,
+      "params": [
+        {
+          "name": "reason",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "u32"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "explode_detached",
+      "method_id": 1401480409,
+      "params": [
+        {
+          "name": "reason",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "unit"
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "explode_later",
+      "method_id": 3852877131,
+      "params": [
+        {
+          "name": "delay_ms",
+          "ty": {
+            "kind": "u32"
+          }
+        },
+        {
+          "name": "reason",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "u32"
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "fail_later",
+      "method_id": 2541635956,
+      "params": [
+        {
+          "name": "delay_ms",
+          "ty": {
+            "kind": "u32"
+          }
+        },
+        {
+          "name": "code",
+          "ty": {
+            "kind": "i32"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "u32"
+          },
+          {
+            "kind": "named",
+            "of": "LabError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "file_delete",
+      "method_id": 1050942131,
+      "params": [
+        {
+          "name": "path",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "unit"
+          },
+          {
+            "kind": "named",
+            "of": "FsError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "file_list",
+      "method_id": 2545535088,
+      "params": [
+        {
+          "name": "dir",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "vec",
+            "of": {
+              "kind": "string"
+            }
+          },
+          {
+            "kind": "named",
+            "of": "FsError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "file_read",
+      "method_id": 553879452,
+      "params": [
+        {
+          "name": "path",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "bytes"
+          },
+          {
+            "kind": "named",
+            "of": "FsError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "file_write",
+      "method_id": 739135095,
+      "params": [
+        {
+          "name": "path",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "data",
+          "ty": {
+            "kind": "bytes"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "unit"
+          },
+          {
+            "kind": "named",
+            "of": "FsError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "greet",
+      "method_id": 93641134,
+      "params": [
+        {
+          "name": "name",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "string"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "http_get",
+      "method_id": 3168915942,
+      "params": [
+        {
+          "name": "url",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "timeout_ms",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "u32"
+            }
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "named",
+            "of": "HttpResponse"
+          },
+          {
+            "kind": "named",
+            "of": "HttpError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "kv_get",
+      "method_id": 97354711,
+      "params": [
+        {
+          "name": "key",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "option",
+            "of": {
+              "kind": "bytes"
+            }
+          },
+          {
+            "kind": "named",
+            "of": "StorageError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "kv_keys",
+      "method_id": 1273308749,
+      "params": [
+        {
+          "name": "prefix",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "vec",
+            "of": {
+              "kind": "string"
+            }
+          },
+          {
+            "kind": "named",
+            "of": "StorageError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "kv_put",
+      "method_id": 456357486,
+      "params": [
+        {
+          "name": "key",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "value",
+          "ty": {
+            "kind": "bytes"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "unit"
+          },
+          {
+            "kind": "named",
+            "of": "StorageError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "kv_remove",
+      "method_id": 3829411709,
+      "params": [
+        {
+          "name": "key",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "unit"
+          },
+          {
+            "kind": "named",
+            "of": "StorageError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "loadable_statement",
+      "method_id": 1947746143,
+      "params": [
+        {
+          "name": "account",
+          "ty": {
+            "kind": "named",
+            "of": "AccountId"
+          }
+        },
+        {
+          "name": "ready",
+          "ty": {
+            "kind": "bool"
+          }
+        },
+        {
+          "name": "limit",
+          "ty": {
+            "kind": "u32"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "LoadableEntries"
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "localized_greeting",
+      "method_id": 612342380,
+      "params": [
+        {
+          "name": "name",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "string"
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "newest<Note>",
+      "method_id": 1211459677,
+      "params": [
+        {
+          "name": "rows",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "Note"
+            }
+          }
+        }
+      ],
+      "returns": {
+        "kind": "option",
+        "of": {
+          "kind": "named",
+          "of": "Note"
+        }
+      },
+      "is_async": false,
+      "takes_ctx": false,
+      "generic": {
+        "of": "newest",
+        "args": [
+          {
+            "param": "T",
+            "ty": {
+              "kind": "named",
+              "of": "Note"
+            },
+            "inferred": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "newest<Todo>",
+      "method_id": 3111402365,
+      "params": [
+        {
+          "name": "rows",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "Todo"
+            }
+          }
+        }
+      ],
+      "returns": {
+        "kind": "option",
+        "of": {
+          "kind": "named",
+          "of": "Todo"
+        }
+      },
+      "is_async": false,
+      "takes_ctx": false,
+      "generic": {
+        "of": "newest",
+        "args": [
+          {
+            "param": "T",
+            "ty": {
+              "kind": "named",
+              "of": "Todo"
+            },
+            "inferred": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "open_account",
+      "method_id": 814885417,
+      "params": [
+        {
+          "name": "owner",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "AccountId"
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "owner_of",
+      "method_id": 2902293208,
+      "params": [
+        {
+          "name": "account",
+          "ty": {
+            "kind": "named",
+            "of": "AccountId"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "string"
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "parse_count",
+      "method_id": 474188100,
+      "params": [
+        {
+          "name": "text",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "u32"
+          },
+          {
+            "kind": "named",
+            "of": "LabError"
+          }
+        ]
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "ping",
+      "method_id": 1625714901,
+      "params": [],
+      "returns": {
+        "kind": "unit"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "recent_todos",
+      "method_id": 1772370932,
+      "params": [
+        {
+          "name": "rows",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "Todo"
+            }
+          }
+        },
+        {
+          "name": "limit",
+          "ty": {
+            "kind": "u32"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "object",
+        "of": "RecentTodos"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "run_background",
+      "method_id": 240850175,
+      "params": [
+        {
+          "name": "deadline_ms",
+          "ty": {
+            "kind": "u64"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "BackgroundReport"
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "sample_receipt",
+      "method_id": 3863254016,
+      "params": [],
+      "returns": {
+        "kind": "named",
+        "of": "Receipt"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "secret_get",
+      "method_id": 1066857306,
+      "params": [
+        {
+          "name": "key",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "option",
+            "of": {
+              "kind": "bytes"
+            }
+          },
+          {
+            "kind": "named",
+            "of": "StorageError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "secret_keys",
+      "method_id": 2560977874,
+      "params": [
+        {
+          "name": "prefix",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "vec",
+            "of": {
+              "kind": "string"
+            }
+          },
+          {
+            "kind": "named",
+            "of": "StorageError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "secret_put",
+      "method_id": 744536011,
+      "params": [
+        {
+          "name": "key",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "value",
+          "ty": {
+            "kind": "bytes"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "unit"
+          },
+          {
+            "kind": "named",
+            "of": "StorageError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "secret_remove",
+      "method_id": 2208772874,
+      "params": [
+        {
+          "name": "key",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "unit"
+          },
+          {
+            "kind": "named",
+            "of": "StorageError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "set_remote_done",
+      "method_id": 2715847263,
+      "params": [
+        {
+          "name": "list",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "id",
+          "ty": {
+            "kind": "u32"
+          }
+        },
+        {
+          "name": "done",
+          "ty": {
+            "kind": "bool"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "named",
+            "of": "RemoteTodo"
+          },
+          {
+            "kind": "named",
+            "of": "RemoteError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "set_ticker_failing",
+      "method_id": 653298321,
+      "params": [
+        {
+          "name": "failing",
+          "ty": {
+            "kind": "bool"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "unit"
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "sse_follow",
+      "method_id": 595453526,
+      "params": [
+        {
+          "name": "url",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "last_event_id",
+          "ty": {
+            "kind": "option",
+            "of": {
+              "kind": "string"
+            }
+          }
+        },
+        {
+          "name": "max",
+          "ty": {
+            "kind": "u32"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "named",
+            "of": "SseFollow"
+          },
+          {
+            "kind": "named",
+            "of": "SseError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    },
+    {
+      "name": "statement",
+      "method_id": 2915277762,
+      "params": [
+        {
+          "name": "account",
+          "ty": {
+            "kind": "named",
+            "of": "AccountId"
+          }
+        },
+        {
+          "name": "offset",
+          "ty": {
+            "kind": "u32"
+          }
+        },
+        {
+          "name": "limit",
+          "ty": {
+            "kind": "u32"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "named",
+        "of": "EntrySlice"
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "storage_status",
+      "method_id": 2032160921,
+      "params": [],
+      "returns": {
+        "kind": "named",
+        "of": "StorageStatus"
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "ticker_fetches",
+      "method_id": 3013824796,
+      "params": [],
+      "returns": {
+        "kind": "u32"
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "touch_feed",
+      "method_id": 655847297,
+      "params": [
+        {
+          "name": "revision",
+          "ty": {
+            "kind": "u32"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "unit"
+      },
+      "is_async": false,
+      "takes_ctx": true
+    },
+    {
+      "name": "version",
+      "method_id": 3468236427,
+      "params": [],
+      "returns": {
+        "kind": "string"
+      },
+      "is_async": false,
+      "takes_ctx": false
+    },
+    {
+      "name": "ws_echo",
+      "method_id": 726247541,
+      "params": [
+        {
+          "name": "url",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "messages",
+          "ty": {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "WsMessage"
+            }
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "WsMessage"
+            }
+          },
+          {
+            "kind": "named",
+            "of": "WsError"
+          }
+        ]
+      },
+      "is_async": true,
+      "takes_ctx": true
+    }
+  ],
+  "ports": [
+    {
+      "name": "Clock",
+      "port_id": 3449406606,
+      "kind": "sync",
+      "methods": [
+        {
+          "name": "now_ms",
+          "method_id": 3435744656,
+          "params": [],
+          "returns": {
+            "kind": "i64"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "monotonic_ns",
+          "method_id": 749909183,
+          "params": [],
+          "returns": {
+            "kind": "u64"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Connectivity",
+      "port_id": 535820031,
+      "kind": "event",
+      "methods": [
+        {
+          "name": "changed",
+          "method_id": 3035799568,
+          "params": [
+            {
+              "name": "online",
+              "ty": {
+                "kind": "bool"
+              }
+            },
+            {
+              "name": "kind",
+              "ty": {
+                "kind": "named",
+                "of": "NetKind"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Db",
+      "port_id": 1436473986,
+      "kind": "async",
+      "methods": [
+        {
+          "name": "open",
+          "method_id": 4000261851,
+          "params": [
+            {
+              "name": "name",
+              "ty": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "migrations",
+              "ty": {
+                "kind": "vec",
+                "of": {
+                  "kind": "named",
+                  "of": "DbMigration"
+                }
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "named",
+                "of": "DbOpened"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "execute",
+          "method_id": 4289474314,
+          "params": [
+            {
+              "name": "db",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "sql",
+              "ty": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "params",
+              "ty": {
+                "kind": "vec",
+                "of": {
+                  "kind": "named",
+                  "of": "DbValue"
+                }
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "named",
+                "of": "DbExecuted"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "query",
+          "method_id": 978185981,
+          "params": [
+            {
+              "name": "db",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "sql",
+              "ty": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "params",
+              "ty": {
+                "kind": "vec",
+                "of": {
+                  "kind": "named",
+                  "of": "DbValue"
+                }
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "named",
+                "of": "DbRows"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "begin",
+          "method_id": 2922095656,
+          "params": [
+            {
+              "name": "db",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "u32"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "commit",
+          "method_id": 4167488942,
+          "params": [
+            {
+              "name": "tx",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "rollback",
+          "method_id": 1048257715,
+          "params": [
+            {
+              "name": "tx",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "close",
+          "method_id": 3728590829,
+          "params": [
+            {
+              "name": "db",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "DbError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Diagnostics",
+      "port_id": 2875772284,
+      "kind": "sync",
+      "methods": [
+        {
+          "name": "panicked",
+          "method_id": 3172236846,
+          "params": [
+            {
+              "name": "report",
+              "ty": {
+                "kind": "named",
+                "of": "PanicReport"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Fs",
+      "port_id": 1319324843,
+      "kind": "async",
+      "methods": [
+        {
+          "name": "read",
+          "method_id": 33406532,
+          "params": [
+            {
+              "name": "path",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "bytes"
+              },
+              {
+                "kind": "named",
+                "of": "FsError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "write",
+          "method_id": 1802556543,
+          "params": [
+            {
+              "name": "path",
+              "ty": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "data",
+              "ty": {
+                "kind": "bytes"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "FsError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "delete",
+          "method_id": 2836038251,
+          "params": [
+            {
+              "name": "path",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "FsError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "list",
+          "method_id": 1337624184,
+          "params": [
+            {
+              "name": "dir",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "vec",
+                "of": {
+                  "kind": "string"
+                }
+              },
+              {
+                "kind": "named",
+                "of": "FsError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Http",
+      "port_id": 515815688,
+      "kind": "async",
+      "methods": [
+        {
+          "name": "request",
+          "method_id": 1796529958,
+          "params": [
+            {
+              "name": "req",
+              "ty": {
+                "kind": "named",
+                "of": "HttpRequest"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "named",
+                "of": "HttpResponse"
+              },
+              {
+                "kind": "named",
+                "of": "HttpError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Kv",
+      "port_id": 1401491725,
+      "kind": "async",
+      "methods": [
+        {
+          "name": "get",
+          "method_id": 4031822618,
+          "params": [
+            {
+              "name": "key",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "option",
+                "of": {
+                  "kind": "bytes"
+                }
+              },
+              {
+                "kind": "named",
+                "of": "StorageError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "set",
+          "method_id": 1648523350,
+          "params": [
+            {
+              "name": "key",
+              "ty": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "value",
+              "ty": {
+                "kind": "bytes"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "StorageError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "delete",
+          "method_id": 1621329593,
+          "params": [
+            {
+              "name": "key",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "StorageError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "list",
+          "method_id": 854708282,
+          "params": [
+            {
+              "name": "prefix",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "vec",
+                "of": {
+                  "kind": "string"
+                }
+              },
+              {
+                "kind": "named",
+                "of": "StorageError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Lifecycle",
+      "port_id": 2176888788,
+      "kind": "event",
+      "methods": [
+        {
+          "name": "changed",
+          "method_id": 197666153,
+          "params": [
+            {
+              "name": "state",
+              "ty": {
+                "kind": "named",
+                "of": "AppState"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Locale",
+      "port_id": 3427178530,
+      "kind": "sync",
+      "methods": [
+        {
+          "name": "hello",
+          "method_id": 2653571305,
+          "params": [],
+          "returns": {
+            "kind": "string"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Log",
+      "port_id": 1465905738,
+      "kind": "sync",
+      "methods": [
+        {
+          "name": "log",
+          "method_id": 3567081033,
+          "params": [
+            {
+              "name": "level",
+              "ty": {
+                "kind": "u8"
+              }
+            },
+            {
+              "name": "target",
+              "ty": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "message",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Reporter",
+      "port_id": 283685973,
+      "kind": "callback",
+      "methods": [
+        {
+          "name": "progress",
+          "method_id": 980929485,
+          "params": [
+            {
+              "name": "done",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "total",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false,
+          "coalesce": true
+        },
+        {
+          "name": "note",
+          "method_id": 2267081470,
+          "params": [
+            {
+              "name": "line",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        },
+        {
+          "name": "confirm",
+          "method_id": 513970266,
+          "params": [
+            {
+              "name": "question",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "bool"
+              },
+              {
+                "kind": "named",
+                "of": "ReportError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Rng",
+      "port_id": 622025717,
+      "kind": "sync",
+      "methods": [
+        {
+          "name": "fill",
+          "method_id": 674412781,
+          "params": [
+            {
+              "name": "len",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "bytes"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "SecureStore",
+      "port_id": 3223280618,
+      "kind": "async",
+      "methods": [
+        {
+          "name": "get",
+          "method_id": 1459842927,
+          "params": [
+            {
+              "name": "key",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "option",
+                "of": {
+                  "kind": "bytes"
+                }
+              },
+              {
+                "kind": "named",
+                "of": "StorageError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "set",
+          "method_id": 3911057787,
+          "params": [
+            {
+              "name": "key",
+              "ty": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "value",
+              "ty": {
+                "kind": "bytes"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "StorageError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "delete",
+          "method_id": 3581785314,
+          "params": [
+            {
+              "name": "key",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "StorageError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "list",
+          "method_id": 4122654921,
+          "params": [
+            {
+              "name": "prefix",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "vec",
+                "of": {
+                  "kind": "string"
+                }
+              },
+              {
+                "kind": "named",
+                "of": "StorageError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Sse",
+      "port_id": 1976758041,
+      "kind": "async",
+      "methods": [
+        {
+          "name": "open",
+          "method_id": 3221437460,
+          "params": [
+            {
+              "name": "url",
+              "ty": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "headers",
+              "ty": {
+                "kind": "vec",
+                "of": {
+                  "kind": "named",
+                  "of": "Header"
+                }
+              }
+            },
+            {
+              "name": "last_event_id",
+              "ty": {
+                "kind": "option",
+                "of": {
+                  "kind": "string"
+                }
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "u32"
+              },
+              {
+                "kind": "named",
+                "of": "SseError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "next",
+          "method_id": 1077267437,
+          "params": [
+            {
+              "name": "stream",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "max",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "vec",
+                "of": {
+                  "kind": "named",
+                  "of": "SseEvent"
+                }
+              },
+              {
+                "kind": "named",
+                "of": "SseError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "close",
+          "method_id": 1543384200,
+          "params": [
+            {
+              "name": "stream",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "SseError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "Timer",
+      "port_id": 12766681,
+      "kind": "sync",
+      "methods": [
+        {
+          "name": "set",
+          "method_id": 2453304940,
+          "params": [
+            {
+              "name": "timer_id",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "delay_ms",
+              "ty": {
+                "kind": "u64"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "unit"
+          },
+          "is_async": false,
+          "takes_ctx": false
+        }
+      ]
+    },
+    {
+      "name": "WebSocket",
+      "port_id": 1938340191,
+      "kind": "async",
+      "methods": [
+        {
+          "name": "connect",
+          "method_id": 2202498616,
+          "params": [
+            {
+              "name": "url",
+              "ty": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "protocols",
+              "ty": {
+                "kind": "vec",
+                "of": {
+                  "kind": "string"
+                }
+              }
+            },
+            {
+              "name": "headers",
+              "ty": {
+                "kind": "vec",
+                "of": {
+                  "kind": "named",
+                  "of": "Header"
+                }
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "named",
+                "of": "WsOpened"
+              },
+              {
+                "kind": "named",
+                "of": "WsError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "send",
+          "method_id": 293282136,
+          "params": [
+            {
+              "name": "conn",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "message",
+              "ty": {
+                "kind": "named",
+                "of": "WsMessage"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "WsError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "receive",
+          "method_id": 2402414735,
+          "params": [
+            {
+              "name": "conn",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "max",
+              "ty": {
+                "kind": "u32"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "vec",
+                "of": {
+                  "kind": "named",
+                  "of": "WsMessage"
+                }
+              },
+              {
+                "kind": "named",
+                "of": "WsError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        },
+        {
+          "name": "close",
+          "method_id": 1612008326,
+          "params": [
+            {
+              "name": "conn",
+              "ty": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "code",
+              "ty": {
+                "kind": "u16"
+              }
+            },
+            {
+              "name": "reason",
+              "ty": {
+                "kind": "string"
+              }
+            }
+          ],
+          "returns": {
+            "kind": "result",
+            "of": [
+              {
+                "kind": "unit"
+              },
+              {
+                "kind": "named",
+                "of": "WsError"
+              }
+            ]
+          },
+          "is_async": true,
+          "takes_ctx": false
+        }
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "name": "feed",
+      "query_id": 22701731,
+      "kind": "query",
+      "key": "feed/{even_only}",
+      "params": [
+        {
+          "name": "even_only",
+          "ty": {
+            "kind": "bool"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "Item"
+            }
+          },
+          {
+            "kind": "named",
+            "of": "ListError"
+          }
+        ]
+      },
+      "stale_ms": 60000,
+      "persist": false,
+      "idempotent": false,
+      "infinite": {
+        "cursor": {
+          "kind": "string"
+        },
+        "item_key": "id"
+      }
+    },
+    {
+      "name": "patch_remote_todo",
+      "query_id": 2013160766,
+      "kind": "mutation",
+      "key": "remote-todos:{list}",
+      "params": [
+        {
+          "name": "list",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "id",
+          "ty": {
+            "kind": "u32"
+          }
+        },
+        {
+          "name": "done",
+          "ty": {
+            "kind": "bool"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "named",
+            "of": "RemoteTodo"
+          },
+          {
+            "kind": "named",
+            "of": "RemoteError"
+          }
+        ]
+      },
+      "stale_ms": null,
+      "persist": false,
+      "idempotent": false
+    },
+    {
+      "name": "post_remote_todo",
+      "query_id": 1552215762,
+      "kind": "mutation",
+      "key": "remote-todos:{list}",
+      "params": [
+        {
+          "name": "list",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "title",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "named",
+            "of": "RemoteTodo"
+          },
+          {
+            "kind": "named",
+            "of": "RemoteError"
+          }
+        ]
+      },
+      "stale_ms": null,
+      "persist": false,
+      "idempotent": true
+    },
+    {
+      "name": "remote_todos",
+      "query_id": 712589671,
+      "kind": "query",
+      "key": "remote-todos:{list}",
+      "params": [
+        {
+          "name": "list",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "vec",
+            "of": {
+              "kind": "named",
+              "of": "RemoteTodo"
+            }
+          },
+          {
+            "kind": "named",
+            "of": "RemoteError"
+          }
+        ]
+      },
+      "stale_ms": 30000,
+      "persist": true,
+      "idempotent": false
+    },
+    {
+      "name": "roster",
+      "query_id": 2856451788,
+      "kind": "query",
+      "key": "roster:{team}",
+      "params": [
+        {
+          "name": "team",
+          "ty": {
+            "kind": "u32"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "vec",
+            "of": {
+              "kind": "string"
+            }
+          },
+          {
+            "kind": "named",
+            "of": "RemoteError"
+          }
+        ]
+      },
+      "stale_ms": 30000,
+      "persist": false,
+      "idempotent": false
+    },
+    {
+      "name": "save_note",
+      "query_id": 2935370694,
+      "kind": "mutation",
+      "key": "notes:{list}",
+      "params": [
+        {
+          "name": "list",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "text",
+          "ty": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "bool"
+          },
+          {
+            "kind": "named",
+            "of": "RemoteError"
+          }
+        ]
+      },
+      "stale_ms": null,
+      "persist": false,
+      "idempotent": true
+    },
+    {
+      "name": "tag_note",
+      "query_id": 3106031713,
+      "kind": "mutation",
+      "key": "notes:{list}",
+      "params": [
+        {
+          "name": "list",
+          "ty": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "id",
+          "ty": {
+            "kind": "u32"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "bool"
+          },
+          {
+            "kind": "named",
+            "of": "RemoteError"
+          }
+        ]
+      },
+      "stale_ms": null,
+      "persist": false,
+      "idempotent": true
+    },
+    {
+      "name": "ticker",
+      "query_id": 954090513,
+      "kind": "query",
+      "key": "ticker",
+      "params": [],
+      "returns": {
+        "kind": "result",
+        "of": [
+          {
+            "kind": "u32"
+          },
+          {
+            "kind": "named",
+            "of": "TickError"
+          }
+        ]
+      },
+      "stale_ms": null,
+      "persist": false,
+      "idempotent": false,
+      "interval_ms": 1000
+    }
+  ]
+}

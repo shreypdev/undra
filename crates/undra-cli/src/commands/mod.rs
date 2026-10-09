@@ -5,6 +5,7 @@ pub(crate) mod bindgen;
 pub(crate) mod build;
 pub(crate) mod dev;
 pub(crate) mod doctor;
+pub(crate) mod drift;
 pub(crate) mod init;
 pub(crate) mod schema;
 pub(crate) mod symbolicate;

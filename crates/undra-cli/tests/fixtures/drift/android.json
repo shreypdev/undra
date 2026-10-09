@@ -1,0 +1,33 @@
+{
+  "format": "undra.recording",
+  "version": 1,
+  "schema_hash": "0x3c17cd5f59bb6f68",
+  "source": "test",
+  "platform": "android",
+  "events": [
+    {"t":4,"kind":"call","target":"constructor","type":4125302698,"method":898850282,"call":1,"args":""},
+    {"t":8,"kind":"reply","call":1,"status":"ok","body":"0000000100000000"},
+    {"t":12,"kind":"observe","handle":"0x0000000001000000","signal":4294967295,"on":true},
+    {"t":16,"kind":"change_set","txn":6,"entries":[{"handle":"0x0000000001000000","signal":0,"op":"full","value":"00000000"},{"handle":"0x0000000001000000","signal":1,"op":"full","value":"0000"},{"handle":"0x0000000001000000","signal":2,"op":"full","value":"00000000"},{"handle":"0x0000000001000000","signal":3,"op":"full","value":"00000000"}]},
+    {"t":20,"kind":"call","target":"method","handle":"0x0000000001000000","method":3510467287,"call":2,"args":"08000000427579206d696c6b"},
+    {"t":24,"kind":"change_set","txn":7,"entries":[{"handle":"0x0000000001000000","signal":0,"op":"patch","value":"0100000000000000000000000000000001000000000000000008000000427579206d696c6b00"},{"handle":"0x0000000001000000","signal":2,"op":"patch","value":"0100000000000000000000000000000001000000000000000008000000427579206d696c6b00"},{"handle":"0x0000000001000000","signal":3,"op":"full","value":"01000000"}]},
+    {"t":28,"kind":"reply","call":2,"status":"ok","body":"0000000000000001000000000000000008000000427579206d696c6b00"},
+    {"t":32,"kind":"call","target":"method","handle":"0x0000000001000000","method":3510467287,"call":3,"args":"0c00000057616c6b2074686520646f67"},
+    {"t":36,"kind":"change_set","txn":8,"entries":[{"handle":"0x0000000001000000","signal":0,"op":"patch","value":"010000000001000000000000000000000200000000000000000c00000057616c6b2074686520646f6700"},{"handle":"0x0000000001000000","signal":2,"op":"patch","value":"010000000001000000000000000000000200000000000000000c00000057616c6b2074686520646f6700"},{"handle":"0x0000000001000000","signal":3,"op":"full","value":"02000000"}]},
+    {"t":40,"kind":"reply","call":3,"status":"ok","body":"000000000000000200000000000000000c00000057616c6b2074686520646f6700"},
+    {"t":44,"kind":"call","target":"method","handle":"0x0000000001000000","method":3510467287,"call":4,"args":"0e00000057726974652074686520646f6373"},
+    {"t":48,"kind":"change_set","txn":9,"entries":[{"handle":"0x0000000001000000","signal":0,"op":"patch","value":"010000000002000000000000000000000300000000000000000e00000057726974652074686520646f637300"},{"handle":"0x0000000001000000","signal":2,"op":"patch","value":"010000000002000000000000000000000300000000000000000e00000057726974652074686520646f637300"},{"handle":"0x0000000001000000","signal":3,"op":"full","value":"03000000"}]},
+    {"t":52,"kind":"reply","call":4,"status":"ok","body":"000000000000000300000000000000000e00000057726974652074686520646f637300"},
+    {"t":56,"kind":"call","target":"function","method":2844908838,"call":5,"args":"1000000068747470733a2f2f6170692e74657374"},
+    {"t":60,"kind":"reply","call":5,"status":"ok","body":""},
+    {"t":64,"kind":"call","target":"function","method":1063473413,"call":6,"args":"05000000696e626f780400000057616c6b"},
+    {"t":68,"kind":"port_call","port":3449406606,"method":3435744656,"call":1,"args":"","name":"Clock.now_ms"},
+    {"t":72,"kind":"port_reply","call":1,"status":"ok","body":"502be6cf8b010000"},
+    {"t":76,"kind":"port_call","port":622025717,"method":674412781,"call":2,"args":"10000000","name":"Rng.fill"},
+    {"t":80,"kind":"port_reply","call":2,"status":"ok","body":"10000000404142434445464748494a4b4c4d4e4f"},
+    {"t":84,"kind":"port_call","port":515815688,"method":1796529958,"call":3,"args":"01002200000068747470733a2f2f6170692e746573742f6c697374732f696e626f782f746f646f73020000000c000000436f6e74656e742d54797065100000006170706c69636174696f6e2f6a736f6e0f0000004964656d706f74656e63792d4b65792400000034303431343234332d343434352d343634372d383834392d34613462346334643465346601100000007b227469746c65223a2257616c6b227d00","name":"Http.request"},
+    {"t":88,"kind":"port_reply","call":3,"status":"ok","body":"f401000000000f00000074727920616761696e206c61746572"},
+    {"t":92,"kind":"reply","call":6,"status":"error","body":"0200f401"},
+    {"t":96,"kind":"release","handle":"0x0000000001000000"}
+  ]
+}

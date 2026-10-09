@@ -16,6 +16,7 @@
 //! | `undra doctor` | checks the toolchains and SDKs, with the fix for each gap |
 //! | `undra adopt` | adds a core to an existing app without touching the app's project files |
 //! | `undra upgrade` | moves a project to this `undra`'s version: every pin in step, the bindings regenerated, the migration notes of each release crossed |
+//! | `undra drift` | compares recordings of one flow made on different platforms (`undra dev --record`) and reports where the hosts diverged at the boundary: calls, port answers, events, observes, final state |
 //!
 //! # How a project is put together
 //!
@@ -136,5 +137,6 @@ fn dispatch(cli: &Cli, sys: &dyn sys::Sys, ui: Ui) -> Result<bool> {
         Command::Doctor(args) => commands::doctor::run(&env, args),
         Command::Adopt(args) => commands::adopt::run(&env, args).map(|()| true),
         Command::Upgrade(args) => commands::upgrade::run(&env, args).map(|()| true),
+        Command::Drift(args) => commands::drift::run(&env, args),
     }
 }
