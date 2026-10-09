@@ -749,6 +749,14 @@ review; nothing is tagged. Merging it accepts ADR-066 (its status line stays Pro
 | **ci-wall-time** | The Gate took 26 to 31 minutes; the macOS pool and four serial jobs were the critical path. Each is two jobs side by side (Bazel recent rulesets and minimums on Linux and macOS, the Rust workspace and the CLI, the Swift runtime and the Xcode projects, Two cores Debug and Release), the Bazel jobs over a disk cache, macOS jobs listed first; every job still runs on every change; `ci-local.rb` knows the ids (`.10x/decisions/devops/ci-wall-time.md`; the pull request's own Gate is the measurement). |
 | **docs** | The landing page's 1.2 section (the real report shape) within the 350-word budget, the roadmap's "No drift (1.2)" group and the adapter-conformance item under Next with its evidence, the architecture page (thirteen crates, "Where drift is caught", what Undra leaves out), the README, the post `blog/undra-1-2-no-drift/`, the CLI and testing pages, `llms.txt`, the search index. |
 
+A whole-branch integration review followed (`.10x/reviews/2026-10-09-undra-1-2-integration-review.md`): four Mediums
+closed on the branch (the main-actor compile pass of ADR-066 was skipping in the Gate, because the macOS image's default
+Xcode is 16.4 with Swift 6.1: the `macos` job now runs that one test on the image's newest stable Xcode and fails on a
+reported skip, so the first Gate run on the branch is also that step's first proof; the post's Swift registration line
+did not compile; the architect record listed ignores the code does not have; the design's sentence about where the
+requirement's origin is written), four Lows recorded (the curated samples abbreviate a line; one timing blends a CI
+duration with a host measurement; the handoff's branch name; two words in the design's drift row).
+
 Totals measured on the integrated tree (host): undra-testkit 50, undra-cli `--test drift` 5 and `--test cli` 10, the playground's
 drift test 1; the pieces' own runs: undra-bindgen 218 (typecheck_swift 5 with the main-actor pass run), cookbook 56 + 1,
 `bindgen_schema` 11, the playground's iOS app built for the simulator, `bazel test //:bindings_check` green. Not run on
