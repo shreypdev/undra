@@ -18,11 +18,16 @@ aligned by (constructor type, ordinal of its reply) across sessions. Built-in ig
 Clock and Rng replies, Timer arguments, the Idempotency-Key header's value, timestamps and uuids where the schema says
 a field is one.
 
-**The Swift shape.** The core calls a port from its own thread, so a `@MainActor` protocol is not an option; an app
-class under default main-actor isolation cannot satisfy a nonisolated synchronous requirement without `nonisolated`.
-The closure form is the answer that needs no annotation: a `@Sendable` closure is nonisolated in every mode. The
-protocol form stays for ports with state worth a type; whatever annotation the reproduction shows to help a plain
-conformer is emitted only if a 1.1 conformer keeps compiling under the default mode. The compile test runs both.
+**The Swift shape.** The core calls a port from its own thread, so a `@MainActor` protocol is not an option. The
+reproduction (Xcode 26.6) corrected the hypothesis: under default main-actor isolation a class conforming to the
+generated protocol (which refines `Sendable`) is inferred nonisolated, so a stateless conformer compiles as written;
+what fails is mutable state in a `Sendable` class, a read of main-actor state from the witness, and the generated
+adapter when its file is compiled inside a module built in that mode (the mode made the un-annotated requirements
+main-actor isolated). So every requirement is `nonisolated` (per requirement, not `nonisolated protocol`, which needs
+Swift 6.1 where the generated package promises 6.0), and the closure form is the answer that needs no conformance at
+all: a `@Sendable` closure is nonisolated in every mode, an async one reaches main-actor state through
+`MainActor.run`, and a sync one that tries is refused with a clear diagnostic. A 1.1 conformer keeps compiling under
+the default mode. The compile test runs both forms in both modes.
 
 **Failure modes watched.** A host that constructs stores in another order reads as drift (the point; the report names
 the handle it could not align). Two recordings of different schema hashes are refused with both hashes. A devtools
