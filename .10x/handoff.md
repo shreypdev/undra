@@ -1,4 +1,4 @@
-# Handoff - Undra 1.2 (no drift) is prepared as one pull request (2026-10-09)
+# Handoff - Undra 1.2 (no drift) landed and tagged (2026-10-09)
 
 The product is **Undra** (renamed from the working name Keel on 2026-09-30, ADR-030). `main` is
 `shreypdev/undra`; the site is https://shreypdev.github.io/undra/.
@@ -56,8 +56,8 @@ findings not taken on are U2 (Xcode 27, needs the reporter's crash log) and U6 (
 
 **After checkpoint 35 (status checkpoint 36):** the single Gate check (#16), no Homebrew tap (#17), no em-dash in any tracked file with a CI check (#18) and the launch polish (#19) are on `main` (`3797ae7`). Rules that came out of them: one required check, `All green`, the Gate's last job; no em-dash (U+2014) in anything tracked, in a commit message or in a pull request (a plain hyphen is fine); a script that lists files and rewrites them makes its whole plan first; a test that follows one handle waits for the other on its own condition.
 
-**Undra 1.2 (2026-10-09, status checkpoint 41).** The no-drift release is one pull request (`wt/undra-1-2`), open for
-the founder's review and not tagged: `undra drift` (recordings of one flow made on different platforms compared at the
+**Undra 1.2 (2026-10-09, status checkpoints 41 and 42).** The no-drift release landed as #43 (`44fb857`) and `v1.2.0` is
+tagged; the publish job waits for the founder's environment approval, then the Release smoke runs. What it holds: `undra drift` (recordings of one flow made on different platforms compared at the
 boundary, with the arguments decoded through the schema; `crates/undra-testkit/src/{decode,drift}.rs`, the CLI command, the
 playground's own three-platform test), ADR-066 (Proposed: every generated Swift port requirement `nonisolated`, a builder
 from `@Sendable` closures beside the adapter, a compile test under `.defaultIsolation(MainActor.self)` with Swift 6.2 or
