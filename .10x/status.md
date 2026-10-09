@@ -768,3 +768,11 @@ adapters (the five SSE adapters merge the core's headers differently; the JDK Ht
 Swift passes them), after a rule in the SPEC says which header wins. Also recorded: a multi-client dev server (one
 `undra dev` serves one app; a second server on another port records the second platform); the React Native host reports
 `web` as its platform in a recording.
+
+### Checkpoint 42 (2026-10-09) - Undra 1.2 landed and tagged
+
+Pull request #43 landed on `main` as `44fb857` through `scripts/wt.sh merge undra-1-2` (the Gate green on `5df88f7`, 23
+minutes), and `v1.2.0` was tagged from it the same night on the founder's instruction. ADR-066 is Accepted with the landing.
+Deviation, recorded as 1.1.0's was: no `1.2.0-rc.1` rehearsal; the distribution channels are unchanged since 1.0.0 and the
+Release smoke workflow on `v1.2.0` is the check. The Release workflow's publish job waits for the founder's approval of the
+`release` environment, as it did for 1.1.0.

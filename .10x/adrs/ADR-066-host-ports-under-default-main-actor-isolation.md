@@ -1,6 +1,6 @@
 # ADR-066: Host ports under default main-actor isolation: nonisolated requirements and a builder from closures
 
-Status: **Proposed** (2026-10-09). Part of the 1.2 no-drift design (`.10x/specs/2026-10-09-no-drift-design.md`).
+Status: **Accepted** (2026-10-09, with the landing of the 1.2 pull request #43). Part of the 1.2 no-drift design (`.10x/specs/2026-10-09-no-drift-design.md`).
 Changes a generated public Swift shape (`Ports.swift`: the port protocols and a second `<name>PortImpl` beside the
 adapter). Nothing on the wire, in the ABI or in the schema changes; the Kotlin and TypeScript shapes are untouched.
 
