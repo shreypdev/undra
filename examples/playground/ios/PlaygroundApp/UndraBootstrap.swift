@@ -98,6 +98,11 @@ enum UndraBootstrap {
             .removing(portId: fnv1a32("port.Connectivity"))
             .replacing(PlaygroundNetwork.shared)
             .replacing(KvAdapter(directory: store))
+            // The app's own port (ADR-049 decision 2) from closures (ADR-066): nothing conforms, and the closure
+            // runs on the core's thread. `Foundation.Locale`: the generated `Locale` protocol shares the name.
+            .replacing(PortImplAdapter(portId: UndraIds.Ports.Locale.portId, impl: localePortImpl(hello: {
+                Foundation.Locale.current.language.languageCode?.identifier == "fr" ? "Bonjour" : "Hello"
+            })))
         #if DEBUG
         if let url = ProcessInfo.processInfo.environment["UNDRA_DEV_URL"], !url.isEmpty {
             devURL = url
