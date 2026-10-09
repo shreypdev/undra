@@ -1920,3 +1920,98 @@ fn decimal_maps_to_each_languages_exact_type() {
     assert!(ts.contains("export const PriceCodec: Codec<Price> = decimalCodec as Codec<Price>;"));
     assert!(!ts.contains("Map<Decimal"), "a decimal is never a map key");
 }
+
+// ----- the Swift port builder from closures (ADR-066) ----------------------------------------
+
+/// A port whose methods are named like the locals of a method-table entry (`args`, `r`, `result`,
+/// `error`) and like the adapter's parameter (`impl`): the builder names its closures after the
+/// methods, so the entry's own locals step aside and every call reaches the closure.
+fn awkward_port() -> Schema {
+    use undra_meta::PortKind;
+    let mut s = Schema::new("awkward");
+    s.enums.push(common::error_def(
+        "AwkwardError",
+        "",
+        vec![common::with_message(common::unit_variant("Bad", 0), "bad")],
+    ));
+    s.ports.push(common::port(
+        "Awkward",
+        "",
+        PortKind::Sync,
+        vec![
+            common::port_method(
+                "Awkward",
+                "args",
+                "",
+                vec![common::param("args", TypeRef::U8)],
+                TypeRef::U8,
+                false,
+            ),
+            common::port_method(
+                "Awkward",
+                "r",
+                "",
+                vec![common::param("r", TypeRef::String)],
+                TypeRef::Unit,
+                false,
+            ),
+            common::port_method("Awkward", "result", "", vec![], TypeRef::I64, false),
+            common::port_method(
+                "Awkward",
+                "error",
+                "",
+                vec![common::param("error", TypeRef::Bool)],
+                TypeRef::result(TypeRef::Unit, TypeRef::named("AwkwardError")),
+                false,
+            ),
+            common::port_method("Awkward", "impl", "", vec![], TypeRef::Unit, false),
+        ],
+    ));
+    s
+}
+
+#[test]
+fn the_swift_port_builder_never_shadows_a_closure_named_like_an_entry_local() {
+    let schema = awkward_port();
+    let generator = common::generator_for("awkward", &schema);
+    let swift = generator.swift(&schema).unwrap();
+    let ports = file(&swift, "Ports.swift");
+    assert!(ports.contains(
+        "public func awkwardPortImpl(\n    args: @escaping @Sendable (_ args: UInt8) -> UInt8,\n    r: @escaping @Sendable (_ r: String) -> Void,\n    result: @escaping @Sendable () -> Int64,\n    error: @escaping @Sendable (_ error: Bool) throws(AwkwardError) -> Void,\n    impl: @escaping @Sendable () -> Void\n) -> PortImpl"
+    ), "the builder's signature:\n{ports}");
+    let builder = ports.split("impl: @escaping").nth(1).unwrap();
+    for expected in [
+        // `args`: the entry's argument bytes and the method's own parameter both step aside.
+        "{ args_ in\n            var r = UndraReader(args_)\n            let args__ = try UInt8.undraDecode(&r)\n            try r.finish()\n            let result = args(args__)\n            return result.undraEncoded()",
+        // `r`: the reader steps aside.
+        "var r_ = UndraReader(args)\n            let r__ = try String.undraDecode(&r_)\n            try r_.finish()\n            r(r__)\n            return []",
+        // `result`: the local holding what the closure returned steps aside.
+        "let result_ = result()\n            return result_.undraEncoded()",
+        // `error`: the caught error steps aside.
+        "try error(error__)\n                return []\n            } catch let error_ as AwkwardError {\n                throw UndraPortError(body: error_.undraEncoded())",
+        "impl()\n            return []",
+    ] {
+        assert!(
+            builder.contains(expected),
+            "missing in the builder:\n{expected}\n\n{builder}"
+        );
+    }
+    // The protocol adapter is what it was: its locals keep their names and only `impl` is reserved.
+    let adapter = ports
+        .split("public func awkwardPortImpl(_ impl: any Awkward)")
+        .nth(1)
+        .unwrap();
+    let adapter = adapter
+        .split("public func awkwardPortImpl(")
+        .next()
+        .unwrap();
+    assert!(
+        adapter.contains("let result = impl.args(args: args_)"),
+        "{adapter}"
+    );
+    assert!(adapter.contains("let result = impl.result()"), "{adapter}");
+    assert!(
+        adapter.contains("} catch let error as AwkwardError {"),
+        "{adapter}"
+    );
+}
