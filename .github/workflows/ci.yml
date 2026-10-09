@@ -118,6 +118,18 @@ jobs:
           cargo test -p undra-cli --test swift_manifests
       - name: Generated Swift compiles against the runtime (every golden case; ADR-024 amendment)
         run: UNDRA_REQUIRE_TOOLCHAINS=1 cargo test -p undra-bindgen --test typecheck_swift
+      # ADR-066: the pass that compiles the ports golden's conformer and closure files in an app target under
+      # `.defaultIsolation(MainActor.self)` needs Swift 6.2, and the image's default Xcode (16.4, Swift 6.1) makes the test
+      # skip it; the newest stable Xcode on the image runs it. The step above keeps every golden on the default, the oldest
+      # compiler CI has. A machine without an `Xcode_*.app` (a developer's Mac, through ci-local) uses its own Swift.
+      - name: The ports golden under default main-actor isolation (the newest stable Xcode; ADR-066)
+        run: |
+          newest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -v -i -E 'beta|candidate|_rc' | sort -V | tail -n 1 || true)"
+          if [ -n "$newest" ]; then export DEVELOPER_DIR="$newest/Contents/Developer"; fi
+          swift --version
+          log="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/main-actor-pass.log"
+          UNDRA_REQUIRE_TOOLCHAINS=1 cargo test -p undra-bindgen --test typecheck_swift -- the_ports_golden_is_implementable_under_default_main_actor_isolation --nocapture 2>&1 | tee "$log"
+          if grep -q 'skipping the default main-actor isolation pass' "$log"; then echo "the main-actor pass was skipped: the selected Swift is older than 6.2" >&2; exit 1; fi
       - name: Swift-over-C-ABI acceptance
         run: bash crates/undra-ffi/tests/swift/run.sh
       - name: C ABI acceptance (undra.h with -Werror; the host contract under ASan)
