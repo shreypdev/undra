@@ -22,7 +22,7 @@ build = "build"
 # Where Undra comes from. `path` is a checkout of the Undra repository (crates and
 # runtimes are used from there); without it, the release `version` names is used: the
 # crates by git tag (see core/Cargo.toml), the runtimes from their package registries.
-version = "1.1.0"
+version = "1.2.0"
 path = "../.."
 
 [bindings]

@@ -2719,12 +2719,14 @@ impl<'a> Ctx<'a> {
                 if m.is_async { "await " } else { "" },
                 idents.join(", ")
             );
-            self.rt_value("encodeValue");
+            // `encodeValue` is imported by the entries that encode: a port whose methods all return
+            // unit imports nothing it does not use (an app's `noUnusedLocals` would refuse the file).
             let encode_result = |cx: &mut Ctx<'a>, w: &mut CodeWriter, ok: &TypeRef| {
                 if matches!(ok, TypeRef::Unit) {
                     w.line(format!("{call};"));
                     w.line("return new Uint8Array(0);");
                 } else {
+                    cx.rt_value("encodeValue");
                     let codec = cx.codec(ok);
                     w.line(format!("return encodeValue({codec}, {call});"));
                 }
@@ -2739,6 +2741,7 @@ impl<'a> Ctx<'a> {
                     w.line("} catch (error) {");
                     w.indented(|w| {
                         w.block(format!("if (error instanceof {err})"), |w| {
+                            self.rt_value("encodeValue");
                             w.line(format!(
                                 "throw new UndraPortError(encodeValue({err_codec}, error));"
                             ));

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Undra 1.2: no drift between three hosts | Undra blog</title>
+<meta name="description" content="One core made three hosts agree on logic. 1.2 adds a diff of one flow recorded per platform, a custom port that compiles on iOS, and a faster gate.">
+<link rel="canonical" href="https://shreypdev.github.io/undra/blog/undra-1-2-no-drift/">
+<meta property="og:title" content="Undra 1.2: no drift between three hosts | Undra blog">
+<meta property="og:description" content="One core made three hosts agree on logic. 1.2 adds a diff of one flow recorded per platform, a custom port that compiles on iOS, and a faster gate.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://shreypdev.github.io/undra/blog/undra-1-2-no-drift/">
+<meta property="og:image" content="https://shreypdev.github.io/undra/assets/og.png">
+<meta property="article:published_time" content="2026-10-09">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Undra 1.2: no drift between three hosts | Undra blog">
+<meta name="twitter:description" content="One core made three hosts agree on logic. 1.2 adds a diff of one flow recorded per platform, a custom port that compiles on iOS, and a faster gate.">
+<meta name="twitter:image" content="https://shreypdev.github.io/undra/assets/og.png">
+<script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Undra 1.2: no drift between three hosts",
+  "description": "One core made three hosts agree on logic. 1.2 adds a diff of one flow recorded per platform, a custom port that compiles on iOS, and a faster gate.",
+  "datePublished": "2026-10-09",
+  "dateModified": "2026-10-09",
+  "inLanguage": "en",
+  "image": "https://shreypdev.github.io/undra/assets/og.png",
+  "author": {
+    "@type": "Organization",
+    "name": "Undra team"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Undra",
+    "url": "https://shreypdev.github.io/undra/"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://shreypdev.github.io/undra/blog/undra-1-2-no-drift/"
+  }
+}</script>
+<!-- chrome:head -->
+<meta name="theme-color" content="#0a0a0a">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="application/rss+xml" title="Undra blog" href="../../feed.xml">
+<script>(function(d){var t,m=/[?&]theme=(light|dark)/.exec(location.search);try{t=m?m[1]:localStorage.getItem('undra-theme')}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'}d.dataset.theme=t;d.classList.add('js')})(document.documentElement)</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..600&amp;family=Geist+Mono:wght@400..500&amp;display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..600&amp;family=Geist+Mono:wght@400..500&amp;display=swap"></noscript>
+<!-- /chrome:head -->
+<link rel="stylesheet" href="../../assets/base.css"><link rel="stylesheet" href="../../assets/blog.css">
+</head>
+<body data-page="blog">
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="../../" aria-label="Undra, home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M10.5 7v11a5.5 5.5 0 0 0 11 0V7" fill="none" stroke="var(--accent-ink)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Undra</span></a>
+    <nav class="nav" id="site-nav" aria-label="Primary">
+      <a href="../../docs/">Docs</a>
+      <a href="../../blog/" aria-current="page">Blog</a>
+      <a href="../../roadmap/">Roadmap</a>
+      <a href="../../playground/">Playground</a>
+      <span class="sp"></span>
+      <a class="nav-gh" href="https://github.com/shreypdev/undra" rel="noopener">GitHub <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11 11 5M6 5h5v5"/></svg></a>
+    </nav>
+    <button class="search-btn" type="button" data-search-open aria-label="Search the docs" aria-keyshortcuts="Control+K Meta+K"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><span>Search</span><kbd>⌘K</kbd></button>
+    <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch to light theme"><svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg><svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg></button>
+    <button class="icon-btn menu-btn" type="button" data-menu aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  </div>
+</header>
+<main class="post" id="main"><article>
+  <header class="post-header">
+    <p class="eyebrow">Release</p><h1>Undra 1.2: no drift between three hosts</h1><p class="lede">One Rust core already made three hosts agree on their logic, state and data. What still drifted was everything the schema cannot see: which calls each UI makes, what each platform's adapters send, how a custom port is written three times. 1.2 is about those three things.</p>
+    <p class="post-meta"><time datetime="2026-10-09">9 Oct 2026</time> · 7 min read · Undra team</p>
+  </header>
+  <nav class="toc" aria-label="On this page"><ol><li><a href="#what-drifted">What still drifted</a></li><li><a href="#drift">undra drift</a></li><li><a href="#ports">A port that compiles on every platform</a></li><li><a href="#gate">The merge gate, measured</a></li><li><a href="#next">What is next</a></li><li><a href="#upgrade">Upgrading</a></li></ol></nav>
+<section id="what-drifted">
+<h2>What still drifted</h2>
+<p>A team spent a week building a trading app on Undra 1.1: one core, SwiftUI on iOS, Compose on Android, React on the web. The core was never the problem. Three things were, and each of them lived outside the schema:</p>
+<ul>
+<li><strong>A header the replay never saw.</strong> Their production API refused a request that every test had accepted: one platform's adapter sent <code>Accept</code> twice. Their replay server matched on method and URL alone, so the duplicate got through.</li>
+<li><strong>A wrong host on one platform.</strong> Orders went to the API host instead of the web host, on one platform only, and nothing compared what the three hosts asked for.</li>
+<li><strong>A port that did not compile.</strong> Their iOS credentials port, a plain class conforming to the generated protocol, failed to build under Xcode 26's default main-actor isolation, and the file also needed an import nobody had told them about.</li>
+</ul>
+<p>The first two are drift at the boundary: the core is deterministic, so if the three apps fed it the same inputs they would have ended in the same state. The third is drift in the one piece of host code a schema cannot generate for you. 1.2 answers each.</p>
+</section>
+<section id="drift">
+<h2>undra drift</h2>
+<p>Undra's testing kit already records a session as one JSON document, the same format on every platform: the calls the host made, the replies, every change-set, every port call and its answer, every event the host pushed. <code>undra dev --record</code> writes one for the app it is serving. 1.2 adds the comparison:</p>
+<div class="code"><div class="code-bar"><span><span class="lang">shell</span></span></div><pre><code>$ undra dev --record ios.json                              # the iOS app connected
+$ undra dev --addr 127.0.0.1:7444 --record android.json    # the Android app, on a second server
+$ undra drift ios.json android.json web.json
+Drift: ios.json (reference) against android.json, web.json (schema 0x3c17cd5f59bb6f68)
+Ignored: the replies of Clock.* and Rng.*, the arguments of Timer.*, the Idempotency-Key header of Http.request, and t
+
+android  calls     Todos.toggle on Todos#0 #5: missing on android ({"id":"00000000-0000-0001-0000-000000000000"})
+android  ports     Http.request #1: reply differs: ios {"body":{"status":200,...},"status":"ok"}, android {"body":{"status":500,...},"status":"ok"}
+web      calls     Todos.add on Todos#0 #6: extra on web ({"title":"Pay the rent"})
+
+3 divergences on 2 of 3 recordings</code></pre></div>
+<p>The first file is the reference; every other file is compared with it. What is compared: the calls each host made and their order, with the arguments decoded through the project's schema; what each platform's port adapters answered, per port and method; the events each host pushed (connectivity, lifecycle); what was observed; and the state every store ended in. What legitimately differs between two runs is ignored and said so in the report: clock and random readings, timer deadlines, idempotency keys and each entry's time. Handles are aligned by the constructor that made them and its ordinal, so a store created second on iOS is compared with the store created second on Android, whatever number each runtime gave it. With <code>--exit-code</code> the command fails on any divergence, which is how it goes into CI.</p>
+<p>What a port drift looks like in the report: the <code>Http.request</code> each platform's core asked for is the same, and the answer is not. The API that refused a duplicate header on one platform answered that platform's call with a 400 and the others with a 200, which is one <code>ports</code> line naming the call and both replies; the wrong host is the same line with the wrong answer. The report shows what the core asked and what each platform answered; what the adapter put on the wire between the two is the next step (below). The record format is unchanged, so a recording made with 1.1 reads in 1.2.</p>
+</section>
+<section id="ports">
+<h2>A port that compiles on every platform</h2>
+<p>A custom port in Rust is a trait. On Kotlin it is an interface and on the web an object literal, and both compiled from day one. On Swift the generated protocol is <code>Sendable</code>, because the core calls it from its own thread. We reproduced the failure with Xcode 26.6 and found it is not where we guessed: under default main-actor isolation a class conforming to that protocol is inferred nonisolated, and a stateless one compiles as written. What fails is what a real port has: a mutable property in a <code>Sendable</code> class, a read of main-actor state from the witness, and, when the generated file is compiled inside a module built in that mode, the generated adapter itself, whose requirements the mode had made main-actor isolated. And the registration line needs <code>import UndraRuntime</code>, which nothing said.</p>
+<p>1.2 makes every requirement <code>nonisolated</code> in the generated protocol, puts a five-line doc on it (the thread, what a conformer therefore is, the import), and generates a second form beside it: one function per port that takes a <code>@Sendable</code> closure per method. A <code>@Sendable</code> closure is nonisolated under every isolation mode, so there is nothing to conform to and nothing to annotate; an async one reads main-actor state through <code>await MainActor.run</code>, and a synchronous one that tries is refused by the compiler with a diagnostic that says so:</p>
+<div class="code"><div class="code-bar"><span><span class="lang">swift</span></span></div><pre><code>import UndraRuntime
+
+let locale = localePortImpl(hello: { "Bonjour" })
+let adapters = Adapters.platformDefault.replacing(PortImplAdapter(portId: UndraIds.Ports.Locale.portId, impl: locale))
+let core = try UndraPlaygroundCore.load(.inproc(adapters: adapters))</code></pre></div>
+<p>The protocol form stays, for a port with state worth a type. A compile test in CI builds both forms, a plain class per port and a closure registration that reads main-actor state, under <code>-default-isolation MainActor</code>, so the shape cannot regress. The cookbook has the same port on three platforms, with each snippet compiled by CI, and the playground's iOS app implements its <code>Locale</code> port in the new form. The decision is <a href="https://github.com/shreypdev/undra/blob/main/.10x/adrs/ADR-066-host-ports-under-default-main-actor-isolation.md" rel="noopener">ADR-066</a>.</p>
+</section>
+<section id="gate">
+<h2>The merge gate, measured</h2>
+<p>Nothing lands on <code>main</code> unless every workflow is green on the exact commit. That gate took 26 to 31 minutes on the last three green runs, and the numbers said why: a handful of macOS runners serve the whole queue, and four jobs ran their work in a row where nothing depended on the order (the macOS Bazel example ran four Bazel configurations one after another; the Rust job's <code>cargo test --workspace</code> spent two thirds of its time in the CLI's integration tests; the Swift job built the Xcode projects after the runtime's tests; Two cores built its Debug cores, then its Release cores).</p>
+<p>So we split all four into halves that run side by side, and measured it on this release's own pull request. The Linux halves did what they were meant to: the Rust job's took 6 and 14 minutes where the one job took 17 to 21, and the Bazel example's 8 and 9 where it took 17. The macOS halves did not: only three macOS runners were free, because two other workflows a pull request starts were using the rest, and the extra jobs added ten runner-minutes of setup to a pool that was already full. The gate took 29 minutes. We kept the Linux splits and the order, put the macOS jobs back the way they were, and ran it again: green in 23 minutes, three to six minutes shorter than before and not the half we had hoped for, with what would shorten it from here written down: the macOS pool is the limit, and it is shared. The record, with both measurements, is <a href="https://github.com/shreypdev/undra/blob/main/.10x/decisions/devops/ci-wall-time.md" rel="noopener">ci-wall-time.md</a>.</p>
+</section>
+<section id="next">
+<h2>What is next</h2>
+<p>The duplicate header pointed at something <code>undra drift</code> reports but does not fix: the platform default adapters themselves differ. The five SSE adapters merge the core's headers in different ways, and the JDK Http adapter drops restricted headers where Swift passes them. The next step is a conformance file for the real adapters, recorded against one server and diffed in CI, the way the fakes are already held to one file. It needs a rule in the specification first (which header wins), so it is on the <a href="../../roadmap/#next-adapter-conformance-across-platforms">roadmap</a> under Next, with the evidence.</p>
+</section>
+<section id="upgrade">
+<h2>Upgrading</h2>
+<p><code>undra upgrade</code> moves a project's pins to 1.2.0 and prints the release's migration notes. Nothing on the wire, the ABI or the schema changed; bindings regenerate to the same public shapes plus the new Swift port builders. The <a href="../../docs/testing.html#compare-platforms">testing page</a> has the drift command, <a href="../../docs/ports.html#writing-your-own-port">the ports page</a> the three-platform port, and the <a href="../../roadmap/">roadmap</a> what shipped and what is open.</p>
+</section>
+</article></main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="../../" aria-label="Undra, home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M10.5 7v11a5.5 5.5 0 0 0 11 0V7" fill="none" stroke="var(--accent-ink)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Undra</span></a>
+        <p class="footer-note">The Rust core for native apps. Undra owns everything under the pixels; the UI stays SwiftUI, Compose, React and React Native.</p>
+      </div>
+      <div>
+        <h3>Docs</h3>
+        <ul>
+          <li><a href="../../docs/getting-started.html">Getting started</a></li>
+          <li><a href="../../docs/concepts.html">Core concepts</a></li>
+          <li><a href="../../docs/queries.html">Queries &amp; mutations</a></li>
+          <li><a href="../../docs/ports.html">Ports &amp; adapters</a></li>
+          <li><a href="../../docs/cli.html">The CLI</a></li>
+          <li><a href="../../docs/architecture.html">Architecture</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Undra</h3>
+        <ul>
+          <li><a href="../../blog/">Blog</a></li>
+          <li><a href="../../roadmap/">Roadmap</a></li>
+          <li><a href="../../playground/">Playground</a></li>
+          <li><a href="../../feed.xml">RSS feed</a></li>
+          <li><a href="../../llms.txt">llms.txt</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Project</h3>
+        <ul>
+          <li><a href="https://github.com/shreypdev/undra" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/shreypdev/undra/blob/main/docs/SPEC.md" rel="noopener">The specification</a></li>
+          <li><a href="https://github.com/shreypdev/undra/tree/main/.10x/adrs" rel="noopener">Decision records</a></li>
+          <li><a href="https://github.com/shreypdev/undra/blob/main/bench/RESULTS.md" rel="noopener">Benchmark results</a></li>
+          <li><a href="https://github.com/shreypdev/undra/blob/main/CLAUDE.md" rel="noopener">The constitution</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-base">
+      <span>Dual-licensed under <a href="https://github.com/shreypdev/undra/blob/main/LICENSE-MIT" rel="noopener">MIT</a> or <a href="https://github.com/shreypdev/undra/blob/main/LICENSE-APACHE" rel="noopener">Apache-2.0</a>, at your option.</span>
+      <span>Timings are host-measured and guarded by CI budgets; device numbers are tracked separately.</span>
+    </div>
+  </div>
+</footer>
+<script src="../../assets/site.js" defer></script></body></html>

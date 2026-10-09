@@ -12,11 +12,15 @@
 //! | [`Seed`] | the starting state of the fakes as JSON, shared with the platform kits |
 //! | [`Harness`] | a `TestRuntime` with the fakes installed and a manual clock |
 //! | [`conformance`] | the file every implementation of the fakes is checked against |
+//! | [`decode`] | [`SchemaIndex`](decode::SchemaIndex): names and decodes a recording's ids and bytes from a schema |
+//! | [`drift`] | [`Session`](drift::Session) and [`compare`](drift::compare): where two recordings of one flow diverged (`undra drift`) |
 //!
 //! The facade crate re-exports all of it as `undra::testing`, together with the test runtime
 //! (`undra::runtime::testing`) and the fakes (`undra::ports::fakes`).
 
 pub mod conformance;
+pub mod decode;
+pub mod drift;
 mod harness;
 mod hex;
 mod names;

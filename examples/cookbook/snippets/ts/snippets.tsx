@@ -13,6 +13,10 @@ import {
   NotesQueryHandle,
   createNote,
   outbox,
+  type Haptics,
+  UndraCookbook,
+  UndraIds,
+  hapticsPortImpl,
 } from "@cookbook/core";
 import { browserAdapters, fetchHttp } from "@undra/runtime";
 import { OptInPortIds, type WebSocketConstructorLike, browserWebSocket, fetchSse, ssePort, webSocketPort } from "@undra/runtime/realtime";
@@ -152,4 +156,20 @@ export function LeaderboardView({ board, myId }: { board: Leaderboard; myId: num
     </>
   );
 }
+// docs:end
+
+// docs:begin custom-port-ts
+const haptics: Haptics = {
+  tap(strength) {
+    navigator.vibrate(strength > 128 ? 40 : 15);
+  },
+};
+
+// A sync port is answered where the core runs: with the core on the page, in `ports`; with the core in a
+// worker, in the worker module's `ports` (`worker.ports`).
+export const core = await UndraCookbook.load({
+  mode: "wasm-main",
+  wasm: new URL("cookbook.wasm", import.meta.url),
+  ports: { [UndraIds.Ports.Haptics.portId]: hapticsPortImpl(haptics) },
+});
 // docs:end

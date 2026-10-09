@@ -733,3 +733,38 @@ Landed on the way, each at its cause: the React Native LazyList test waited a fi
 Deviation, recorded: 1.1.0 was released without a `1.1.0-rc.1` rehearsal. The rehearsal proves the distribution
 channels with a real tag; they were proven at 1.0.0 on 2026-10-04 and 1.1 changes none of them. The Release smoke
 workflow on `v1.1.0` is the check.
+
+### Checkpoint 41 (2026-10-09) - Undra 1.2, no drift, prepared as one pull request
+
+The 1.2 design (`.10x/specs/2026-10-09-no-drift-design.md`, ADR-066 Proposed, the role records `no-drift.md` under
+architect, cto and product-manager) was built as two pieces in parallel worktrees from one integration branch, each
+with its own adversarial review (`.10x/reviews/2026-10-09-<slug>-review.md`) and record (`.10x/decisions/sde/<slug>.md`),
+plus the CI restructure and the docs on the integration branch itself. The pull request is open for the founder's
+review; nothing is tagged. Merging it accepts ADR-066 (its status line stays Proposed until then).
+
+| Piece | What it is |
+|---|---|
+| **drift** | `undra drift REFERENCE OTHER...` compares recordings of one flow made on different platforms at the boundary: calls and their order (arguments decoded through the schema), port answers per port and method, host events, the set of observed signals, the state each store ended in; handles aliased by constructor and ordinal; built-in ignores named in the report (Clock and Rng replies, Timer arguments, the Idempotency-Key header with a schema, `t`); `--ignore PATH`, `--exit-code`, `--schema FILE` (else the project's `schema.json`, else the built core). `crates/undra-testkit/src/{decode,drift}.rs`, `crates/undra-cli/src/commands/drift.rs`, goldens and fixtures, the playground core's own test recording three platforms. Review: three Mediums closed (two recordings of one platform are named by their files; the schema-less header says the Idempotency-Key header is compared; a `Lazy<T>` value is compared without its per-session handle), one Low closed, three Lows recorded (an `--ignore` path naming nothing is silent; the LCS is quadratic in memory; port calls of one method pair by index). |
+| **host-ports** (ADR-066) | Reproduced with Xcode 26.6: under default main-actor isolation a conformer of a generated port protocol is inferred nonisolated; what fails is mutable state in a `Sendable` class, a main-actor read from a witness, and the generated adapter itself when its file is compiled inside a module in that mode. bindgen now emits `nonisolated func` on every requirement, a teaching doc per protocol, and a builder from `@Sendable` closures beside the adapter (`clockPortImpl(nowMs:monotonicNs:log:)`); every committed Swift tree regenerated; `typecheck_swift` compiles a conformer file and a closure file in the default build and, with a compiler of 6.2 or newer, under `.defaultIsolation(MainActor.self)`; the playground's iOS app registers `Locale` from a closure; the cookbook's `Haptics` port with Swift, Kotlin and TypeScript snippets compiled by CI, the recipe page, the ports page over snippet markers, SPEC 10. A TypeScript generator fix rode along (an unused `encodeValue` import for a port whose methods all return unit). Review: one High (the recipe's description over the site's 155-character limit, which would have turned the Site job red), one Medium (a test for the builder's renaming of locals), two Lows, all closed. |
+| **ci-wall-time** | The Gate took 26 to 31 minutes; the macOS pool and four serial jobs were the critical path. The first shape split all four and added a Bazel disk cache; the pull request's first Gate run measured 29 minutes and one red job (the CLI half lacked rustfmt): three macOS runners were free, not five, because the RN devices and Launch rehearsal workflows ran beside the Gate, and the extra macOS jobs added ten runner-minutes of setup. What stays: the Rust job split (6 and 14 minutes for 17), the Linux Bazel example split (8 and 9 for 17), macOS jobs listed first, ADR-066's compile pass on the newest Xcode; the macOS splits and the disk cache reverted. The second run, green: 23 minutes against 26 to 31 before, with ADR-066's pass run on Swift 6.2.4 (1 passed). Every job still runs on every change; `ci-local.rb` knows the ids (`.10x/decisions/devops/ci-wall-time.md`). |
+| **docs** | The landing page's 1.2 section (the real report shape) within the 350-word budget, the roadmap's "No drift (1.2)" group and the adapter-conformance item under Next with its evidence, the architecture page (thirteen crates, "Where drift is caught", what Undra leaves out), the README, the post `blog/undra-1-2-no-drift/`, the CLI and testing pages, `llms.txt`, the search index. |
+
+A whole-branch integration review followed (`.10x/reviews/2026-10-09-undra-1-2-integration-review.md`): four Mediums
+closed on the branch (the main-actor compile pass of ADR-066 was skipping in the Gate, because the macOS image's default
+Xcode is 16.4 with Swift 6.1: the `macos` job now runs that one test on the image's newest stable Xcode and fails on a
+reported skip, so the first Gate run on the branch is also that step's first proof; the post's Swift registration line
+did not compile; the architect record listed ignores the code does not have; the design's sentence about where the
+requirement's origin is written), four Lows recorded (the curated samples abbreviate a line; one timing blends a CI
+duration with a host measurement; the handoff's branch name; two words in the design's drift row).
+
+Totals measured on the integrated tree (host): undra-testkit 50, undra-cli `--test drift` 5 and `--test cli` 10, the playground's
+drift test 1; the pieces' own runs: undra-bindgen 218 (typecheck_swift 5 with the main-actor pass run), cookbook 56 + 1,
+`bindgen_schema` 11, the playground's iOS app built for the simulator, `bazel test //:bindings_check` green. Not run on
+this tree before the pull request: `scripts/ci-local.sh` in full (the Rust, CLI, macOS and site jobs ran; see the handoff);
+the Gate on the pushed head is the proof.
+
+Left for 1.3, recorded in the roadmap under Next with the evidence: adapter conformance across the platform default
+adapters (the five SSE adapters merge the core's headers differently; the JDK Http adapter drops restricted headers where
+Swift passes them), after a rule in the SPEC says which header wins. Also recorded: a multi-client dev server (one
+`undra dev` serves one app; a second server on another port records the second platform); the React Native host reports
+`web` as its platform in a recording.

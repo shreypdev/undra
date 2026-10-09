@@ -22,7 +22,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.1.0"
+version = "1.2.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -30,18 +30,18 @@ repository = "https://github.com/shreypdev/undra"
 authors = ["Shrey <shreypdev@gmail.com>"]
 
 [workspace.dependencies]
-undra-meta = { path = "crates/undra-meta", version = "1.1.0" }
-undra-wire = { path = "crates/undra-wire", version = "1.1.0" }
-undra-macros = { path = "crates/undra-macros", version = "1.1.0" }
-undra-signals = { path = "crates/undra-signals", version = "1.1.0" }
-undra-runtime = { path = "crates/undra-runtime", version = "1.1.0" }
-undra-ports = { path = "crates/undra-ports", version = "1.1.0" }
-undra-testkit = { path = "crates/undra-testkit", version = "1.1.0" }
-undra-query = { path = "crates/undra-query", version = "1.1.0" }
-undra-ffi = { path = "crates/undra-ffi", version = "1.1.0" }
-undra-transport = { path = "crates/undra-transport", version = "1.1.0" }
-undra-bindgen = { path = "crates/undra-bindgen", version = "1.1.0" }
-undra = { path = "crates/undra", version = "1.1.0" }
+undra-meta = { path = "crates/undra-meta", version = "1.2.0" }
+undra-wire = { path = "crates/undra-wire", version = "1.2.0" }
+undra-macros = { path = "crates/undra-macros", version = "1.2.0" }
+undra-signals = { path = "crates/undra-signals", version = "1.2.0" }
+undra-runtime = { path = "crates/undra-runtime", version = "1.2.0" }
+undra-ports = { path = "crates/undra-ports", version = "1.2.0" }
+undra-testkit = { path = "crates/undra-testkit", version = "1.2.0" }
+undra-query = { path = "crates/undra-query", version = "1.2.0" }
+undra-ffi = { path = "crates/undra-ffi", version = "1.2.0" }
+undra-transport = { path = "crates/undra-transport", version = "1.2.0" }
+undra-bindgen = { path = "crates/undra-bindgen", version = "1.2.0" }
+undra = { path = "crates/undra", version = "1.2.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 inventory = "0.3"

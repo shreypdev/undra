@@ -23,7 +23,7 @@
 {"@context":"https://schema.org","@graph":[
 {"@type":"WebSite","@id":"https://shreypdev.github.io/undra/#website","name":"Undra","alternateName":"Undra framework","url":"https://shreypdev.github.io/undra/","description":"Undra is a Rust framework for sharing business logic across iOS, Android and web, with generated native Swift, Kotlin and TypeScript.","inLanguage":"en","publisher":{"@id":"https://shreypdev.github.io/undra/#org"}},
 {"@type":"Organization","@id":"https://shreypdev.github.io/undra/#org","name":"Undra","url":"https://shreypdev.github.io/undra/","logo":"https://shreypdev.github.io/undra/favicon.svg","sameAs":["https://github.com/shreypdev/undra"]},
-{"@type":"SoftwareSourceCode","name":"Undra","codeRepository":"https://github.com/shreypdev/undra","programmingLanguage":"Rust","runtimePlatform":"iOS, Android, Web","license":"https://github.com/shreypdev/undra/blob/main/LICENSE-MIT","dateModified":"2026-10-03"},
+{"@type":"SoftwareSourceCode","name":"Undra","codeRepository":"https://github.com/shreypdev/undra","programmingLanguage":"Rust","runtimePlatform":"iOS, Android, Web","license":"https://github.com/shreypdev/undra/blob/main/LICENSE-MIT","dateModified":"2026-10-09"},
 {"@type":"SoftwareApplication","name":"Undra","applicationCategory":"DeveloperApplication","operatingSystem":"macOS, Linux","description":"Rust framework and CLI that owns domain logic, reactive state, the data layer and persistence for native iOS, Android and web apps.","url":"https://shreypdev.github.io/undra/","downloadUrl":"https://github.com/shreypdev/undra","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"license":"https://github.com/shreypdev/undra/blob/main/LICENSE-MIT"}
 ]}
 </script>
@@ -70,7 +70,7 @@
 
     <div class="hero-grid">
       <div>
-        <p class="hero-sub"><span class="hero-lead">Undra is a Rust framework for iOS, Android and web apps.</span> Write your logic, state and data once; the UI stays native: SwiftUI, Jetpack Compose, React or React Native.</p>
+        <p class="hero-sub"><span class="hero-lead">Undra is a Rust framework for iOS, Android and web apps.</span> Write logic, state and data once; the UI stays native: SwiftUI, Compose, React or React Native.</p>
         <div class="cta-row">
           <a class="btn btn-primary" href="docs/getting-started.html">Get started <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
           <a class="btn btn-ghost" href="#live">See it live</a>
@@ -601,18 +601,40 @@ pub async fn create_remote_todo(ctx: &amp;Ctx, list: String, title: String) -&gt
   </div>
 </section>
 
+<!-- 5b. NO DRIFT: the hosts, held to one recording (1.2) -->
+<section class="section" id="drift">
+  <div class="wrap">
+    <span class="kicker reveal">1.2</span>
+    <h2 class="h2 reveal">Three hosts. <em>No drift.</em></h2>
+    <p class="lede reveal" data-d="1">One flow, recorded per platform; what differs is the host.</p>
+    <div class="code reveal" data-d="1"><div class="code-bar"><span><span class="lang">shell</span></span></div><pre><code>$ undra drift ios.json android.json web.json
+Drift: ios.json (reference) against android.json, web.json (schema 0x3c17cd5f59bb6f68)
+Ignored: the replies of Clock.* and Rng.*, the arguments of Timer.*, the Idempotency-Key header of Http.request, and t
+
+android  calls     Todos.toggle on Todos#0 #5: missing on android ({"id":"00000000-0000-0001-0000-000000000000"})
+android  ports     Http.request #1: reply differs: ios {"body":{"status":200,...},"status":"ok"}, android {"body":{"status":500,...},"status":"ok"}
+web      calls     Todos.add on Todos#0 #6: extra on web ({"title":"Pay the rent"})
+
+3 divergences on 2 of 3 recordings</code></pre></div>
+    <div class="cards4 cards3">
+      <a class="card reveal" href="docs/testing.html#compare-platforms"><h3>Record, then compare</h3><span class="go" aria-hidden="true"><i>→</i></span></a>
+      <a class="card reveal" href="docs/ports.html#writing-your-own-port" data-d="1"><h3>A port that compiles everywhere</h3><span class="go" aria-hidden="true"><i>→</i></span></a>
+      <a class="card reveal" href="blog/undra-1-2-no-drift/" data-d="2"><h3>The 1.2 post</h3><span class="go" aria-hidden="true"><i>→</i></span></a>
+    </div>
+  </div>
+</section>
+
 <!-- 6. WHY THIS: the alternatives, each in a post -->
 <section class="section" id="compared">
   <div class="wrap">
     <span class="kicker reveal">Why Undra</span>
     <h2 class="h2 reveal">For apps on two or more platforms <em>that must agree.</em></h2>
-    <p class="lede reveal" data-d="1">One set of rules for logic, state and data, with each screen as native as before. How that compares:</p>
     <div class="cards4 cards3">
       <a class="card reveal" href="blog/undra-vs-kotlin-multiplatform/"><h3>vs Kotlin Multiplatform</h3><span class="go" aria-hidden="true"><i>→</i></span></a>
       <a class="card reveal" href="blog/undra-vs-uniffi-and-crux/" data-d="1"><h3>vs UniFFI and Crux</h3><span class="go" aria-hidden="true"><i>→</i></span></a>
       <a class="card reveal" href="blog/why-undra-keeps-your-ui-native/" data-d="2"><h3>vs sharing the UI too</h3><span class="go" aria-hidden="true"><i>→</i></span></a>
     </div>
-    <p class="more-row"><a class="tlink" href="blog/why-undra-is-the-default-choice/">The limitations matrix, row by row →</a></p>
+    <p class="more-row"><a class="tlink" href="blog/why-undra-is-the-default-choice/">The limitations matrix →</a></p>
   </div>
 </section>
 
@@ -623,12 +645,12 @@ pub async fn create_remote_todo(ctx: &amp;Ctx, list: String, title: String) -&gt
     <h2 class="h2 reveal">What is <em>still open.</em></h2>
     <!-- roadmap-teaser:start -->
     <ul class="now3 reveal">
+    <li><a href="roadmap/#next-adapter-conformance-across-platforms"><span class="st st-next">Next</span><span>Adapter conformance across platforms</span></a></li>
     <li><a href="roadmap/#next-benchmarks-on-physical-phones"><span class="st st-next">Next</span><span>Benchmarks on physical phones</span></a></li>
-    <li><a href="roadmap/#next-maven-central-and-the-npm-registry"><span class="st st-next">Next</span><span>Maven Central and the npm registry</span></a></li>
     <li><a href="roadmap/#later-dart-and-flutter-bindings"><span class="st st-later">Later</span><span>Dart and Flutter bindings</span></a></li>
     </ul>
     <!-- roadmap-teaser:end -->
-    <p class="more-row"><a class="tlink" href="roadmap/">Everything shipped, next and later →</a></p>
+    <p class="more-row"><a class="tlink" href="roadmap/">The roadmap →</a></p>
   </div>
 </section>
 

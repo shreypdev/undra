@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://shreypdev.github.io/undra/</loc><lastmod>2026-10-03</lastmod></url>
+  <url><loc>https://shreypdev.github.io/undra/</loc><lastmod>2026-10-09</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/</loc><lastmod>2026-10-03</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/api-kotlin.html</loc><lastmod>2026-10-01</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/api-swift.html</loc><lastmod>2026-10-01</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/api-typescript.html</loc><lastmod>2026-10-03</lastmod></url>
-  <url><loc>https://shreypdev.github.io/undra/docs/architecture.html</loc><lastmod>2026-10-03</lastmod></url>
+  <url><loc>https://shreypdev.github.io/undra/docs/architecture.html</loc><lastmod>2026-10-09</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/bazel.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/callbacks.html</loc><lastmod>2026-10-02</lastmod></url>
-  <url><loc>https://shreypdev.github.io/undra/docs/cli.html</loc><lastmod>2026-10-02</lastmod></url>
+  <url><loc>https://shreypdev.github.io/undra/docs/cli.html</loc><lastmod>2026-10-09</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/concepts.html</loc><lastmod>2026-09-30</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/cookbook/auth.html</loc><lastmod>2026-10-01</lastmod></url>
+  <url><loc>https://shreypdev.github.io/undra/docs/cookbook/custom-port.html</loc><lastmod>2026-10-09</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/cookbook/forms.html</loc><lastmod>2026-10-01</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/cookbook/from-kmp.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/cookbook/from-uniffi.html</loc><lastmod>2026-10-02</lastmod></url>
@@ -30,22 +31,23 @@
   <url><loc>https://shreypdev.github.io/undra/docs/objects.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/paging.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/polling.html</loc><lastmod>2026-10-02</lastmod></url>
-  <url><loc>https://shreypdev.github.io/undra/docs/ports.html</loc><lastmod>2026-10-02</lastmod></url>
+  <url><loc>https://shreypdev.github.io/undra/docs/ports.html</loc><lastmod>2026-10-09</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/production.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/queries.html</loc><lastmod>2026-09-30</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/realtime.html</loc><lastmod>2026-10-01</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/reviewing-generated-code.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/sample.html</loc><lastmod>2026-10-01</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/several-cores.html</loc><lastmod>2026-10-01</lastmod></url>
-  <url><loc>https://shreypdev.github.io/undra/docs/testing.html</loc><lastmod>2026-10-01</lastmod></url>
+  <url><loc>https://shreypdev.github.io/undra/docs/testing.html</loc><lastmod>2026-10-09</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/types.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/updates.html</loc><lastmod>2026-10-01</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/docs/web.html</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/blog/a-week-of-outside-use/</loc><lastmod>2026-10-03</lastmod></url>
-  <url><loc>https://shreypdev.github.io/undra/blog/</loc><lastmod>2026-10-03</lastmod></url>
+  <url><loc>https://shreypdev.github.io/undra/blog/</loc><lastmod>2026-10-09</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/blog/reads-never-cross-the-boundary/</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/blog/the-javascript-runtime-at-16-kb/</loc><lastmod>2026-10-03</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/blog/undra-1-0/</loc><lastmod>2026-10-03</lastmod></url>
+  <url><loc>https://shreypdev.github.io/undra/blog/undra-1-2-no-drift/</loc><lastmod>2026-10-09</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/blog/undra-vs-kotlin-multiplatform/</loc><lastmod>2026-10-02</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/blog/undra-vs-uniffi-and-crux/</loc><lastmod>2026-09-30</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/blog/why-undra-is-the-default-choice/</loc><lastmod>2026-10-02</lastmod></url>
@@ -53,5 +55,5 @@
   <url><loc>https://shreypdev.github.io/undra/reference/kotlin.html</loc><lastmod>2026-10-01</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/reference/swift.html</loc><lastmod>2026-10-01</lastmod></url>
   <url><loc>https://shreypdev.github.io/undra/reference/typescript.html</loc><lastmod>2026-10-01</lastmod></url>
-  <url><loc>https://shreypdev.github.io/undra/roadmap/</loc><lastmod>2026-10-06</lastmod></url>
+  <url><loc>https://shreypdev.github.io/undra/roadmap/</loc><lastmod>2026-10-09</lastmod></url>
 </urlset>

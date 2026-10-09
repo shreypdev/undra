@@ -1,6 +1,6 @@
 {
   "name": "@undra/runtime",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Undra TypeScript runtime: wire format, transports and reactive mirror for Undra cores.",
   "license": "MIT OR Apache-2.0",
   "repository": {

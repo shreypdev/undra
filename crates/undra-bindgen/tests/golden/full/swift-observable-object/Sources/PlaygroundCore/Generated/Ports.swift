@@ -24,9 +24,13 @@ public struct ConnectivityEvents: Sendable {
     }
 }
 
+/// The core calls these methods from its own thread, so a conforming class is nonisolated and
+/// `Sendable`: under default main-actor isolation (Xcode 26) it cannot keep mutable state without
+/// a lock or read main-actor state in a synchronous method. ``httpPortImpl(request:)``
+/// takes closures instead, so nothing has to conform. Registering either needs `import UndraRuntime`.
 public protocol Http: UndraPort, Sendable {
     /// - Throws: ``HttpError``.
-    func request(_ req: HttpRequest) async throws(HttpError) -> HttpResponse
+    nonisolated func request(_ req: HttpRequest) async throws(HttpError) -> HttpResponse
 }
 
 /// Adapts an implementation of ``Http`` to `UndraCore.registerPort(UndraIds.Ports.Http.portId, _:)`.
@@ -46,9 +50,36 @@ public func httpPortImpl(_ impl: any Http) -> PortImpl {
     ])
 }
 
+/// ``httpPortImpl(_:)`` from closures, one per method in the protocol's order, for an app that has no
+/// class to conform: under default main-actor isolation a closure literal passed here is nonisolated, so
+/// this form compiles unchanged. The closures run on the core's thread: read main-actor state in an
+/// async one with `await MainActor.run { .. }`, never in a synchronous one.
+/// A closure for a method with a typed error names it: `request: { req async throws(HttpError) in .. }`.
+public func httpPortImpl(
+    request: @escaping @Sendable (_ req: HttpRequest) async throws(HttpError) -> HttpResponse
+) -> PortImpl {
+    return .async([
+        UndraIds.Ports.Http.request: { args in
+            var r = UndraReader(args)
+            let req = try HttpRequest.undraDecode(&r)
+            try r.finish()
+            do {
+                let result = try await request(req)
+                return result.undraEncoded()
+            } catch let error as HttpError {
+                throw UndraPortError(body: error.undraEncoded())
+            }
+        },
+    ])
+}
+
+/// The core calls these methods from its own thread, so a conforming class is nonisolated and
+/// `Sendable`: under default main-actor isolation (Xcode 26) it cannot keep mutable state without
+/// a lock or read main-actor state in a synchronous method. ``kvPortImpl(get:set:)``
+/// takes closures instead, so nothing has to conform. Registering either needs `import UndraRuntime`.
 public protocol Kv: UndraPort, Sendable {
-    func get(key: String) async -> [UInt8]?
-    func set(key: String, value: [UInt8]) async
+    nonisolated func get(key: String) async -> [UInt8]?
+    nonisolated func set(key: String, value: [UInt8]) async
 }
 
 /// Adapts an implementation of ``Kv`` to `UndraCore.registerPort(UndraIds.Ports.Kv.portId, _:)`.
@@ -72,9 +103,40 @@ public func kvPortImpl(_ impl: any Kv) -> PortImpl {
     ])
 }
 
+/// ``kvPortImpl(_:)`` from closures, one per method in the protocol's order, for an app that has no
+/// class to conform: under default main-actor isolation a closure literal passed here is nonisolated, so
+/// this form compiles unchanged. The closures run on the core's thread: read main-actor state in an
+/// async one with `await MainActor.run { .. }`, never in a synchronous one.
+public func kvPortImpl(
+    get: @escaping @Sendable (_ key: String) async -> [UInt8]?,
+    set: @escaping @Sendable (_ key: String, _ value: [UInt8]) async -> Void
+) -> PortImpl {
+    return .async([
+        UndraIds.Ports.Kv.get: { args in
+            var r = UndraReader(args)
+            let key = try String.undraDecode(&r)
+            try r.finish()
+            let result = await get(key)
+            return result.map(UndraBytes.init).undraEncoded()
+        },
+        UndraIds.Ports.Kv.set: { args in
+            var r = UndraReader(args)
+            let key = try String.undraDecode(&r)
+            let value = try r.readBytes()
+            try r.finish()
+            await set(key, value)
+            return []
+        },
+    ])
+}
+
+/// The core calls these methods from its own thread, so a conforming class is nonisolated and
+/// `Sendable`: under default main-actor isolation (Xcode 26) it cannot keep mutable state without
+/// a lock or read main-actor state in a synchronous method. ``wallClockPortImpl(nowMs:monotonicNs:)``
+/// takes closures instead, so nothing has to conform. Registering either needs `import UndraRuntime`.
 public protocol WallClock: UndraPort, Sendable {
-    func nowMs() -> Int64
-    func monotonicNs() -> UInt64
+    nonisolated func nowMs() -> Int64
+    nonisolated func monotonicNs() -> UInt64
 }
 
 /// Adapts an implementation of ``WallClock`` to `UndraCore.registerPort(UndraIds.Ports.WallClock.portId, _:)`.
@@ -86,6 +148,26 @@ public func wallClockPortImpl(_ impl: any WallClock) -> PortImpl {
         },
         UndraIds.Ports.WallClock.monotonicNs: { _ in
             let result = impl.monotonicNs()
+            return result.undraEncoded()
+        },
+    ])
+}
+
+/// ``wallClockPortImpl(_:)`` from closures, one per method in the protocol's order, for an app that has no
+/// class to conform: under default main-actor isolation a closure literal passed here is nonisolated, so
+/// this form compiles unchanged. The closures run on the core's thread: read main-actor state in an
+/// async one with `await MainActor.run { .. }`, never in a synchronous one.
+public func wallClockPortImpl(
+    nowMs: @escaping @Sendable () -> Int64,
+    monotonicNs: @escaping @Sendable () -> UInt64
+) -> PortImpl {
+    return .sync([
+        UndraIds.Ports.WallClock.nowMs: { _ in
+            let result = nowMs()
+            return result.undraEncoded()
+        },
+        UndraIds.Ports.WallClock.monotonicNs: { _ in
+            let result = monotonicNs()
             return result.undraEncoded()
         },
     ])

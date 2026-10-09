@@ -788,18 +788,92 @@ An unavailable port is a normal outcome, not a bug. A port nobody registered beh
 
 ## Writing your own port
 
-Mark a trait with `#[undra::port]`. The macro registers it in the schema and generates a proxy type, so the core calls your trait like any other, and the platform gets a protocol or interface to implement. This one is made up, to show the shape:
+Mark a trait with `#[undra::port]`. The macro registers it in the schema and generates a proxy type, so the core calls your trait like any other, and each platform gets a protocol or interface to implement and an adapter to register. The cookbook's `Haptics` port is the whole story on three platforms ([the recipe](https://shreypdev.github.io/undra/docs/cookbook/custom-port.html)); the code below is the code that compiles there.
 
-rust
+core/src/haptics.rs
 
 ```rust
+/// A tap the user feels: the platform's haptics engine.
 #[undra::port(sync)]
 pub trait Haptics {
+    /// One tap, `strength` from 0 (nothing) to 255 (the strongest the device has).
     fn tap(&self, strength: u8);
 }
 ```
 
-A port method's parameters must be wire types (`E0030`), and an `event` port's methods cannot return a value (`E0031`).
+core/src/haptics.rs
+
+```rust
+/// Confirms an action the user just took: one light tap through the [`Haptics`] port.
+#[undra::api]
+pub fn confirm(ctx: &Ctx) {
+    haptics(ctx).tap(LIGHT);
+}
+```
+
+A port method's parameters must be wire types (`E0030`), and an `event` port's methods cannot return a value (`E0031`). A port with no `Result` is a port every platform registers: a call on one nobody registered is `E0062` ([above](https://shreypdev.github.io/undra/docs/ports.html#when-a-port-is-missing)).
+
+### Swift: closures, or a class
+
+The generated `Ports.swift` holds three things for the port: the protocol (`public protocol Haptics: UndraPort, Sendable`, each requirement `nonisolated`), `hapticsPortImpl(_:)` for a class that conforms, and `hapticsPortImpl(tap:)`, which takes one closure per method. The core calls a port from its own thread. That is why a class that conforms is nonisolated, and why, under Xcode 26's default main-actor isolation (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, what Xcode 26 sets for a new project), the compiler refuses a `var` in it (`stored property 'store' of 'Sendable'-conforming class 'MyKv' is mutable`) and a read of main-actor state in a synchronous method (`call to main actor-isolated .. in a synchronous nonisolated context`). The closure form has no state to own and the same thread rule: a closure literal passed to a `@Sendable` parameter is nonisolated whatever the file's default, an async closure reads main-actor state with `await MainActor.run { .. }`, and a synchronous one is refused the read (`main actor-isolated property .. can not be referenced from a Sendable closure`). A closure for a method with a typed error names it in its clause (`{ req async throws(HttpError) in .. }`), since Swift infers `any Error` otherwise. The file that registers the port needs `import UndraRuntime`.
+
+swift
+
+```swift
+// From closures: nothing conforms, and the form that compiles unchanged under default main-actor isolation
+// (Xcode 26). The closure runs on the core's thread.
+let haptics = hapticsPortImpl(tap: { strength in Haptic.play(strength) })
+
+// Or a class. A class that conforms to a port protocol is nonisolated, since the core calls it from its own
+// thread: it keeps its state in `let`s or behind a lock, and reads main-actor state from an async port only,
+// with `await MainActor.run { .. }`.
+final class AppHaptics: Haptics {
+    func tap(strength: UInt8) { Haptic.play(strength) }
+}
+
+// Registered with the rest of the adapters, before the core loads: `load(.inproc(adapters: adapters))`.
+let adapters = Adapters.platformDefault
+    .replacing(PortImplAdapter(portId: UndraIds.Ports.Haptics.portId, impl: haptics))
+```
+
+### Kotlin
+
+An `object` (or any class) that implements the generated interface, registered after the platform defaults. A method of a sync port runs on the thread the core calls from; a `suspend` method of an async port is answered later, as a coroutine.
+
+kotlin
+
+```kotlin
+val haptics = object : Haptics {
+    override fun tap(strength: UByte) = vibrator.tap(strength)
+}
+
+// After AndroidPlatformDefaults.install(core, this): served from Kotlin, on the thread the core calls from.
+fun registerHaptics(core: UndraCore) {
+    core.registerPort(UndraIds.Ports.Haptics.PORT_ID, hapticsPortImpl(haptics))
+}
+```
+
+### TypeScript
+
+An object literal, passed in `ports` when the core loads. A sync port is answered where the core runs: with the core in a worker (`wasm-worker`), it goes in the worker module's `ports` instead ([workers](https://shreypdev.github.io/undra/docs/web.html)).
+
+ts
+
+```ts
+const haptics: Haptics = {
+  tap(strength) {
+    navigator.vibrate(strength > 128 ? 40 : 15);
+  },
+};
+
+// A sync port is answered where the core runs: with the core on the page, in `ports`; with the core in a
+// worker, in the worker module's `ports` (`worker.ports`).
+export const core = await UndraCookbook.load({
+  mode: "wasm-main",
+  wasm: new URL("cookbook.wasm", import.meta.url),
+  ports: { [UndraIds.Ports.Haptics.portId]: hapticsPortImpl(haptics) },
+});
+```
 
 ## Testing with fakes
 
@@ -1383,6 +1457,19 @@ A recording is one canonical JSON document, `undra.recording` version 1: payload
 ## Replay port traffic
 
 A `Replayer` answers a core&rsquo;s port calls from a recording, in order per port. A call that differs is a typed `mismatch`, an extra one is `exhausted`, a recorded call with no reply in the file is `unanswered`, and a recorded call never made is `unconsumed`. A deviation consumes nothing, so one wrong call does not shift every later answer.
+
+## Compare platforms
+
+Record the same flow on each platform, then `undra drift ios.json android.json web.json` prints where the hosts diverged: a call missing, extra or made with other arguments; a port answered differently by the platform&rsquo;s adapters; an event pushed on one side only; a signal observed on one side only; a signal whose final value differs. The core is deterministic, so the difference is in what the hosts put in. Clock and random readings, timer deadlines and the `Idempotency-Key` header are ignored; `--ignore Todos.add.title` adds your own. `--exit-code` makes it a CI gate; [the CLI page](https://shreypdev.github.io/undra/docs/cli.html#undra-drift) has every flag.
+
+bash
+
+```bash
+undra dev --record ios.json                              # the iOS app runs the flow against this server
+undra dev --addr 127.0.0.1:7444 --record android.json    # a second server for the Android app (a server serves one client at a time)
+undra drift ios.json android.json                        # the first file is the reference
+undra drift ios.json android.json --exit-code            # CI
+```
 
 ## In the playground
 
@@ -2216,6 +2303,7 @@ Recipes for what every app does. Each is a module of one Rust crate that is comp
 
 - **An app with a login?** [Auth](https://shreypdev.github.io/undra/docs/cookbook/auth.html), then [offline-first](https://shreypdev.github.io/undra/docs/cookbook/offline.html).
 - **A big list that changes fast?** [Live leaderboard](https://shreypdev.github.io/undra/docs/cookbook/leaderboard.html): 100,000 players, a snapshot and a delta stream, with the core lock held for under a microsecond.
+- **Something only the platform can do?** [Your own port](https://shreypdev.github.io/undra/docs/cookbook/custom-port.html): declared in Rust, implemented in Swift, Kotlin and TypeScript, with what Xcode 26's default main-actor isolation makes of a Swift conformer.
 - **An existing codebase?** [From Kotlin Multiplatform](https://shreypdev.github.io/undra/docs/cookbook/from-kmp.html) or [from UniFFI](https://shreypdev.github.io/undra/docs/cookbook/from-uniffi.html): three steps, the first one small.
 - **Want it all in one place?** [Fieldbook](https://shreypdev.github.io/undra/docs/sample.html), field notes with photos, uses the recipes together on the web, iOS and Android.
 
@@ -2549,6 +2637,109 @@ Source: [`okhttp-adapters/README.md`](https://github.com/shreypdev/undra/blob/ma
 
 ---
 
+Source: https://shreypdev.github.io/undra/docs/cookbook/custom-port.html
+
+# Your own port, on three platforms
+
+Haptic feedback is something only the platform can give. The core declares the port and calls it like any other; each platform implements it the way it writes everything else and registers it with the rest of the adapters. The code on this page is the code that compiles: the Rust by `cargo test -p cookbook`, the platform lines by `examples/cookbook/snippets/check.sh`.
+
+## The port, in Rust
+
+A trait with `#[undra::port]`: `sync`, because a tap has nothing to wait for (an async port is the same trait with `async fn`s). The macro puts it in the schema and generates the accessor the core calls it through.
+
+core/src/haptics.rs
+
+```rust
+/// A tap the user feels: the platform's haptics engine.
+#[undra::port(sync)]
+pub trait Haptics {
+    /// One tap, `strength` from 0 (nothing) to 255 (the strongest the device has).
+    fn tap(&self, strength: u8);
+}
+```
+
+core/src/haptics.rs
+
+```rust
+/// Confirms an action the user just took: one light tap through the [`Haptics`] port.
+#[undra::api]
+pub fn confirm(ctx: &Ctx) {
+    haptics(ctx).tap(LIGHT);
+}
+```
+
+A port with no `Result` is a port every platform registers: a call on one nobody registered is `E0062` ([when a port is missing](https://shreypdev.github.io/undra/docs/ports.html#when-a-port-is-missing)). Give a port that a platform may lack a `Result`, and the core sees the platform's answer as a value.
+
+## Swift: closures, or a class
+
+The generated `Ports.swift` holds three things for the port: the protocol (`public protocol Haptics: UndraPort, Sendable`, each requirement `nonisolated`), `hapticsPortImpl(_:)` for a class that conforms, and `hapticsPortImpl(tap:)`, which takes one closure per method. The core calls a port from its own thread. That is why a class that conforms is nonisolated, and why, under Xcode 26's default main-actor isolation (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, what Xcode 26 sets for a new project), the compiler refuses a `var` in it (`stored property 'store' of 'Sendable'-conforming class 'MyKv' is mutable`) and a read of main-actor state in a synchronous method (`call to main actor-isolated .. in a synchronous nonisolated context`). Its state goes in `let`s or behind a lock. The closure form has no state to own and the same thread rule: a closure literal passed to a `@Sendable` parameter is nonisolated whatever the file's default, an async closure reads main-actor state with `await MainActor.run { .. }`, and a synchronous one is refused the read (`main actor-isolated property .. can not be referenced from a Sendable closure`). A closure for a method with a typed error names it in its clause (`{ req async throws(HttpError) in .. }`), since Swift infers `any Error` otherwise. The file that registers the port needs `import UndraRuntime`.
+
+swift
+
+```swift
+// From closures: nothing conforms, and the form that compiles unchanged under default main-actor isolation
+// (Xcode 26). The closure runs on the core's thread.
+let haptics = hapticsPortImpl(tap: { strength in Haptic.play(strength) })
+
+// Or a class. A class that conforms to a port protocol is nonisolated, since the core calls it from its own
+// thread: it keeps its state in `let`s or behind a lock, and reads main-actor state from an async port only,
+// with `await MainActor.run { .. }`.
+final class AppHaptics: Haptics {
+    func tap(strength: UInt8) { Haptic.play(strength) }
+}
+
+// Registered with the rest of the adapters, before the core loads: `load(.inproc(adapters: adapters))`.
+let adapters = Adapters.platformDefault
+    .replacing(PortImplAdapter(portId: UndraIds.Ports.Haptics.portId, impl: haptics))
+```
+
+## Kotlin
+
+An `object` (or any class) that implements the generated interface, registered after the platform defaults. A method of a sync port runs on the thread the core calls from; a `suspend` method of an async port is answered later, as a coroutine.
+
+kotlin
+
+```kotlin
+val haptics = object : Haptics {
+    override fun tap(strength: UByte) = vibrator.tap(strength)
+}
+
+// After AndroidPlatformDefaults.install(core, this): served from Kotlin, on the thread the core calls from.
+fun registerHaptics(core: UndraCore) {
+    core.registerPort(UndraIds.Ports.Haptics.PORT_ID, hapticsPortImpl(haptics))
+}
+```
+
+## TypeScript
+
+An object literal, passed in `ports` when the core loads. A sync port is answered where the core runs: with the core in a worker (`wasm-worker`), it goes in the worker module's `ports` instead ([workers](https://shreypdev.github.io/undra/docs/web.html)).
+
+ts
+
+```ts
+const haptics: Haptics = {
+  tap(strength) {
+    navigator.vibrate(strength > 128 ? 40 : 15);
+  },
+};
+
+// A sync port is answered where the core runs: with the core on the page, in `ports`; with the core in a
+// worker, in the worker module's `ports` (`worker.ports`).
+export const core = await UndraCookbook.load({
+  mode: "wasm-main",
+  wasm: new URL("cookbook.wasm", import.meta.url),
+  ports: { [UndraIds.Ports.Haptics.portId]: hapticsPortImpl(haptics) },
+});
+```
+
+## What the tests prove
+
+- `cargo test -p cookbook`: two confirmations are two light taps through a fake bound as the port (`core/src/haptics.rs`).
+- `examples/cookbook/snippets/check.sh swift kotlin ts`: the three snippets above compile against the generated bindings and the runtimes, the Swift in the Swift 6 language mode.
+- `cargo test -p undra-bindgen --test typecheck_swift`: a class per port and a closure registration per port compile against the `ports` golden, and, from Swift 6.2, in a target under `.defaultIsolation(MainActor.self)` (ADR-066).
+
+---
+
 Source: https://shreypdev.github.io/undra/docs/cookbook/from-kmp.html
 
 # Moving from Kotlin Multiplatform
@@ -2724,6 +2915,7 @@ undra [-C <dir>] <command>
   schema    compare the public API of two schemas (breaking or additive), or export the core's schema
   build     build the core for iOS, Android, the web or this machine
   dev       serve the core over a WebSocket to running apps, rebuilding on change
+  drift     compare recordings of one flow made on different platforms: where the hosts diverged
   doctor    check toolchains and SDKs against what the project needs, with the fix for each gap
   adopt     add an Undra core to an existing app, without touching its project files
   upgrade   move a project to this undra's version: every pin, the bindings, the migration notes
@@ -2881,6 +3073,26 @@ Every platform runtime exposes what the connection is doing (`connecting`, `conn
 
 **No authentication.** The server has none. Keep the loopback default unless a device has to reach it.
 
+## undra drift
+
+bash
+
+```bash
+undra drift ios.json android.json web.json          # where the three hosts diverged; the first file is the reference
+undra drift ios.json android.json --exit-code       # exit 1 on any divergence (CI)
+undra drift --schema schema.json ios.json web.json  # name and decode with this schema (outside the project)
+undra drift --ignore Todos.add.title a.json b.json  # leave a parameter out of the comparison
+```
+
+Compares recordings of one user flow made on different platforms ([`undra dev --record`](https://shreypdev.github.io/undra/docs/cli.html#undra-dev), one server per platform) and prints where the hosts diverged at the boundary, one line per divergence: `calls` (a host call missing, extra, or made with other arguments; the sequence is diffed, so one skipped tap does not shift every later line), `ports` (a port method called another number of times, with other arguments, or answered differently by the platform's adapters), `events` (a host-pushed event missing or extra), `observes` (a signal observed on one side only) and `state` (a signal whose final value differs). The core is deterministic, so with the same inputs every platform gets the same change-sets: the drift that matters is in the inputs. Handles are matched by constructor and order (`Todos#0`); call ids, timer ids and `t` are never compared. Always ignored, and named in the header: the replies of `Clock.*` and `Rng.*`, the arguments of `Timer.*`, and, with a schema to find it, the `Idempotency-Key` header of `Http.request`. The exit status is 0 whatever is found unless `--exit-code`. [Testing your app](https://shreypdev.github.io/undra/docs/testing.html#compare-platforms) has the recording steps.
+
+| Flag | Meaning |
+| --- | --- |
+| `REFERENCE OTHER...` | the reference recording, then every recording to compare with it; each must carry the reference's schema hash (`C0009` otherwise) |
+| `--schema <file>` | the schema that names the ids and decodes the bytes; default `schema.json` in the project directory, else the project's core is built and asked; outside a project, ids and bytes are compared and the header says so |
+| `--ignore <path>` | leave this out (repeatable): `Todos.add.title` a parameter, `Http.request.req.headers` a field inside one, `Todos.add` the whole arguments, `Todos.todos` a signal's final value |
+| `--exit-code` | exit with status 1 when any divergence was found; the output is the same |
+
 ## undra doctor
 
 bash
@@ -3005,7 +3217,7 @@ The standard ports and their types are in every schema but are not generated int
 
 ## The crates
 
-Twelve Rust crates, and only one of them may contain `unsafe`.
+Thirteen Rust crates, and only one of them may contain `unsafe`.
 
 | Crate | Role |
 | --- | --- |
@@ -3017,6 +3229,7 @@ Twelve Rust crates, and only one of them may contain `unsafe`.
 | `undra-ports` | the ten standard ports, their records and the deterministic fakes |
 | `undra-query` | the query client, mutations, retry, persistence and the offline queue |
 | `undra-ffi` | the C ABI, the JNI shim and the wasm exports: **the only `unsafe`** |
+| `undra-testkit` | the testing kit: the harness, the recording format, the recorder and replayer, the cross-platform drift comparison, the fakes' conformance file |
 | `undra-transport` | the WebSocket server and framing behind `undra dev` |
 | `undra-bindgen` | the Swift, Kotlin and TypeScript generators |
 | `undra-cli` | the `undra` command |
@@ -3134,7 +3347,18 @@ Platform runtimes do the same jobs everywhere: load the core, allocate call ids,
 
 ## Compatibility
 
-A UI and a core that were not built from the same schema must not talk. The schema hash is checked when the runtime attaches and surfaces as a typed mismatch error, and `undra bindgen --check` catches stale bindings at build time. Breaking the wire is a major version and needs an ADR; evolving a schema across a hash mismatch is deliberately not in v1.
+A UI and a core that were not built from the same schema must not talk. The schema hash is checked when the runtime attaches and surfaces as a typed mismatch error, and `undra bindgen --check` catches stale bindings at build time. Breaking the wire is a major version and needs an ADR; a changed schema still restores what the last build stored ([Shipping an update](https://shreypdev.github.io/undra/docs/updates.html)).
+
+### Where drift is caught
+
+One schema removes most of the ways three platforms can disagree, and each remaining way has a check that fails:
+
+- **At load:** the schema hash, on every platform, before a single call.
+- **At build:** `undra bindgen --check`, and `undra_bindings_test` under Bazel, for committed bindings that are not what the schema generates.
+- **In review:** `undra schema diff` marks each change to the public API breaking or additive.
+- **In the runtimes:** the contract grid, 35 scenarios against the real core on Swift, Kotlin and TypeScript, every cell passing.
+- **In the hosts:** `undra drift` compares recordings of one flow made on iOS, Android and the web: the calls each UI made and their order, what each platform's port adapters answered, the events each host pushed, what was observed, and the state every store ended in, with the arguments decoded through the schema ([Testing](https://shreypdev.github.io/undra/docs/testing.html#compare-platforms)).
+- **In a custom port:** the generated Swift compiles under Swift's default main-actor isolation, proven by a compile test in CI ([Ports](https://shreypdev.github.io/undra/docs/ports.html#writing-your-own-port)).
 
 ## Diagnostics
 
@@ -3202,9 +3426,9 @@ The big decisions are written down as ADRs before the code. The ones in the tree
 | [027](https://github.com/shreypdev/undra/blob/main/.10x/adrs/ADR-027-keyed-list-ops-are-recorded-not-diffed.md) | Keyed list operations are recorded, not diffed |
 | [028](https://github.com/shreypdev/undra/blob/main/.10x/adrs/ADR-028-synchronous-reply-slot.md) | The synchronous reply slot |
 
-## What v1 leaves out
+## What Undra leaves out
 
-By design, v1 has no sync engine, no hosted services and no shared UI of any kind. Kv is a foreign port rather than Rust-owned SQLite. Lazy lists are reserved and rejected. Those are choices recorded in the specification, not gaps.
+By design, Undra has no sync engine, no hosted services and no shared UI of any kind. Storage is a port the platform implements (Kv, SecureStore, Fs, and the opt-in Db over SQLite), not a database the core owns. Those are choices recorded in the specification and the roadmap, not gaps.
 
 ## Read the source of truth
 
@@ -5039,15 +5263,22 @@ Roadmap
 
 # What is shipped, and what comes next.
 
-Shipped is what is on `main`. Next, Later and Exploring come only from what the repository records as planned or open: plans, not promises. This page follows the project's working record, [.10x/status.md](https://github.com/shreypdev/undra/blob/main/.10x/status.md), and changes with it. Last updated 6 Oct 2026.
+Shipped is what is on `main`. Next, Later and Exploring come only from what the repository records as planned or open: plans, not promises. This page follows the project's working record, [.10x/status.md](https://github.com/shreypdev/undra/blob/main/.10x/status.md), and changes with it. Last updated 9 Oct 2026.
 
 Shipped
 
-## In 1.0 and 1.1
+## In 1.0, 1.1 and 1.2
 
 on main
 
 What you can build on today, grouped. Each line has its page in the docs and its decision record in the repository.
+
+### No drift (1.2)
+
+- **undra drift**Recordings of one flow made on iOS, Android and the web, compared at the boundary: calls and their order, port answers, events, what was observed, the state each store ended in; --exit-code for CI.
+- **Host ports under default main-actor isolation (ADR-066)**A custom port compiles on iOS on the first try: a closure form beside the protocol, and a compile test under Swift's default main-actor isolation in CI.
+- **Your own port, on three platforms**A cookbook recipe whose Swift, Kotlin and TypeScript snippets compile in CI, with the registration line per platform.
+- **The merge gate, measured**The two longest Linux jobs split into halves that run side by side; the macOS splits measured no gain on a shared runner pool and were reverted; every job still runs on every change.
 
 ### Bazel-first (1.1)
 
@@ -5138,6 +5369,7 @@ recorded as open
 
 Each of these is recorded as open in the repository, with the work done around it. A plan, not a promise; the order may change.
 
+- Adapter conformance across platformsThe five SSE adapters merge the core's headers differently, and the JDK Http adapter drops restricted headers where Swift passes them. One vector file recorded against one server and diffed in CI, like the fakes' conformance file, after a rule in the specification says which header wins.
 - Benchmarks on physical phonesEvery device row so far is from a simulator, an emulator or headless Chromium. Real-phone rows next, then budgets for them and a CI job.
 - Maven Central and the npm registryThe conventional registries, after launch, beside GitHub: the Kotlin runtime on Maven Central and the npm packages on the registry. undra upgrade moves a project over. crates.io follows, under a registry-safe prefix.
 - Homebrew (brew install undra)Through homebrew-core, once the repository is 30 days old and notable (75 stars, or 30 forks or watchers). There is no tap at launch: the installer and cargo are the two ways to get the CLI.
@@ -5186,6 +5418,84 @@ Shared UI of any kind, and hosted services. Undra owns everything under the pixe
 > Open an issue on [GitHub](https://github.com/shreypdev/undra/issues) and describe the problem you have rather than the feature you want; real projects and real numbers move items up. Anything that touches the wire, the runtime model, the threading model or a generated public shape needs a decision record first, and those live in [.10x/adrs](https://github.com/shreypdev/undra/tree/main/.10x/adrs).
 >
 > [Open an issue](https://github.com/shreypdev/undra/issues)
+
+---
+
+Source: https://shreypdev.github.io/undra/blog/undra-1-2-no-drift/
+
+Release
+
+# Undra 1.2: no drift between three hosts
+
+One Rust core already made three hosts agree on their logic, state and data. What still drifted was everything the schema cannot see: which calls each UI makes, what each platform's adapters send, how a custom port is written three times. 1.2 is about those three things.
+
+9 Oct 2026 · 7 min read · Undra team
+
+## What still drifted
+
+A team spent a week building a trading app on Undra 1.1: one core, SwiftUI on iOS, Compose on Android, React on the web. The core was never the problem. Three things were, and each of them lived outside the schema:
+
+- **A header the replay never saw.** Their production API refused a request that every test had accepted: one platform's adapter sent `Accept` twice. Their replay server matched on method and URL alone, so the duplicate got through.
+- **A wrong host on one platform.** Orders went to the API host instead of the web host, on one platform only, and nothing compared what the three hosts asked for.
+- **A port that did not compile.** Their iOS credentials port, a plain class conforming to the generated protocol, failed to build under Xcode 26's default main-actor isolation, and the file also needed an import nobody had told them about.
+
+The first two are drift at the boundary: the core is deterministic, so if the three apps fed it the same inputs they would have ended in the same state. The third is drift in the one piece of host code a schema cannot generate for you. 1.2 answers each.
+
+## undra drift
+
+Undra's testing kit already records a session as one JSON document, the same format on every platform: the calls the host made, the replies, every change-set, every port call and its answer, every event the host pushed. `undra dev --record` writes one for the app it is serving. 1.2 adds the comparison:
+
+shell
+
+```
+$ undra dev --record ios.json                              # the iOS app connected
+$ undra dev --addr 127.0.0.1:7444 --record android.json    # the Android app, on a second server
+$ undra drift ios.json android.json web.json
+Drift: ios.json (reference) against android.json, web.json (schema 0x3c17cd5f59bb6f68)
+Ignored: the replies of Clock.* and Rng.*, the arguments of Timer.*, the Idempotency-Key header of Http.request, and t
+
+android  calls     Todos.toggle on Todos#0 #5: missing on android ({"id":"00000000-0000-0001-0000-000000000000"})
+android  ports     Http.request #1: reply differs: ios {"body":{"status":200,...},"status":"ok"}, android {"body":{"status":500,...},"status":"ok"}
+web      calls     Todos.add on Todos#0 #6: extra on web ({"title":"Pay the rent"})
+
+3 divergences on 2 of 3 recordings
+```
+
+The first file is the reference; every other file is compared with it. What is compared: the calls each host made and their order, with the arguments decoded through the project's schema; what each platform's port adapters answered, per port and method; the events each host pushed (connectivity, lifecycle); what was observed; and the state every store ended in. What legitimately differs between two runs is ignored and said so in the report: clock and random readings, timer deadlines, idempotency keys and each entry's time. Handles are aligned by the constructor that made them and its ordinal, so a store created second on iOS is compared with the store created second on Android, whatever number each runtime gave it. With `--exit-code` the command fails on any divergence, which is how it goes into CI.
+
+What a port drift looks like in the report: the `Http.request` each platform's core asked for is the same, and the answer is not. The API that refused a duplicate header on one platform answered that platform's call with a 400 and the others with a 200, which is one `ports` line naming the call and both replies; the wrong host is the same line with the wrong answer. The report shows what the core asked and what each platform answered; what the adapter put on the wire between the two is the next step (below). The record format is unchanged, so a recording made with 1.1 reads in 1.2.
+
+## A port that compiles on every platform
+
+A custom port in Rust is a trait. On Kotlin it is an interface and on the web an object literal, and both compiled from day one. On Swift the generated protocol is `Sendable`, because the core calls it from its own thread. We reproduced the failure with Xcode 26.6 and found it is not where we guessed: under default main-actor isolation a class conforming to that protocol is inferred nonisolated, and a stateless one compiles as written. What fails is what a real port has: a mutable property in a `Sendable` class, a read of main-actor state from the witness, and, when the generated file is compiled inside a module built in that mode, the generated adapter itself, whose requirements the mode had made main-actor isolated. And the registration line needs `import UndraRuntime`, which nothing said.
+
+1.2 makes every requirement `nonisolated` in the generated protocol, puts a five-line doc on it (the thread, what a conformer therefore is, the import), and generates a second form beside it: one function per port that takes a `@Sendable` closure per method. A `@Sendable` closure is nonisolated under every isolation mode, so there is nothing to conform to and nothing to annotate; an async one reads main-actor state through `await MainActor.run`, and a synchronous one that tries is refused by the compiler with a diagnostic that says so:
+
+swift
+
+```
+import UndraRuntime
+
+let locale = localePortImpl(hello: { "Bonjour" })
+let adapters = Adapters.platformDefault.replacing(PortImplAdapter(portId: UndraIds.Ports.Locale.portId, impl: locale))
+let core = try UndraPlaygroundCore.load(.inproc(adapters: adapters))
+```
+
+The protocol form stays, for a port with state worth a type. A compile test in CI builds both forms, a plain class per port and a closure registration that reads main-actor state, under `-default-isolation MainActor`, so the shape cannot regress. The cookbook has the same port on three platforms, with each snippet compiled by CI, and the playground's iOS app implements its `Locale` port in the new form. The decision is [ADR-066](https://github.com/shreypdev/undra/blob/main/.10x/adrs/ADR-066-host-ports-under-default-main-actor-isolation.md).
+
+## The merge gate, measured
+
+Nothing lands on `main` unless every workflow is green on the exact commit. That gate took 26 to 31 minutes on the last three green runs, and the numbers said why: a handful of macOS runners serve the whole queue, and four jobs ran their work in a row where nothing depended on the order (the macOS Bazel example ran four Bazel configurations one after another; the Rust job's `cargo test --workspace` spent two thirds of its time in the CLI's integration tests; the Swift job built the Xcode projects after the runtime's tests; Two cores built its Debug cores, then its Release cores).
+
+So we split all four into halves that run side by side, and measured it on this release's own pull request. The Linux halves did what they were meant to: the Rust job's took 6 and 14 minutes where the one job took 17 to 21, and the Bazel example's 8 and 9 where it took 17. The macOS halves did not: only three macOS runners were free, because two other workflows a pull request starts were using the rest, and the extra jobs added ten runner-minutes of setup to a pool that was already full. The gate took 29 minutes. We kept the Linux splits and the order, put the macOS jobs back the way they were, and ran it again: green in 23 minutes, three to six minutes shorter than before and not the half we had hoped for, with what would shorten it from here written down: the macOS pool is the limit, and it is shared. The record, with both measurements, is [ci-wall-time.md](https://github.com/shreypdev/undra/blob/main/.10x/decisions/devops/ci-wall-time.md).
+
+## What is next
+
+The duplicate header pointed at something `undra drift` reports but does not fix: the platform default adapters themselves differ. The five SSE adapters merge the core's headers in different ways, and the JDK Http adapter drops restricted headers where Swift passes them. The next step is a conformance file for the real adapters, recorded against one server and diffed in CI, the way the fakes are already held to one file. It needs a rule in the specification first (which header wins), so it is on the [roadmap](https://shreypdev.github.io/undra/roadmap/#next-adapter-conformance-across-platforms) under Next, with the evidence.
+
+## Upgrading
+
+`undra upgrade` moves a project's pins to 1.2.0 and prints the release's migration notes. Nothing on the wire, the ABI or the schema changed; bindings regenerate to the same public shapes plus the new Swift port builders. The [testing page](https://shreypdev.github.io/undra/docs/testing.html#compare-platforms) has the drift command, [the ports page](https://shreypdev.github.io/undra/docs/ports.html#writing-your-own-port) the three-platform port, and the [roadmap](https://shreypdev.github.io/undra/roadmap/) what shipped and what is open.
 
 ---
 

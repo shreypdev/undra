@@ -6,7 +6,15 @@
     <description>Comparisons, architecture and design notes from the Undra team.</description>
     <language>en</language>
     <atom:link href="https://shreypdev.github.io/undra/feed.xml" rel="self" type="application/rss+xml"/>
-    <lastBuildDate>Sat, 03 Oct 2026 00:00:00 GMT</lastBuildDate>
+    <lastBuildDate>Fri, 09 Oct 2026 00:00:00 GMT</lastBuildDate>
+    <item>
+      <title>Undra 1.2: no drift between three hosts</title>
+      <link>https://shreypdev.github.io/undra/blog/undra-1-2-no-drift/</link>
+      <guid isPermaLink="true">https://shreypdev.github.io/undra/blog/undra-1-2-no-drift/</guid>
+      <pubDate>Fri, 09 Oct 2026 00:00:00 GMT</pubDate>
+      <category>Release</category>
+      <description>One core made three hosts agree on logic. 1.2 adds a diff of one flow recorded per platform, a custom port that compiles on iOS, and a faster gate.</description>
+    </item>
     <item>
       <title>A week of outside use: seven findings, five fixes</title>
       <link>https://shreypdev.github.io/undra/blog/a-week-of-outside-use/</link>

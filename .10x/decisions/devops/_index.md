@@ -13,3 +13,4 @@ via DEVELOPER_DIR. Missing until the playground step: Android commandlinetools +
   `docs/RELEASING.md`.
 - `pr-gate.md` - the merge gate as GitHub enforces it: the "All green" roll-up per workflow, the four required checks, Site on every pull request, `wt.sh merge` through a pull request (2026-10-02).
 - `bazel-first.md` - 1.1 CI additions (Bazel range, ruleset minimums, Android in CI, the symbolicate and bindings tests), their cost, and that the release process is unchanged (2026-10-05).
+- `ci-wall-time.md` - the Gate's critical path measured twice: the two longest Linux jobs split (Rust workspace and CLI: 6 and 14 minutes for 17; Bazel recent rulesets and minimums: 8 and 9 for 17), macOS jobs listed first, ADR-066's compile pass on the newest Xcode; the macOS splits and a Bazel disk cache measured no gain (the pool is shared with the RN devices and Launch rehearsal workflows) and were reverted; every job still runs on every change (2026-10-09).

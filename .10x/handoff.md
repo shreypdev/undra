@@ -1,4 +1,4 @@
-# Handoff - the v1.1 / v1.2 program is landing (2026-10-01)
+# Handoff - Undra 1.2 (no drift) is prepared as one pull request (2026-10-09)
 
 The product is **Undra** (renamed from the working name Keel on 2026-09-30, ADR-030). `main` is
 `shreypdev/undra`; the site is https://shreypdev.github.io/undra/.
@@ -55,6 +55,25 @@ open: `origin` has `main` only.** What each review left recorded is listed at th
 findings not taken on are U2 (Xcode 27, needs the reporter's crash log) and U6 (GraphQL).
 
 **After checkpoint 35 (status checkpoint 36):** the single Gate check (#16), no Homebrew tap (#17), no em-dash in any tracked file with a CI check (#18) and the launch polish (#19) are on `main` (`3797ae7`). Rules that came out of them: one required check, `All green`, the Gate's last job; no em-dash (U+2014) in anything tracked, in a commit message or in a pull request (a plain hyphen is fine); a script that lists files and rewrites them makes its whole plan first; a test that follows one handle waits for the other on its own condition.
+
+**Undra 1.2 (2026-10-09, status checkpoint 41).** The no-drift release is one pull request (`wt/undra-1-2`), open for
+the founder's review and not tagged: `undra drift` (recordings of one flow made on different platforms compared at the
+boundary, with the arguments decoded through the schema; `crates/undra-testkit/src/{decode,drift}.rs`, the CLI command, the
+playground's own three-platform test), ADR-066 (Proposed: every generated Swift port requirement `nonisolated`, a builder
+from `@Sendable` closures beside the adapter, a compile test under `.defaultIsolation(MainActor.self)` with Swift 6.2 or
+newer, the playground's `Locale` registered from a closure, the cookbook's `Haptics` on three platforms), the Gate's two
+longest Linux jobs split (the macOS splits were measured on the first run and reverted: the pool is shared with the RN devices
+and Launch rehearsal workflows), the site, the README, the post, and the 1.2.0 version with its migration notes. Design: `.10x/specs/2026-10-09-no-drift-design.md`; reviews:
+`.10x/reviews/2026-10-09-{drift,host-ports}-review.md` and the whole-branch
+`.10x/reviews/2026-10-09-undra-1-2-integration-review.md` (its fixes are on the branch; the one outside docs: the `macos`
+job runs ADR-066's main-actor compile pass on the image's newest stable Xcode and fails on a skip, so the Gate's `macos`
+job log is where to confirm it: `Swift version 6.2` or newer and `1 passed` under that step; if that step alone is red,
+drop it and reword the four public claims of a CI proof to "from Swift 6.2"). The branch was pushed as `wt/undra-1-2` from
+the integration checkout `claude/tdd-trading-kernel-release-fcddfe`. What the founder decides: merging accepts ADR-066; whether to rehearse
+as `1.2.0-rc.1` (generated Swift shapes changed, additively; `docs/RELEASING.md` step 3 says a rehearsal is required and
+1.1.0 skipped it with a recorded reason); whether Launch rehearsal and RN devices should keep running
+beside the Gate on every pull request (they take the macOS pool: `.10x/decisions/devops/ci-wall-time.md`). Next after it: adapter conformance across the platform default adapters (roadmap,
+Next, with the evidence), then the 1.1 list below (native Bazel mode, port cancellation, the Swift SSE backpressure design).
 
 **Undra 1.1 (2026-10-06, status checkpoint 40).** The Bazel-first integration landed as one pull request after
 per-piece adversarial reviews: Bazel 8.8 and 9.x with ruleset minimums, `undra_bindings_test` for committed bindings

@@ -139,6 +139,24 @@ pub const MIGRATIONS: &[Migration] = &[
             },
         ],
     },
+    Migration {
+        version: "1.2.0",
+        title: "1.2: no drift between hosts: undra drift, Swift ports from closures, nonisolated port requirements",
+        notes: &[
+            Note {
+                kind: Kind::New,
+                text: "`undra drift REFERENCE OTHER...` compares recordings of one flow made on different platforms (`undra dev --record FILE`, one server per platform) and reports where the hosts diverged at the boundary: a call missing, extra or made with other arguments, a port answered differently, an event pushed on one side only, a signal observed on one side only, a signal whose final value differs. The replies of Clock and Rng, the arguments of Timer, the Idempotency-Key header (with a schema to find it) and `t` are ignored; `--ignore PATH` adds your own; `--exit-code` makes it a CI gate. docs/TESTING.md has it.",
+            },
+            Note {
+                kind: Kind::New,
+                text: "Every generated Swift port has a second `<name>PortImpl`, from closures: one labelled `@Sendable` parameter per method (`clockPortImpl(nowMs:monotonicNs:log:)`), built on the same method table as `<name>PortImpl(_:)`. Under Xcode 26's default main-actor isolation a closure literal passed to it is nonisolated, so an app registers a port without conforming to anything; an async closure reads main-actor state with `await MainActor.run { .. }`, and a closure for a method with a typed error names it in its clause (`{ req async throws(HttpError) in .. }`). Registering needs `import UndraRuntime` (ADR-066).",
+            },
+            Note {
+                kind: Kind::Changed,
+                text: "Every requirement of a generated Swift port protocol is `nonisolated`, so the file also compiles in a module under default main-actor isolation. A class that conforms compiles as before: it is nonisolated and `Sendable`, keeps its state in `let`s or behind a lock, and reads main-actor state from an async method only (ADR-066).",
+            },
+        ],
+    },
 ];
 
 /// The migrations a project crosses going from `from` (the version it is on; `None` when that is

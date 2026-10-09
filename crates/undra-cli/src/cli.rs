@@ -35,6 +35,9 @@ REVIEWING A CHANGE
     undra schema diff --against origin/main        what changed in the public API, each line breaking or additive (review this, not the bindings)
     undra bindgen --check                          the committed bindings are exactly what the schema generates (CI)
 
+ACROSS PLATFORMS
+    undra drift ios.json android.json web.json     where the iOS, Android and web hosts diverged in one recorded flow (--exit-code for CI)
+
 CHECK THE MACHINE
     undra doctor                                   every prerequisite, with the exact fix for each gap (--fix, --json)
 
@@ -296,6 +299,49 @@ EXAMPLES
     undra schema diff old.json new.json                two schema files"
     )]
     Schema(SchemaArgs),
+    /// Compare recordings of one flow made on different platforms and report where the hosts diverged.
+    #[command(
+        long_about = "Compares two or more recordings of the same user flow (`undra dev --record FILE`, one per platform: iOS, \
+Android, web) and reports where the hosts diverged at the boundary. The core is deterministic, so with the same inputs \
+every platform gets the same change-sets: the drift that matters is in the inputs, and that is what is compared. The \
+first file is the reference; every other file is compared with it. Five kinds of line: `calls` (a host call missing, \
+extra, or made with other arguments; the sequence is diffed, so one skipped tap does not shift every later line), \
+`ports` (a port method called another number of times, or with other arguments, or answered differently by the \
+platform's adapters), `events` (the host-pushed events, Connectivity and Lifecycle), `observes` (a signal observed on \
+one side only) and `state` (a signal whose final value differs). Handles are matched by constructor and order, so the \
+first `Todos` of one session is the first `Todos` of another; call ids, timer ids and `t` are never compared.\n\n\
+Always ignored, and said so in the header: the replies of `Clock.*` and `Rng.*`, the arguments of `Timer.*`, and, with a \
+schema to find it, the value of an `Idempotency-Key` header inside `Http.request` arguments. --ignore adds dotted paths, matched after \
+decoding: `Todos.add.title` (a parameter), `Http.request.req.headers` (a field inside one), `Todos.add` (the whole \
+arguments), `Todos.todos` (a signal's final value).\n\n\
+The schema names the ids and decodes the bytes (`Todos.add`, `{\"title\":\"Buy milk\"}`): --schema FILE, else \
+`schema.json` in the project directory, else the project's core is built and asked, as `undra schema export` does; \
+outside a project without --schema, ids and bytes are compared and the report says so. Every file must be a recording \
+of the same schema as the reference (and as the schema); another one is refused (C0009).\n\n\
+The output goes to stdout and the exit status is 0 whatever is found, so it can be read freely; --exit-code makes it 1 \
+when any line was printed, for a CI gate. docs/TESTING.md has how to record each platform.",
+        after_long_help = "\
+EXAMPLES
+    undra drift ios.json android.json web.json          where the three hosts diverged, iOS as the reference
+    undra drift ios.json android.json --exit-code       ... and exit 1 on any divergence (CI)
+    undra drift --schema schema.json ios.json web.json  name and decode with this schema (outside the project)
+    undra drift --ignore Todos.add.title a.json b.json  leave a parameter out of the comparison
+
+OUTPUT
+    Drift: ios.json (reference) against android.json, web.json (schema 0x3c17cd5f59bb6f68)
+    Ignored: the replies of Clock.* and Rng.*, the arguments of Timer.*, the Idempotency-Key header of Http.request, and t
+
+    android  calls     Todos.toggle on Todos#0 #5: missing on android ({\"id\":\"00000000-0000-0001-0000-000000000000\"})
+    android  ports     Http.request #1: reply differs: ios {\"body\":{..,\"status\":200},\"status\":\"ok\"}, android {..}
+    web      calls     Todos.add on Todos#0 #6: extra on web ({\"title\":\"Pay the rent\"})
+
+    3 divergences on 2 of 3 recordings
+
+RECORDING EACH PLATFORM
+    undra dev --record ios.json                          one server per platform: the dev server serves one client at a time
+    undra dev --addr 127.0.0.1:7444 --record android.json"
+    )]
+    Drift(DriftArgs),
     /// Move a project to the version of this `undra`: every pin in step, bindings regenerated, migration notes.
     #[command(
         long_about = "Reads the Undra version a project pins in every place `undra init` writes it: the core's \
@@ -485,6 +531,28 @@ pub struct SchemaDiffArgs {
 
     /// Two schema files, old then new; with --against, at most one: the schema file (default `schema.json` in the project directory).
     #[arg(value_name = "OLD NEW | FILE")]
+    pub files: Vec<PathBuf>,
+}
+
+/// Arguments of `undra drift`.
+#[derive(Args, Debug)]
+pub struct DriftArgs {
+    /// The schema that names the ids and decodes the bytes (default: `schema.json` in the project directory, else the
+    /// project's core is built and asked; outside a project, ids and bytes are compared).
+    #[arg(long, value_name = "FILE")]
+    pub schema: Option<PathBuf>,
+
+    /// Leave this out of the comparison (repeatable): `Todos.add.title`, `Http.request.req.headers`, `Todos.add`
+    /// (the whole arguments), `Todos.todos` (a signal's final value).
+    #[arg(long, value_name = "PATH")]
+    pub ignore: Vec<String>,
+
+    /// Exit with status 1 when any divergence was found (for CI); the output is the same.
+    #[arg(long)]
+    pub exit_code: bool,
+
+    /// The reference recording, then every recording to compare with it (`undra dev --record FILE`).
+    #[arg(value_name = "REFERENCE OTHER", required = true, num_args = 1..)]
     pub files: Vec<PathBuf>,
 }
 
@@ -900,6 +968,48 @@ mod tests {
                 sub.get_name()
             );
         }
+    }
+
+    #[test]
+    fn drift_takes_a_reference_and_others_with_a_schema_ignores_and_a_gate() {
+        let cli = Cli::try_parse_from([
+            "undra",
+            "drift",
+            "--schema",
+            "s.json",
+            "--ignore",
+            "Todos.add.title",
+            "--ignore",
+            "Http.request.req.headers",
+            "--exit-code",
+            "ios.json",
+            "android.json",
+            "web.json",
+        ])
+        .unwrap();
+        let Command::Drift(args) = cli.command else {
+            panic!("not drift")
+        };
+        assert_eq!(args.schema, Some(PathBuf::from("s.json")));
+        assert_eq!(args.ignore, ["Todos.add.title", "Http.request.req.headers"]);
+        assert!(args.exit_code);
+        assert_eq!(
+            args.files,
+            [
+                PathBuf::from("ios.json"),
+                PathBuf::from("android.json"),
+                PathBuf::from("web.json")
+            ]
+        );
+        let cli = Cli::try_parse_from(["undra", "drift", "a.json", "b.json"]).unwrap();
+        let Command::Drift(args) = cli.command else {
+            panic!("not drift")
+        };
+        assert!(args.schema.is_none() && args.ignore.is_empty() && !args.exit_code);
+        assert!(
+            Cli::try_parse_from(["undra", "drift"]).is_err(),
+            "a file is needed"
+        );
     }
 
     #[test]
