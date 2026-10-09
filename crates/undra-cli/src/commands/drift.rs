@@ -78,16 +78,27 @@ pub fn run(env: &Env<'_>, args: &DriftArgs) -> Result<bool> {
             session
         }
     };
-    let reference_session = session(reference_file, reference);
-    let compared = recordings[1..]
+    let mut sessions: Vec<(&String, DriftSession)> = recordings
         .iter()
-        .map(|(file, recording)| {
-            let other = session(file, recording);
-            Compared {
-                file: file.clone(),
-                label: other.label.clone(),
-                divergences: compare(&reference_session, &other, &rules),
-            }
+        .map(|(file, recording)| (file, session(file, recording)))
+        .collect();
+    // Two runs of one platform (`ios.json` against `ios-again.json`) would read `ios {..},
+    // ios {..}` on every line: when labels collide, every session is named by its file.
+    let mut labels: Vec<&str> = sessions.iter().map(|(_, s)| s.label.as_str()).collect();
+    labels.sort_unstable();
+    labels.dedup();
+    if labels.len() != sessions.len() {
+        for (file, session) in &mut sessions {
+            session.label.clone_from(file);
+        }
+    }
+    let (_, reference_session) = &sessions[0];
+    let compared = sessions[1..]
+        .iter()
+        .map(|(file, other)| Compared {
+            file: (*file).clone(),
+            label: other.label.clone(),
+            divergences: compare(reference_session, other, &rules),
         })
         .collect();
     let report = Report {

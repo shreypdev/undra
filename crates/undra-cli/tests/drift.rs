@@ -156,6 +156,33 @@ fn the_exit_status_follows_exit_code_and_only_then() {
 }
 
 #[test]
+fn two_recordings_of_one_platform_are_named_by_their_files() {
+    // A second run of the iOS app, one title changed ("Buy milk" is "Buy eggs" in the call, the
+    // patches and the reply alike): the lines would read `ios {..}, ios {..}`.
+    let scratch = TempDir::new("drift-same-platform");
+    let again = scratch.path().join("ios-again.json");
+    let text = std::fs::read_to_string(fixtures_dir().join("ios.json")).unwrap();
+    std::fs::write(&again, text.replace("427579206d696c6b", "4275792065676773")).unwrap();
+    let out = run_ok(&mut drift(&[
+        "--schema",
+        "schema.json",
+        "ios.json",
+        again.to_str().unwrap(),
+    ]));
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains(
+            "Todos.add on Todos#0 #2: arguments differ: ios.json {\"title\":\"Buy milk\"}, "
+        ) && text.contains("ios-again.json {\"title\":\"Buy eggs\"}"),
+        "{text}"
+    );
+    assert!(
+        !text.contains(" ios {") && !text.contains(", ios {"),
+        "{text}"
+    );
+}
+
+#[test]
 fn bad_input_teaches() {
     // One file is not a comparison.
     let (code, stderr) = run_err(&mut drift(&["ios.json"]));
