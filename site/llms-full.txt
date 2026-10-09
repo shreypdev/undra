@@ -5278,7 +5278,7 @@ What you can build on today, grouped. Each line has its page in the docs and its
 - **undra drift**Recordings of one flow made on iOS, Android and the web, compared at the boundary: calls and their order, port answers, events, what was observed, the state each store ended in; --exit-code for CI.
 - **Host ports under default main-actor isolation (ADR-066)**A custom port compiles on iOS on the first try: a closure form beside the protocol, and a compile test under Swift's default main-actor isolation in CI.
 - **Your own port, on three platforms**A cookbook recipe whose Swift, Kotlin and TypeScript snippets compile in CI, with the registration line per platform.
-- **The merge gate in half the time**The four longest jobs split into halves that run side by side, the Bazel jobs over a disk cache; every job still runs on every change.
+- **The merge gate, measured**The two longest Linux jobs split into halves that run side by side; the macOS splits measured no gain on a shared runner pool and were reverted; every job still runs on every change.
 
 ### Bazel-first (1.1)
 
@@ -5483,11 +5483,11 @@ let core = try UndraPlaygroundCore.load(.inproc(adapters: adapters))
 
 The protocol form stays, for a port with state worth a type. A compile test in CI builds both forms, a plain class per port and a closure registration that reads main-actor state, under `-default-isolation MainActor`, so the shape cannot regress. The cookbook has the same port on three platforms, with each snippet compiled by CI, and the playground's iOS app implements its `Locale` port in the new form. The decision is [ADR-066](https://github.com/shreypdev/undra/blob/main/.10x/adrs/ADR-066-host-ports-under-default-main-actor-isolation.md).
 
-## The merge gate in half the time
+## The merge gate, measured
 
-Nothing lands on `main` unless every workflow is green on the exact commit. That gate took 26 to 31 minutes on the last three green runs, and the numbers said why: five macOS runners serve the whole queue, and four jobs ran their work in a row where nothing depended on the order (the macOS Bazel example ran four Bazel configurations one after another, 23 minutes; the Rust job's `cargo test --workspace` spent two thirds of its 11 minutes in the CLI's integration tests; the Swift job built the Xcode projects after the runtime's tests; Two cores built its Debug cores, then its Release cores).
+Nothing lands on `main` unless every workflow is green on the exact commit. That gate took 26 to 31 minutes on the last three green runs, and the numbers said why: a handful of macOS runners serve the whole queue, and four jobs ran their work in a row where nothing depended on the order (the macOS Bazel example ran four Bazel configurations one after another; the Rust job's `cargo test --workspace` spent two thirds of its time in the CLI's integration tests; the Swift job built the Xcode projects after the runtime's tests; Two cores built its Debug cores, then its Release cores).
 
-Each of the four is now two jobs that run side by side, with the same steps between them and nothing dropped. The Bazel jobs are split by ruleset set rather than by Bazel version, so each job's 9.x run reads what its 8.8.1 run built from a disk cache. The macOS jobs are listed first, longest first, so they get runners first. Every job still runs on every change, because a job that can be skipped cannot be part of the roll-up. The record, with the measurement from the release's own run, is [ci-wall-time.md](https://github.com/shreypdev/undra/blob/main/.10x/decisions/devops/ci-wall-time.md).
+So we split all four into halves that run side by side, and measured it on this release's own pull request. The Linux halves did what they were meant to: the Rust job's took 6 and 14 minutes where the one job took 17 to 21, and the Bazel example's 8 and 9 where it took 17. The macOS halves did not: only three macOS runners were free, because two other workflows a pull request starts were using the rest, and the extra jobs added ten runner-minutes of setup to a pool that was already full. The gate took 29 minutes. We kept the Linux splits and the order, put the macOS jobs back the way they were, and wrote down what would shorten the gate from here: the macOS pool is the limit, and it is shared. The record, with both measurements, is [ci-wall-time.md](https://github.com/shreypdev/undra/blob/main/.10x/decisions/devops/ci-wall-time.md).
 
 ## What is next
 

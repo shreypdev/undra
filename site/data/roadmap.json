@@ -26,8 +26,8 @@
               "text": "A cookbook recipe whose Swift, Kotlin and TypeScript snippets compile in CI, with the registration line per platform."
             },
             {
-              "title": "The merge gate in half the time",
-              "text": "The four longest jobs split into halves that run side by side, the Bazel jobs over a disk cache; every job still runs on every change."
+              "title": "The merge gate, measured",
+              "text": "The two longest Linux jobs split into halves that run side by side; the macOS splits measured no gain on a shared runner pool and were reverted; every job still runs on every change."
             }
           ]
         },

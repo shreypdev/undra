@@ -61,9 +61,9 @@ the founder's review and not tagged: `undra drift` (recordings of one flow made 
 boundary, with the arguments decoded through the schema; `crates/undra-testkit/src/{decode,drift}.rs`, the CLI command, the
 playground's own three-platform test), ADR-066 (Proposed: every generated Swift port requirement `nonisolated`, a builder
 from `@Sendable` closures beside the adapter, a compile test under `.defaultIsolation(MainActor.self)` with Swift 6.2 or
-newer, the playground's `Locale` registered from a closure, the cookbook's `Haptics` on three platforms), the Gate
-restructured so the macOS pool and the four serial jobs stop being the critical path (every job still runs), the site, the
-README, the post, and the 1.2.0 version with its migration notes. Design: `.10x/specs/2026-10-09-no-drift-design.md`; reviews:
+newer, the playground's `Locale` registered from a closure, the cookbook's `Haptics` on three platforms), the Gate's two
+longest Linux jobs split (the macOS splits were measured on the first run and reverted: the pool is shared with the RN devices
+and Launch rehearsal workflows), the site, the README, the post, and the 1.2.0 version with its migration notes. Design: `.10x/specs/2026-10-09-no-drift-design.md`; reviews:
 `.10x/reviews/2026-10-09-{drift,host-ports}-review.md` and the whole-branch
 `.10x/reviews/2026-10-09-undra-1-2-integration-review.md` (its fixes are on the branch; the one outside docs: the `macos`
 job runs ADR-066's main-actor compile pass on the image's newest stable Xcode and fails on a skip, so the Gate's `macos`
@@ -71,8 +71,8 @@ job log is where to confirm it: `Swift version 6.2` or newer and `1 passed` unde
 drop it and reword the four public claims of a CI proof to "from Swift 6.2"). The branch was pushed as `wt/undra-1-2` from
 the integration checkout `claude/tdd-trading-kernel-release-fcddfe`. What the founder decides: merging accepts ADR-066; whether to rehearse
 as `1.2.0-rc.1` (generated Swift shapes changed, additively; `docs/RELEASING.md` step 3 says a rehearsal is required and
-1.1.0 skipped it with a recorded reason); the Gate's measured wall time on the pull request goes into
-`.10x/decisions/devops/ci-wall-time.md`. Next after it: adapter conformance across the platform default adapters (roadmap,
+1.1.0 skipped it with a recorded reason); whether Launch rehearsal and RN devices should keep running
+beside the Gate on every pull request (they take the macOS pool: `.10x/decisions/devops/ci-wall-time.md`). Next after it: adapter conformance across the platform default adapters (roadmap,
 Next, with the evidence), then the 1.1 list below (native Bazel mode, port cancellation, the Swift SSE backpressure design).
 
 **Undra 1.1 (2026-10-06, status checkpoint 40).** The Bazel-first integration landed as one pull request after

@@ -32,14 +32,15 @@ compile on the first try on every platform, and halves the time the project's ow
 |---|---|---|
 | `drift` | `undra drift REFERENCE OTHER...` compares recordings of one user flow made on different platforms: the host's calls and their order, the port adapters' answers, the host's events, what was observed, the state each store ended in; arguments and values decoded through the schema; built-in ignores for what legitimately differs (clock and random readings, timer ids, idempotency keys); `--exit-code` for CI | The command, a golden report over fixtures with injected divergences, the playground core's own test recording two platforms and asserting the drift; `docs/TESTING.md`, `docs/DEV_LOOP.md` and the CLI reference |
 | `host-ports` (ADR-066) | A custom port compiles on iOS under Swift's default main-actor isolation: bindgen emits a closure-based builder beside the protocol (`@Sendable` closures, no conformance) and the annotation that lets a plain conformer compile; the generated doc says what to import; a compile test with `-default-isolation MainActor` in CI; the playground's `Locale` port implemented in the new form on iOS; a cookbook recipe "Your own port, on three platforms" whose Swift, Kotlin and TypeScript snippets compile | The reproduction and the fix proven by the compile test; every committed Swift tree regenerated; the recipe and the ports page |
-| `ci-wall-time` | The Gate in half the time with every job still run: the four longest jobs split into halves that run side by side, the Bazel jobs over a disk cache, macOS jobs queued first | The first Gate run on the branch is the measurement (`.10x/decisions/devops/ci-wall-time.md`) |
+| `ci-wall-time` | The Gate's critical path measured, with every job still run: the two longest Linux jobs split into halves that run side by side, macOS jobs queued first; the macOS splits and a disk cache tried, measured and reverted | The Gate runs on the branch are the measurement (`.10x/decisions/devops/ci-wall-time.md`) |
 | `docs-1-2` | The landing page's drift section, the roadmap's 1.2 group and the adapter-conformance item under Next with its evidence, the architecture page's "where drift is caught" (and its crate table corrected to thirteen), the README, a blog post "Undra 1.2: no drift", `llms.txt`, the search index | `node site/scripts/build-all.mjs` changes nothing after the commit; `check-links` passes; no em-dash |
 
 Then: `scripts/bump-version.sh 1.2.0`, the 1.2.0 migration notes, status checkpoint 41, the handoff.
 
 ## Sequencing
 
-1. `ci-wall-time` first on the integration branch (it changes only workflow files and `ci-local.rb`).
+1. `ci-wall-time` first on the integration branch (it changes only workflow files and `ci-local.rb`); its first shape is
+   corrected after the first Gate run measures it.
 2. `drift` and `host-ports` in parallel worktrees (`wt/drift`, `wt/host-ports`); disjoint files: the first owns
    `crates/undra-testkit`, `crates/undra-cli`, `docs/TESTING.md`, `docs/DEV_LOOP.md`, `site/docs/cli.html` and
    `site/docs/testing.html`; the second owns `crates/undra-bindgen`, every committed Swift tree, `examples/cookbook`,

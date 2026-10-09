@@ -65,3 +65,12 @@ On the reviewed head `65676bb` first, then again on the fixed tree where a fix t
 * The two fixture files and the regenerated `Ports.swift` under Swift 6.1 (the image's default), as ADR-066's consequences already say for 6.0: this Mac has Xcode 26.6 only; the Gate's goldens step is that run.
 * The measured wall time of the restructured Gate (the record's own "Expected" paragraph; the first run fills it in).
 * The `ci/leaf-features` smoke of `ci-local.sh` (another run held the machine).
+
+## Amendment (integrator, after the first Gate run, 2026-10-09)
+
+The first Gate run on the pushed head (37904093066) measured the CI restructure this review had checked for completeness:
+one red job (`rust-cli`: its toolchain step lacked the rustfmt and clippy components the CLI's tests need) and 29 minutes
+of wall time, no better than before, because the macOS pool was shared with the RN devices and Launch rehearsal workflows
+and the extra macOS jobs added setup work. The macOS splits and the disk cache were reverted and the components added
+(`039d511`); the Linux splits, the order and the ADR-066 step stay. `.10x/decisions/devops/ci-wall-time.md` holds both
+measurements. The counts above ("all 29 Bazel invocations carry `--disk_cache`", "21 jobs") describe the reviewed head.
