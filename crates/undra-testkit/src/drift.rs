@@ -1643,7 +1643,7 @@ mod tests {
         let sc = session("web", c);
         let d = compare(&sa, &sc, &rules());
         assert_eq!(kinds(&d), [(Kind::State, "Todos#0.items")]);
-        let patch_of = format!("patch of {}", TypeRef::vec(TypeRef::named("Todo")));
+        let patch_of = "patch of Vec<Todo>";
         assert_eq!(
             d[0].text,
             format!(

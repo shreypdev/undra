@@ -286,12 +286,12 @@ impl SchemaIndex {
     #[must_use]
     pub fn decode_value(&self, ty: &TypeRef, bytes: &[u8]) -> Value {
         let Some(wire) = self.wire_type(ty) else {
-            return undecoded(bytes, Some(&ty.to_string()));
+            return undecoded(bytes, Some(&type_name(ty)));
         };
         let closure = self.schema.closure(&wire);
         match decode_dyn(bytes, &wire, &closure) {
             Ok(v) => self.to_json(&v, Some(ty), &closure),
-            Err(_) => undecoded(bytes, Some(&ty.to_string())),
+            Err(_) => undecoded(bytes, Some(&type_name(ty))),
         }
     }
 
@@ -302,7 +302,7 @@ impl SchemaIndex {
         };
         match ok {
             TypeRef::Unit if body.is_empty() => Value::Null,
-            TypeRef::Stream(_) => empty_or_undecoded(body, Some(&ok.to_string())),
+            TypeRef::Stream(_) => empty_or_undecoded(body, Some(&type_name(ok))),
             other => self.decode_value(other, body),
         }
     }
@@ -432,7 +432,39 @@ impl SchemaIndex {
 }
 
 fn type_text(ty: Option<&TypeRef>) -> String {
-    ty.map_or_else(|| "an unknown type".to_owned(), ToString::to_string)
+    ty.map_or_else(|| "an unknown type".to_owned(), type_name)
+}
+
+/// `ty` as a reader of the bindings knows it: `Vec<Todo>`, `Option<String>`, `Map<String, u32>`.
+#[must_use]
+pub fn type_name(ty: &TypeRef) -> String {
+    match ty {
+        TypeRef::Bool => "bool".to_owned(),
+        TypeRef::I8 => "i8".to_owned(),
+        TypeRef::I16 => "i16".to_owned(),
+        TypeRef::I32 => "i32".to_owned(),
+        TypeRef::I64 => "i64".to_owned(),
+        TypeRef::U8 => "u8".to_owned(),
+        TypeRef::U16 => "u16".to_owned(),
+        TypeRef::U32 => "u32".to_owned(),
+        TypeRef::U64 => "u64".to_owned(),
+        TypeRef::F32 => "f32".to_owned(),
+        TypeRef::F64 => "f64".to_owned(),
+        TypeRef::String => "String".to_owned(),
+        TypeRef::Bytes => "Bytes".to_owned(),
+        TypeRef::Unit => "()".to_owned(),
+        TypeRef::Duration => "Duration".to_owned(),
+        TypeRef::Timestamp => "Timestamp".to_owned(),
+        TypeRef::Uuid => "Uuid".to_owned(),
+        TypeRef::Decimal => "Decimal".to_owned(),
+        TypeRef::Option(t) => format!("Option<{}>", type_name(t)),
+        TypeRef::Vec(t) => format!("Vec<{}>", type_name(t)),
+        TypeRef::Map(k, v) => format!("Map<{}, {}>", type_name(k), type_name(v)),
+        TypeRef::Lazy(t) => format!("Lazy<{}>", type_name(t)),
+        TypeRef::Result(t, e) => format!("Result<{}, {}>", type_name(t), type_name(e)),
+        TypeRef::Stream(t) => format!("Stream<{}>", type_name(t)),
+        TypeRef::Named(n) | TypeRef::Object(n) | TypeRef::Callback(n) => n.clone(),
+    }
 }
 
 fn empty_or_undecoded(body: &[u8], type_name: Option<&str>) -> Value {
@@ -923,14 +955,20 @@ pub(crate) mod tests {
             index.decode_signal(todos, 0, ChangeOp::Full, &bytes(|w| w.write_len(0))),
             json!([])
         );
-        let list = TypeRef::vec(TypeRef::named("Todo")).to_string();
         assert_eq!(
             index.decode_signal(todos, 0, ChangeOp::KeyedPatch, &[1, 0]),
-            json!({"$bytes": "0100", "$type": format!("patch of {list}")})
+            json!({"$bytes": "0100", "$type": "patch of Vec<Todo>"})
         );
         assert_eq!(
             index.decode_signal(todos, 0, ChangeOp::LazyInvalidated, &[]),
-            json!({"$bytes": "", "$type": format!("invalidation of {list}")})
+            json!({"$bytes": "", "$type": "invalidation of Vec<Todo>"})
+        );
+        assert_eq!(
+            type_name(&TypeRef::map(
+                TypeRef::String,
+                TypeRef::option(TypeRef::object("Todos"))
+            )),
+            "Map<String, Option<Todos>>"
         );
         assert_eq!(
             index.decode_signal(5, 0, ChangeOp::Full, &[1]),
