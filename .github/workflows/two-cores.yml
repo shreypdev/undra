@@ -7,7 +7,7 @@ name: Two cores
 # amendment A), one shut down while the other keeps working. Each app prints `two-cores <platform>: ok ...` lines and its runner exits non-zero
 # unless the last is `passed`. The same scenario, as S26, runs in the contract columns of ci.yml.
 #
-#   iOS simulator   examples/two-cores/ios/run.sh       two prelinked static cores in one app binary (Debug and Release)
+#   iOS simulator   examples/two-cores/ios/run.sh       two prelinked static cores in one app binary (Debug and Release, a job each)
 #   Android         examples/two-cores/android/run.sh   two .so in one APK, each registering its own JNI class
 #   JVM             examples/two-cores/jvm/run.sh       two host libraries in one JVM
 #   Node            examples/two-cores/node/run.sh      two wasm modules in one process
@@ -35,8 +35,10 @@ env:
   NDK_VERSION: 27.2.12479018
 
 jobs:
+  # The Debug and the Release cores are two jobs, not two steps: each takes about seven minutes on a macOS runner, and the macOS
+  # pool is what the Gate waits for (.10x/decisions/devops/ci-wall-time.md).
   ios:
-    name: iOS simulator (Debug and Release cores)
+    name: iOS simulator (Debug cores)
     runs-on: macos-15
     timeout-minutes: 90
     steps:
@@ -54,8 +56,26 @@ jobs:
         run: cargo build -p undra-cli
       - name: Debug cores (prelinked with -all_load)
         run: SIMULATOR="$(xcrun simctl list devices available | grep -m1 -oE 'iPhone [0-9]+ Pro' || echo 'iPhone 16 Pro')" examples/two-cores/ios/run.sh
+
+  ios-release:
+    name: iOS simulator (Release cores)
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+      - name: The newest stable Xcode
+        run: |
+          newest="$(ls -d /Applications/Xcode_*.app | grep -v -i -E 'beta|candidate|_rc' | sort -V | tail -n 1)"
+          sudo xcode-select -s "$newest/Contents/Developer"
+          xcodebuild -version
+      - name: The undra CLI
+        run: cargo build -p undra-cli
       - name: Release cores (fat LTO, prelinked with -u)
-        run: CONFIGURATION=Release examples/two-cores/ios/run.sh
+        run: SIMULATOR="$(xcrun simctl list devices available | grep -m1 -oE 'iPhone [0-9]+ Pro' || echo 'iPhone 16 Pro')" CONFIGURATION=Release examples/two-cores/ios/run.sh
 
   android:
     name: Android emulator (API 34, x86_64)
@@ -140,7 +160,7 @@ jobs:
   complete:
     name: Complete
     if: always()
-    needs: [ios, android, jvm-and-node]
+    needs: [ios, ios-release, android, jvm-and-node]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

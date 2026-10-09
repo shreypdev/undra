@@ -28,6 +28,205 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
+  # The macOS runner pool is the Gate's critical path (five macOS jobs run at once; the rest queue), so the macOS jobs come
+  # first in this file, longest first, and none of them is longer than it has to be: the four longest jobs of the Gate were
+  # split into halves that run side by side (the two Bazel jobs, the Swift runtime and the Xcode projects, the two halves of
+  # the Rust job, the Debug and Release cores of Two cores). Every job still runs on every change: a job that can be skipped
+  # cannot be part of the roll-up (.10x/decisions/devops/ci-wall-time.md).
+  #
+  # What only macOS can run, where rules_swift and the iOS core have Xcode: the Swift consumer runs the core in process, the
+  # XCFramework (device and simulator slices) builds in a Bazel action, and the example's iOS app, built to debug (`-c dbg`), has a
+  # dSYM that resolves the Rust core (`keep_debug_objects`). The Kotlin and TypeScript targets are the Linux job's. The ruleset
+  # minimums run in the job after this one; the ADR-061 comment at `bazel-example` says how the Bazel matrix is laid out.
+  bazel-example-macos:
+    name: "Bazel example (macOS, Swift and iOS)"
+    timeout-minutes: 60
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Bazelisk
+        run: brew install bazelisk
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-repository
+          key: bazel-repository-${{ runner.os }}-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
+          restore-keys: bazel-repository-${{ runner.os }}-
+      - name: The Swift consumer, the iOS core and the iOS app's dSYM
+        working-directory: examples/bazel
+        run: |
+          bazel test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+          bazel build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+          bazel test //ios:symbols_test --ios_multi_cpus=sim_arm64 -c dbg --apple_generate_dsym \
+            --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+      - name: The Swift consumer and the iOS core on Bazel 9.x
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: |
+          bazel test //swift/... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+          bazel build //:mobile_ios --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+
+  bazel-example-macos-minimums:
+    # The Swift consumer and the iOS core with every ruleset at the lowest version the rules declare, on Bazel 8.8.1 and on the
+    # newest 9.x (rules_swift and rules_apple are exercised only on macOS, so their minimums are too). Its own job for the
+    # same reason as the Linux one, and because the macOS runner pool is the Gate's bottleneck: two short jobs on it finish
+    # before one long one.
+    name: "Bazel example (macOS, ruleset minimums)"
+    timeout-minutes: 60
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Bazelisk
+        run: brew install bazelisk
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-repository
+          key: bazel-repository-${{ runner.os }}-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
+          restore-keys: bazel-repository-${{ runner.os }}-
+      # rules_swift and rules_apple are only exercised here, so their minimums are too: the same targets with every ruleset at the
+      # version undra_rules declares, then all of it on the newest 9.x (rules_swift is the ruleset a new Bazel breaks first).
+      - name: The Swift consumer and the iOS core at the ruleset minimums
+        working-directory: examples/bazel
+        run: |
+          scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+          scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+      - name: The Swift consumer and the iOS core on Bazel 9.x at the ruleset minimums
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: |
+          scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+          scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+
+  macos:
+    name: Swift runtime + C ABI (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Swift tests
+        working-directory: runtimes/swift/UndraRuntime
+        run: swift test
+      # ADR-063: apps add the repository itself as their Swift package; its root manifest builds the same sources.
+      - name: The repository's root Package.swift builds (what an app depends on)
+        run: |
+          swift build --package-path . --scratch-path "$RUNNER_TEMP/spm-root"
+          cargo test -p undra-cli --test swift_manifests
+      - name: Generated Swift compiles against the runtime (every golden case; ADR-024 amendment)
+        run: UNDRA_REQUIRE_TOOLCHAINS=1 cargo test -p undra-bindgen --test typecheck_swift
+      - name: Swift-over-C-ABI acceptance
+        run: bash crates/undra-ffi/tests/swift/run.sh
+      - name: C ABI acceptance (undra.h with -Werror; the host contract under ASan)
+        run: UNDRA_C_SANITIZE=1 bash crates/undra-ffi/tests/c/run.sh
+      - name: Loaded cdylib keeps its schema + JNI exports (ADR-029 regression, macOS dead-strip), and its docs equal the dev runner's
+        run: cargo test -p undra-cli --test schema_retention --test schema_docs -- --ignored --nocapture
+      - name: iOS cross-build (device + simulator)
+        run: |
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+          cargo check -p undra-ffi --target aarch64-apple-ios
+          cargo check -p undra-ffi --target aarch64-apple-ios-sim
+
+  macos-apps:
+    # The Xcode projects: `undra init`'s app building its core in the Run Script phase, the cookbook's Swift lines, Fieldbook's and
+    # the playground's iOS apps. Split from `macos` (the runtime and the C ABI) so neither waits for the other: the macOS runner
+    # pool is the Gate's bottleneck, and one long job on it is a longer Gate than two short ones.
+    name: Xcode projects (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: The undra CLI
+        run: cargo build -p undra-cli
+      - name: Xcode builds the core in its Run Script phase (undra init's project; Debug, Release, Debug)
+        run: UNDRA_REQUIRE_TOOLCHAINS=1 cargo test -p undra-cli --test build_systems -- xcode --nocapture
+      - name: Cookbook Swift lines compile (Swift 6, over the generated bindings)
+        run: bash examples/cookbook/snippets/check.sh swift
+      - name: Fieldbook's iOS app builds (the Run Script phase builds the core)
+        run: |
+          PATH="$GITHUB_WORKSPACE/target/debug:$PATH" xcodebuild -project examples/fieldbook/ios/Fieldbook.xcodeproj \
+            -scheme Fieldbook -destination 'generic/platform=iOS Simulator' build
+      # The playground's SwiftUI previews (#Preview over UndraTestKit) are compiled with the app: a Debug build of it.
+      - name: The playground's iOS app builds, SwiftUI previews and the testing kit included
+        run: |
+          target/debug/undra build -C examples/playground --platform ios
+          xcodebuild -quiet -project examples/playground/ios/PlaygroundApp.xcodeproj -scheme PlaygroundApp \
+            -configuration Debug -destination 'generic/platform=iOS Simulator' build
+
+  ios-floor:
+    # ADR-045, docs/IOS_15_16.md: an app that supports iOS 15 and 16 gets ObservableObject stores and the runtime's UndraDuration.
+    # Everything here is scripts/ios-floor.sh, so a machine runs the same steps: the runtime for the iOS 15.0 simulator, every golden
+    # case of the generator in this mode for iOS 15.0 and 16.0, examples/ios15-sample (deployment target 15.0) with xcodebuild, the
+    # playground's and Fieldbook's bindings generated for iOS 15 and compiled for it (their apps stay on 17, which is the default
+    # job above), and the Swift contract grid against the iOS 15 bindings. Running the sample needs an iOS 15 or 16 simulator
+    # runtime, which the hosted image may not have (the last step says which); the build is the guarantee.
+    name: iOS 15 / 16 floor
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: iOS targets of the core, and the undra CLI
+        run: |
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+          cargo build -p undra-cli
+      - name: The runtime, the golden cases and the sample build at the floor
+        run: scripts/ios-floor.sh runtime golden sample
+      - name: The playground's and Fieldbook's bindings generated for iOS 15 compile for it
+        run: scripts/ios-floor.sh apps
+      - name: Swift contract scenarios against bindings generated for iOS 15
+        run: scripts/ios-floor.sh contract
+      - name: The observation path at run time on the image's simulator, and the sample on an iOS 15 or 16 runtime when it has one
+        run: |
+          xcrun simctl list runtimes
+          scripts/ios-floor.sh probe simulator
+
+  contracts-swift:
+    name: Contract scenarios (Swift)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run the Swift scenario runner
+        run: bash contract-tests/run-all.sh swift
+
+  ffi-miri:
+    # macOS, not Linux: Miri's strict c-variadic check currently flags parking_lot_core's
+    # Linux futex call (upstream toolchain friction, not our code); the macOS backend has
+    # no futex path and checks the same undra-ffi code.
+    name: undra-ffi under Miri
+    runs-on: macos-15
+    env:
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri, rust-src
+      - uses: Swatinem/rust-cache@v2
+      - name: Miri (unit tests; FFI-callback tests excluded)
+        run: cargo +nightly miri test -p undra-ffi --lib
+      - name: Miri (host-allocated port replies, out_reply is always free()d)
+        run: |
+          MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test -p undra-ffi --test abi -- \
+            a_host_that_sets_cap sync_port_answers
+
   rust:
     name: Rust (Linux)
     runs-on: ubuntu-latest
@@ -65,10 +264,51 @@ jobs:
         run: bash runtimes/kotlin/undra-runtime/scripts/jitpack-install.test.sh
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Test
-        run: cargo test --workspace
+      # The CLI's tests (its integration tests drive real builds: the web, the host library, the dev server, a reload) are the
+      # longest half of the workspace's; they run in the `rust-cli` job beside this one, with every step that needs the built CLI.
+      - name: Test (the workspace, but the CLI's tests)
+        run: cargo test --workspace --exclude undra-cli
       - name: The release version script (every file it owns moves, on a copy, with a throwaway version; ADR-063)
         run: bash scripts/bump-version.test.sh
+      - name: The real-time recipe and Fieldbook's presence over the opt-in ports (ADR-047)
+        run: |
+          cargo test -p cookbook --features realtime
+          cargo test -p fieldbook-core --features presence
+      - name: Cookbook TypeScript lines compile (tsc --strict)
+        run: bash examples/cookbook/snippets/check.sh ts
+      - name: The write rule in release (ADR-035; the audit's off-core writes were release-only)
+        run: cargo test --release -p undra-runtime --test write_context -p undra-signals --test write_checker
+      - name: Clippy (undra-ffi on wasm32)
+        run: cargo clippy -p undra-ffi --target wasm32-unknown-unknown -- -D warnings
+      - name: C ABI acceptance (undra.h with -Werror; the host contract under ASan)
+        run: UNDRA_C_SANITIZE=1 bash crates/undra-ffi/tests/c/run.sh
+      - name: Docs
+        run: cargo doc --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - name: wasm32 build (core crates)
+        run: |
+          for p in undra-meta undra-wire undra-signals undra-runtime undra-ports undra-query undra-testkit undra-ffi undra playground-core cookbook fieldbook-core; do
+            cargo build -p $p --target wasm32-unknown-unknown
+          done
+
+  rust-cli:
+    # The other half of the Rust job: the CLI's own tests (`undra init`, `build`, `dev`, a reload, `upgrade`, `adopt`, the
+    # devtools, symbolication), and every step that runs the built CLI over the examples. Split from `rust` because `cargo test
+    # --workspace` was the longest step of the Gate; the two halves take about the same time now, side by side.
+    name: Rust (Linux), the CLI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: The CLI's tests
+        run: cargo test -p undra-cli
       # The cookbook (examples/cookbook) and Fieldbook (examples/fieldbook): their bindings are what the
       # core generates, the TypeScript lines the cookbook pages show compile, and Fieldbook's web app runs
       # its generated bindings against the real wasm core (npm test) and bundles (npm run build).
@@ -81,261 +321,199 @@ jobs:
       # just built, so the installer's PATH lines and its note about an older undra are checked before they ship.
       - name: The curl installer against a release served from this machine (checksums, refusals, the PATH line, an older undra on PATH)
         run: UNDRA_BIN=target/debug/undra bash packaging/test-install.sh
-      - name: The real-time recipe and Fieldbook's presence over the opt-in ports (ADR-047)
-        run: |
-          cargo test -p cookbook --features realtime
-          cargo test -p fieldbook-core --features presence
-      - name: Cookbook TypeScript lines compile (tsc --strict)
-        run: bash examples/cookbook/snippets/check.sh ts
       - name: Fieldbook web (bindings over the real wasm core, then the bundle)
         working-directory: examples/fieldbook/web
         run: |
           npm ci --no-audit --no-fund
           PATH="$GITHUB_WORKSPACE/target/debug:$PATH" npm test
           PATH="$GITHUB_WORKSPACE/target/debug:$PATH" npm run build
-      # `cargo test --workspace` above skips the heavy halves of these (they run real builds); here they
+      # `cargo test -p undra-cli` above skips the heavy halves of these (they run real builds); here they
       # must run. The web app's build through the Vite plugin needs the npm registry; `undra upgrade`
       # end to end builds the core from a local clone. Gradle runs in the android job, Xcode in macos.
       - name: Build integrations (Vite plugin), undra upgrade end to end, the CI workflow, undra doctor
         run: UNDRA_REQUIRE_TOOLCHAINS=1 cargo test -p undra-cli --test build_systems --test upgrade --test ci_workflow --test doctor -- --skip xcode_builds --skip xcode_without --skip gradle_builds --skip gradle_without
-      - name: The write rule in release (ADR-035; the audit's off-core writes were release-only)
-        run: cargo test --release -p undra-runtime --test write_context -p undra-signals --test write_checker
-      - name: Clippy (undra-ffi on wasm32)
-        run: cargo clippy -p undra-ffi --target wasm32-unknown-unknown -- -D warnings
-      - name: C ABI acceptance (undra.h with -Werror; the host contract under ASan)
-        run: UNDRA_C_SANITIZE=1 bash crates/undra-ffi/tests/c/run.sh
       - name: Loaded cdylib keeps its schema + JNI exports (ADR-029 regression), and its docs equal the dev runner's
         run: cargo test -p undra-cli --test schema_retention --test schema_docs -- --ignored --nocapture
-      - name: Docs
-        run: cargo doc --workspace --no-deps
-        env:
-          RUSTDOCFLAGS: -D warnings
-      - name: wasm32 build (core crates)
-        run: |
-          for p in undra-meta undra-wire undra-signals undra-runtime undra-ports undra-query undra-testkit undra-ffi undra playground-core cookbook fieldbook-core; do
-            cargo build -p $p --target wasm32-unknown-unknown
-          done
 
-  # ADR-042: the types of other crates that cross as a wire leaf are opt-in features of `undra`. Each must
-  # build for every platform the core ships to, and none may bring a clock or randomness along (R12): a
-  # `chrono` with `clock` or a `uuid` with `v4` would pull `wasm-bindgen` and `getrandom` into the wasm core.
-  leaf-features:
-    name: Leaf-type features (uuid, chrono, time, rust_decimal, bytes)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99.0
-        with:
-          targets: wasm32-unknown-unknown, aarch64-apple-ios, aarch64-linux-android
-      - uses: Swatinem/rust-cache@v2
-      - name: Tests with every feature on (the codecs, the facade, the macros that name a missing feature)
-        run: |
-          features=uuid,chrono,time,rust_decimal,bytes
-          cargo test -p undra-wire --features $features
-          cargo test -p undra --features $features
-          cargo test -p undra-macros --lib --features $features
-      - name: Each feature builds for wasm32, iOS and Android
-        run: |
-          for target in wasm32-unknown-unknown aarch64-apple-ios aarch64-linux-android; do
-            for feature in uuid chrono time rust_decimal bytes; do
-              cargo build -p undra-wire --features $feature --target $target
-              cargo build -p undra --features $feature --target $target
-            done
-          done
-      - name: No clock and no randomness comes with them
-        run: |
-          if cargo tree -p undra --features uuid,chrono,time,rust_decimal,bytes -e features,normal --target wasm32-unknown-unknown | grep -E 'getrandom|wasm-bindgen|js-sys|iana-time-zone'; then
-            echo "a leaf-type feature pulled a clock or randomness source into the core (R12)"
-            exit 1
-          fi
-
-  ts:
-    name: TypeScript runtime
+  # ADR-061: the Bazel rules (bazel/) and their example workspace (examples/bazel). `bazel test //...` builds the to-do core for the
+  # host and the web with the pinned Rust 1.99.0 that Bazel fetches (rules_rust, by checksum), generates the bindings from the host
+  # library, compiles the Kotlin and TypeScript consumers and runs them against the real core (JNI, Node), and runs ktlint over the
+  # generated Kotlin with and without the exclusions `undra bindgen` writes. Bazel is pinned by .bazelversion (Bazelisk; the example's
+  # is a link to bazel/'s): 8.8.1, the lowest the rules support, and every step runs again on the newest 9.x through
+  # USE_BAZEL_VERSION (Bazelisk's own override), so both ends of "Bazel 8.8 and 9.x" are tested, in the same job, over one
+  # disk cache. The rulesets are tested at both
+  # ends too: the example's MODULE.bazel pins recent versions (what most applications run), and examples/bazel/scripts/at-minimums.sh
+  # runs the same targets with every ruleset at the lowest version undra_rules declares (bazel/MODULE.bazel), failing if anything
+  # in the graph raises one. The lock files are committed as Bazel 8.8.1 writes them. They are not run with
+  # --lockfile_mode=error here: a lock records what the machine that wrote it resolved, per OS, and a Linux runner would fail on
+  # every entry a macOS developer made. The 9.x steps and the minimums run with --lockfile_mode=off: 9.x records other registry
+  # files than 8.8.1, and the minimums are another graph, so neither reads or rewrites the committed lock. Bump the 9.x pin
+  # (USE_BAZEL_VERSION, in the 9.x steps of the five Bazel jobs and in examples/bazel/README.md) when a newer 9.x
+  # release is out and passes.
+  bazel-example:
+    name: Bazel example
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
-      # The runtime's call-path guard (test/call-path.test.ts, the `[web."node/..."]` budgets of bench/budgets.toml; read by
-      # scripts/web-budgets.mjs) is the one test of this workflow that holds an absolute time to a budget. Runner classes
-      # measured 3.5x-6.2x slower than the M5 host in Oct 2026, against the 5x the budgets were set with; the same
-      # 2x of headroom bench.yml carries keeps the guard honest about a real regression and stops it failing on the slowest
-      # runner (callSync measured 952 ns against 800 ns). It scales ceilings only. No other job runs the test.
-      UNDRA_BENCH_SCALE: "2"
+      BAZELISK_VERSION: v1.29.0
+      # The sha256 of that release's bazelisk-linux-amd64.
+      BAZELISK_SHA256: 5a408715e932c0250d28bd84555f12edbf70117de42f9181691c736eacc4a992
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Install Bazelisk
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -sSfLo "$RUNNER_TEMP/bin/bazel" "https://github.com/bazelbuild/bazelisk/releases/download/$BAZELISK_VERSION/bazelisk-linux-amd64"
+          echo "$BAZELISK_SHA256  $RUNNER_TEMP/bin/bazel" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/bazel"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      # What the rulesets download (the Rust toolchain, the JDK, Node, binaryen, the crates): Bazel's repository cache, keyed by the
+      # lock files that name them. Every bazel command of the Bazel jobs also writes a disk cache (--disk_cache, on the runner's
+      # own disk, not persisted): the 9.x run of a job reads what its 8.8.1 run built, since an action's key does not change
+      # with the Bazel version. The minimums are another graph and run in a job of their own.
+      - uses: actions/cache@v4
         with:
-          node-version: 24
-      - name: Test
-        working-directory: runtimes/ts/@undra/runtime
+          path: ~/.cache/bazel-repository
+          key: bazel-repository-${{ runner.os }}-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
+          restore-keys: bazel-repository-${{ runner.os }}-
+      # //symbols:symbolicate_test resolves a crash of the release core with the machine's llvm-symbolizer (the `.so.debug`,
+      # ADR-046). The test also looks below /usr/lib/llvm-*, where the image's clang may have put one; when there is none, the
+      # distribution's LLVM is installed.
+      - name: llvm-symbolizer for the symbols test
         run: |
-          npm ci
-          npm test
-      # ADR-057: the package publishes a production build whose private properties are renamed. The same suite, run against it (the
-      # sources' own tests of the build: `scripts/mangle.mjs`, the flavours).
-      - name: Test against the production build (renamed private properties)
-        working-directory: runtimes/ts/@undra/runtime
-        run: npm run test:dist
-      # The testing kit (docs/TESTING.md): its tests, and its build config, which compiles against the runtime's emitted declarations.
-      - name: Testing kit (@undra/testkit)
-        run: |
-          (cd runtimes/ts/@undra/runtime && npm run build)
-          cd runtimes/ts/@undra/testkit
-          npm ci
-          npm test
-          UNDRA_TS_DIST="$GITHUB_WORKSPACE/runtimes/ts/@undra/runtime/dist/index.js" npm test
-          npm run typecheck
-      # The devtools page of `undra dev` (ADR-054): its tests, and the committed assets must be what its
-      # sources build to (the CLI embeds them, so `cargo build` needs no Node).
-      - name: Devtools page (typecheck, tests, committed assets equal a rebuild, size budget)
-        working-directory: runtimes/ts/devtools
-        run: |
-          npm ci
-          npm run typecheck
-          npm test
-          UNDRA_TS_DIST="$GITHUB_WORKSPACE/runtimes/ts/@undra/runtime/dist/index.js" npm test
-          bash build.sh --check
-
-  kotlin:
-    name: Kotlin runtime (JVM)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Install kotlinc
-        run: |
-          curl -sSfL -o kotlinc.zip https://github.com/JetBrains/kotlin/releases/download/v2.0.21/kotlin-compiler-2.0.21.zip
-          unzip -q kotlinc.zip -d "$HOME/kotlin"
-          echo "$HOME/kotlin/kotlinc/bin" >> "$GITHUB_PATH"
-      - name: Fetch kotlinx-coroutines
-        run: |
-          mkdir -p "$HOME/lib"
-          curl -sSfLo "$HOME/lib/kotlinx-coroutines-core-jvm-1.6.4.jar" \
-            https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.6.4/kotlinx-coroutines-core-jvm-1.6.4.jar
-          # The SQLite JDBC driver of the Db port's JVM tests and the Kotlin S25 column (ADR-048);
-          # never a dependency of the runtime module.
-          curl -sSfLo "$HOME/lib/sqlite-jdbc-3.53.4.0.jar" \
-            https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.53.4.0/sqlite-jdbc-3.53.4.0.jar
-          echo "47e21dd53efe1524fe0df6965cb65003ffe17172  $HOME/lib/sqlite-jdbc-3.53.4.0.jar" | sha1sum -c -
-      - uses: dtolnay/rust-toolchain@1.99.0
-      - uses: Swatinem/rust-cache@v2
-      - name: Build the JNI library (the fixture core, namespace undra_fixture)
-        run: cargo build --manifest-path crates/undra-ffi/tests/fixture/Cargo.toml
-      - name: Test (incl. JNI smoke against the real library)
+          if command -v llvm-symbolizer >/dev/null || ls /usr/lib/llvm-*/bin/llvm-symbolizer >/dev/null 2>&1; then exit 0; fi
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends llvm
+      - name: The rules' own tests (the Cargo.lock reader)
+        working-directory: bazel
+        run: bazel test //tests/... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+      - name: bazel test //... (host and web cores, bindings, Kotlin and TypeScript consumers, ktlint)
+        working-directory: examples/bazel
+        run: bazel test //... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+      - name: at-minimums.sh puts MODULE.bazel back whatever the command does
+        working-directory: examples/bazel
+        run: bash scripts/at-minimums.test.sh
+      - name: The rules' own tests on Bazel 9.x
+        working-directory: bazel
         env:
-          UNDRA_KOTLINX_COROUTINES: /home/runner/lib/kotlinx-coroutines-core-jvm-1.6.4.jar
-          UNDRA_SQLITE_JDBC: /home/runner/lib/sqlite-jdbc-3.53.4.0.jar
-          UNDRA_NATIVE_LIB_DIR: ${{ github.workspace }}/crates/undra-ffi/tests/fixture/target/debug
-        run: runtimes/kotlin/undra-runtime/scripts/test-local.sh
+          USE_BAZEL_VERSION: "9.2.0"
+        run: bazel test //tests/... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+      - name: bazel test //... on Bazel 9.x
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: bazel test //... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
 
-  wasm-ffi:
-    name: wasm ABI (real module, TS runtime)
+  bazel-example-minimums:
+    # The same example with every ruleset at the lowest version the rules declare (examples/bazel/scripts/at-minimums.sh), on
+    # Bazel 8.8.1 and on the newest 9.x. Its own job: the minimums are another dependency graph, so a run of them shares little
+    # with the recent-rulesets run, and the two side by side halve the longest Linux job of the Gate.
+    name: Bazel example (ruleset minimums)
+    timeout-minutes: 60
     runs-on: ubuntu-latest
+    env:
+      BAZELISK_VERSION: v1.29.0
+      # The sha256 of that release's bazelisk-linux-amd64.
+      BAZELISK_SHA256: 5a408715e932c0250d28bd84555f12edbf70117de42f9181691c736eacc4a992
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99.0
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Install the TypeScript runtime's dependencies
-        working-directory: runtimes/ts/@undra/runtime
-        run: npm ci
-      # run.sh builds the TypeScript runtime from source into a scratch directory and fails (it does
-      # not skip) when it cannot, so this leg can neither be stale nor silently absent.
-      - name: wasm acceptance (raw host + TS runtime)
-        run: bash crates/undra-ffi/tests/wasm/run.sh
-      # The same acceptance against the package's production build (ADR-057: private properties renamed, messages as codes).
-      - name: wasm acceptance against the production build
+      - name: Install Bazelisk
         run: |
-          (cd runtimes/ts/@undra/runtime && npm run build)
-          UNDRA_TS_DIST="$GITHUB_WORKSPACE/runtimes/ts/@undra/runtime/dist/index.js" bash crates/undra-ffi/tests/wasm/run.sh
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -sSfLo "$RUNNER_TEMP/bin/bazel" "https://github.com/bazelbuild/bazelisk/releases/download/$BAZELISK_VERSION/bazelisk-linux-amd64"
+          echo "$BAZELISK_SHA256  $RUNNER_TEMP/bin/bazel" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/bazel"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-repository
+          key: bazel-repository-${{ runner.os }}-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
+          restore-keys: bazel-repository-${{ runner.os }}-
+      - name: llvm-symbolizer for the symbols test
+        run: |
+          if command -v llvm-symbolizer >/dev/null || ls /usr/lib/llvm-*/bin/llvm-symbolizer >/dev/null 2>&1; then exit 0; fi
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends llvm
+      - name: bazel test //... at the ruleset minimums
+        working-directory: examples/bazel
+        run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
+      - name: bazel test //... on Bazel 9.x at the ruleset minimums
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
+        run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors
 
-  macos:
-    name: Swift runtime + C ABI (macOS)
-    runs-on: macos-15
+  # The Android core and the Kotlin bindings as an Android library, built by Bazel on Linux (ADR-065). The core's NDK is a declared
+  # input of its action: the example pins the archives (MODULE.bazel), and this job gives the build the NDK that sdkmanager installs
+  # (with the retries the other Android jobs use for dl.google.com) in their place, so a run does not download 664 MB through Bazel.
+  # `undra_android_library` needs the Android SDK (ANDROID_HOME); rules_android fetches one archive without a checksum
+  # (android.googlesource.com, ADR-061): acceptable here, and why it is not part of the job that runs on every developer's machine.
+  bazel-android:
+    name: Bazel example (Android core and library)
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      BAZELISK_VERSION: v1.29.0
+      # The sha256 of that release's bazelisk-linux-amd64.
+      BAZELISK_SHA256: 5a408715e932c0250d28bd84555f12edbf70117de42f9181691c736eacc4a992
+      NDK_VERSION: 27.2.12479018
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99.0
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+      - name: Install Bazelisk
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -sSfLo "$RUNNER_TEMP/bin/bazel" "https://github.com/bazelbuild/bazelisk/releases/download/$BAZELISK_VERSION/bazelisk-linux-amd64"
+          echo "$BAZELISK_SHA256  $RUNNER_TEMP/bin/bazel" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/bazel"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
         with:
-          node-version: 24
-      - name: Swift tests
-        working-directory: runtimes/swift/UndraRuntime
-        run: swift test
-      # ADR-063: apps add the repository itself as their Swift package; its root manifest builds the same sources.
-      - name: The repository's root Package.swift builds (what an app depends on)
+          path: ~/.cache/bazel-repository
+          key: bazel-repository-${{ runner.os }}-android-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
+          restore-keys: bazel-repository-${{ runner.os }}-
+      - name: The Android SDK and NDK r27 (a failed download is tried again)
+        run: bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION" "platforms;android-35" "build-tools;35.0.0"
+      - name: The Android core (//:mobile_android, linked with the NDK)
+        working-directory: examples/bazel
         run: |
-          swift build --package-path . --scratch-path "$RUNNER_TEMP/spm-root"
-          cargo test -p undra-cli --test swift_manifests
-      - name: Generated Swift compiles against the runtime (every golden case; ADR-024 amendment)
-        run: UNDRA_REQUIRE_TOOLCHAINS=1 cargo test -p undra-bindgen --test typecheck_swift
-      - name: Swift-over-C-ABI acceptance
-        run: bash crates/undra-ffi/tests/swift/run.sh
-      - name: C ABI acceptance (undra.h with -Werror; the host contract under ASan)
-        run: UNDRA_C_SANITIZE=1 bash crates/undra-ffi/tests/c/run.sh
-      - name: Loaded cdylib keeps its schema + JNI exports (ADR-029 regression, macOS dead-strip), and its docs equal the dev runner's
-        run: cargo test -p undra-cli --test schema_retention --test schema_docs -- --ignored --nocapture
-      - name: iOS cross-build (device + simulator)
+          # On its own line, so that a failed script stops the step (bash -e ignores a failed substitution inside an argument),
+          # where Bazel would otherwise download the 664 MB archive.
+          flags="$(android/use-installed-ndk.sh "$ANDROID_HOME/ndk/$NDK_VERSION")"
+          echo "NDK_FLAGS=$flags" >> "$GITHUB_ENV"
+          bazel build //:mobile_android $flags --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+          # The build used the installed NDK and not the archive: an NDK repository of the output base links into it. (Were the
+          # override to stop working, Bazel would download the archive and this job would be green for the wrong reason.)
+          ndk_real="$(cd "$ANDROID_HOME/ndk/$NDK_VERSION" && pwd -P)"
+          used=0
+          for repo in "$(bazel info output_base)"/external/*android_ndk_linux; do
+            [ -e "$repo/source.properties" ] || continue
+            case "$(readlink -f "$repo/source.properties")" in "$ndk_real"/*) used=1 ;; esac
+          done
+          [ "$used" = 1 ] || { echo "the build did not use the installed NDK: no NDK repository of the output base links into $ndk_real" >&2; exit 1; }
+      - name: The Kotlin bindings as an Android library (//android:hello)
+        working-directory: examples/bazel
+        run: bazel build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+      # Both at the ruleset minimums and on the newest 9.x, as the other two Bazel jobs run their targets (the same script and
+      # pin; a newer 9.x moves with theirs).
+      - name: The Android core and library at the ruleset minimums
+        working-directory: examples/bazel
         run: |
-          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-          cargo check -p undra-ffi --target aarch64-apple-ios
-          cargo check -p undra-ffi --target aarch64-apple-ios-sim
-      - name: Xcode builds the core in its Run Script phase (undra init's project; Debug, Release, Debug)
-        run: UNDRA_REQUIRE_TOOLCHAINS=1 cargo test -p undra-cli --test build_systems -- xcode --nocapture
-      - name: Cookbook Swift lines compile (Swift 6, over the generated bindings)
-        run: bash examples/cookbook/snippets/check.sh swift
-      - name: Fieldbook's iOS app builds (the Run Script phase builds the core)
+          scripts/at-minimums.sh build //:mobile_android $NDK_FLAGS --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+          scripts/at-minimums.sh build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+      - name: The Android core and library on Bazel 9.x
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
         run: |
-          rustup target add aarch64-apple-ios-sim
-          cargo build -p undra-cli
-          PATH="$GITHUB_WORKSPACE/target/debug:$PATH" xcodebuild -project examples/fieldbook/ios/Fieldbook.xcodeproj \
-            -scheme Fieldbook -destination 'generic/platform=iOS Simulator' build
-      # The playground's SwiftUI previews (#Preview over UndraTestKit) are compiled with the app: a Debug build of it.
-      - name: The playground's iOS app builds, SwiftUI previews and the testing kit included
+          bazel build //:mobile_android $NDK_FLAGS --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+          bazel build //android:hello --config=android --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+      - name: The Android core and library on Bazel 9.x at the ruleset minimums
+        working-directory: examples/bazel
+        env:
+          USE_BAZEL_VERSION: "9.2.0"
         run: |
-          cargo build -p undra-cli
-          target/debug/undra build -C examples/playground --platform ios
-          xcodebuild -quiet -project examples/playground/ios/PlaygroundApp.xcodeproj -scheme PlaygroundApp \
-            -configuration Debug -destination 'generic/platform=iOS Simulator' build
-
-  ios-floor:
-    # ADR-045, docs/IOS_15_16.md: an app that supports iOS 15 and 16 gets ObservableObject stores and the runtime's UndraDuration.
-    # Everything here is scripts/ios-floor.sh, so a machine runs the same steps: the runtime for the iOS 15.0 simulator, every golden
-    # case of the generator in this mode for iOS 15.0 and 16.0, examples/ios15-sample (deployment target 15.0) with xcodebuild, the
-    # playground's and Fieldbook's bindings generated for iOS 15 and compiled for it (their apps stay on 17, which is the default
-    # job above), and the Swift contract grid against the iOS 15 bindings. Running the sample needs an iOS 15 or 16 simulator
-    # runtime, which the hosted image may not have (the last step says which); the build is the guarantee.
-    name: iOS 15 / 16 floor
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99.0
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: iOS targets of the core, and the undra CLI
-        run: |
-          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-          cargo build -p undra-cli
-      - name: The runtime, the golden cases and the sample build at the floor
-        run: scripts/ios-floor.sh runtime golden sample
-      - name: The playground's and Fieldbook's bindings generated for iOS 15 compile for it
-        run: scripts/ios-floor.sh apps
-      - name: Swift contract scenarios against bindings generated for iOS 15
-        run: scripts/ios-floor.sh contract
-      - name: The observation path at run time on the image's simulator, and the sample on an iOS 15 or 16 runtime when it has one
-        run: |
-          xcrun simctl list runtimes
-          scripts/ios-floor.sh probe simulator
+          scripts/at-minimums.sh build //:mobile_android $NDK_FLAGS --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
+          scripts/at-minimums.sh build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository" --disk_cache="$HOME/.cache/bazel-disk"
 
   android:
     name: Android cross-build
@@ -388,46 +566,6 @@ jobs:
         working-directory: runtimes/kotlin/undra-runtime
         run: UNDRA_REQUIRE_TOOLCHAINS=1 ./gradlew --no-daemon :okhttp-adapters:testDebugUnitTest --console=plain
 
-  ffi-miri:
-    # macOS, not Linux: Miri's strict c-variadic check currently flags parking_lot_core's
-    # Linux futex call (upstream toolchain friction, not our code); the macOS backend has
-    # no futex path and checks the same undra-ffi code.
-    name: undra-ffi under Miri
-    runs-on: macos-15
-    env:
-      RUSTFLAGS: ""
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: miri, rust-src
-      - uses: Swatinem/rust-cache@v2
-      - name: Miri (unit tests; FFI-callback tests excluded)
-        run: cargo +nightly miri test -p undra-ffi --lib
-      - name: Miri (host-allocated port replies, out_reply is always free()d)
-        run: |
-          MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test -p undra-ffi --test abi -- \
-            a_host_that_sets_cap sync_port_answers
-
-  ffi-asan:
-    name: undra-ffi under ASan
-    runs-on: ubuntu-latest
-    env:
-      RUSTFLAGS: ""
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rust-src
-      - uses: Swatinem/rust-cache@v2
-      - name: AddressSanitizer (memory safety; host_contract is the port-callback lifetime regression)
-        # The memory-safety targets only. `sync_alloc` asserts EXACT Rust allocation counts, which
-        # ASan instrumentation perturbs (it is a performance-accounting test, not a safety one, and
-        # runs unmodified in the normal Rust job).
-        run: |
-          RUSTFLAGS="-Z sanitizer=address" cargo +nightly test -p undra-ffi \
-            --target x86_64-unknown-linux-gnu --lib --test abi --test host_contract
-
   contracts:
     name: Contract scenarios (TS + Kotlin)
     runs-on: ubuntu-latest
@@ -476,236 +614,6 @@ jobs:
         env:
           UNDRA_KOTLINX_COROUTINES: /home/runner/lib/kotlinx-coroutines-core-jvm-1.6.4.jar
         run: bash examples/cookbook/snippets/check.sh kotlin
-
-  contracts-swift:
-    name: Contract scenarios (Swift)
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99.0
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Run the Swift scenario runner
-        run: bash contract-tests/run-all.sh swift
-
-  # ADR-061: the Bazel rules (bazel/) and their example workspace (examples/bazel). `bazel test //...` builds the to-do core for the
-  # host and the web with the pinned Rust 1.99.0 that Bazel fetches (rules_rust, by checksum), generates the bindings from the host
-  # library, compiles the Kotlin and TypeScript consumers and runs them against the real core (JNI, Node), and runs ktlint over the
-  # generated Kotlin with and without the exclusions `undra bindgen` writes. Bazel is pinned by .bazelversion (Bazelisk; the example's
-  # is a link to bazel/'s): 8.8.1, the lowest the rules support, and every step runs again on the newest 9.x through
-  # USE_BAZEL_VERSION (Bazelisk's own override), so both ends of "Bazel 8.8 and 9.x" are tested. The rulesets are tested at both
-  # ends too: the example's MODULE.bazel pins recent versions (what most applications run), and examples/bazel/scripts/at-minimums.sh
-  # runs the same targets with every ruleset at the lowest version undra_rules declares (bazel/MODULE.bazel), failing if anything
-  # in the graph raises one. The lock files are committed as Bazel 8.8.1 writes them. They are not run with
-  # --lockfile_mode=error here: a lock records what the machine that wrote it resolved, per OS, and a Linux runner would fail on
-  # every entry a macOS developer made. The 9.x steps and the minimums run with --lockfile_mode=off: 9.x records other registry
-  # files than 8.8.1, and the minimums are another graph, so neither reads or rewrites the committed lock. Bump the 9.x pin
-  # (USE_BAZEL_VERSION, in the 9.x steps of this job, of the macOS one and of the Android one, and in examples/bazel/README.md) when a newer 9.x
-  # release is out and passes.
-  bazel-example:
-    name: Bazel example
-    timeout-minutes: 60
-    runs-on: ubuntu-latest
-    env:
-      BAZELISK_VERSION: v1.29.0
-      # The sha256 of that release's bazelisk-linux-amd64.
-      BAZELISK_SHA256: 5a408715e932c0250d28bd84555f12edbf70117de42f9181691c736eacc4a992
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Bazelisk
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          curl -sSfLo "$RUNNER_TEMP/bin/bazel" "https://github.com/bazelbuild/bazelisk/releases/download/$BAZELISK_VERSION/bazelisk-linux-amd64"
-          echo "$BAZELISK_SHA256  $RUNNER_TEMP/bin/bazel" | sha256sum -c -
-          chmod +x "$RUNNER_TEMP/bin/bazel"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      # What the rulesets download (the Rust toolchain, the JDK, Node, binaryen, the crates): Bazel's repository cache, keyed by the
-      # lock files that name them.
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/bazel-repository
-          key: bazel-repository-${{ runner.os }}-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
-          restore-keys: bazel-repository-${{ runner.os }}-
-      # //symbols:symbolicate_test resolves a crash of the release core with the machine's llvm-symbolizer (the `.so.debug`,
-      # ADR-046). The test also looks below /usr/lib/llvm-*, where the image's clang may have put one; when there is none, the
-      # distribution's LLVM is installed.
-      - name: llvm-symbolizer for the symbols test
-        run: |
-          if command -v llvm-symbolizer >/dev/null || ls /usr/lib/llvm-*/bin/llvm-symbolizer >/dev/null 2>&1; then exit 0; fi
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends llvm
-      - name: The rules' own tests (the Cargo.lock reader)
-        working-directory: bazel
-        run: bazel test //tests/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
-      - name: bazel test //... (host and web cores, bindings, Kotlin and TypeScript consumers, ktlint)
-        working-directory: examples/bazel
-        run: bazel test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
-      - name: at-minimums.sh puts MODULE.bazel back whatever the command does
-        working-directory: examples/bazel
-        run: bash scripts/at-minimums.test.sh
-      - name: bazel test //... at the ruleset minimums
-        working-directory: examples/bazel
-        run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
-      - name: The rules' own tests on Bazel 9.x
-        working-directory: bazel
-        env:
-          USE_BAZEL_VERSION: "9.2.0"
-        run: bazel test //tests/... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
-      - name: bazel test //... on Bazel 9.x
-        working-directory: examples/bazel
-        env:
-          USE_BAZEL_VERSION: "9.2.0"
-        run: bazel test //... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
-      - name: bazel test //... on Bazel 9.x at the ruleset minimums
-        working-directory: examples/bazel
-        env:
-          USE_BAZEL_VERSION: "9.2.0"
-        run: scripts/at-minimums.sh test //... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
-
-  # What only macOS can run, where rules_swift and the iOS core have Xcode: the Swift consumer runs the core in process, the
-  # XCFramework (device and simulator slices) builds in a Bazel action, and the example's iOS app, built to debug (`-c dbg`), has a
-  # dSYM that resolves the Rust core (`keep_debug_objects`). The Kotlin and TypeScript targets are the Linux job's.
-  # Every change runs it, like the other macOS jobs: what moves its result is the Undra crates, the Swift runtime, the CLI and
-  # the rules, which is nearly every change, and a job that can be skipped cannot be part of the roll-up.
-  bazel-example-macos:
-    name: "Bazel example (macOS, Swift and iOS)"
-    timeout-minutes: 60
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Bazelisk
-        run: brew install bazelisk
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/bazel-repository
-          key: bazel-repository-${{ runner.os }}-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
-          restore-keys: bazel-repository-${{ runner.os }}-
-      - name: The Swift consumer, the iOS core and the iOS app's dSYM
-        working-directory: examples/bazel
-        run: |
-          bazel test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
-          bazel build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
-          bazel test //ios:symbols_test --ios_multi_cpus=sim_arm64 -c dbg --apple_generate_dsym \
-            --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
-      # rules_swift and rules_apple are only exercised here, so their minimums are too: the same targets with every ruleset at the
-      # version undra_rules declares, then all of it on the newest 9.x (rules_swift is the ruleset a new Bazel breaks first).
-      - name: The Swift consumer and the iOS core at the ruleset minimums
-        working-directory: examples/bazel
-        run: |
-          scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
-          scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
-      - name: The Swift consumer and the iOS core on Bazel 9.x
-        working-directory: examples/bazel
-        env:
-          USE_BAZEL_VERSION: "9.2.0"
-        run: |
-          bazel test //swift/... --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
-          bazel build //:mobile_ios --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
-      - name: The Swift consumer and the iOS core on Bazel 9.x at the ruleset minimums
-        working-directory: examples/bazel
-        env:
-          USE_BAZEL_VERSION: "9.2.0"
-        run: |
-          scripts/at-minimums.sh test //swift/... --repository_cache="$HOME/.cache/bazel-repository" --test_output=errors
-          scripts/at-minimums.sh build //:mobile_ios --repository_cache="$HOME/.cache/bazel-repository"
-
-  # The Android core and the Kotlin bindings as an Android library, built by Bazel on Linux (ADR-065). The core's NDK is a declared
-  # input of its action: the example pins the archives (MODULE.bazel), and this job gives the build the NDK that sdkmanager installs
-  # (with the retries the other Android jobs use for dl.google.com) in their place, so a run does not download 664 MB through Bazel.
-  # `undra_android_library` needs the Android SDK (ANDROID_HOME); rules_android fetches one archive without a checksum
-  # (android.googlesource.com, ADR-061): acceptable here, and why it is not part of the job that runs on every developer's machine.
-  bazel-android:
-    name: Bazel example (Android core and library)
-    timeout-minutes: 60
-    runs-on: ubuntu-latest
-    env:
-      BAZELISK_VERSION: v1.29.0
-      # The sha256 of that release's bazelisk-linux-amd64.
-      BAZELISK_SHA256: 5a408715e932c0250d28bd84555f12edbf70117de42f9181691c736eacc4a992
-      NDK_VERSION: 27.2.12479018
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Bazelisk
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          curl -sSfLo "$RUNNER_TEMP/bin/bazel" "https://github.com/bazelbuild/bazelisk/releases/download/$BAZELISK_VERSION/bazelisk-linux-amd64"
-          echo "$BAZELISK_SHA256  $RUNNER_TEMP/bin/bazel" | sha256sum -c -
-          chmod +x "$RUNNER_TEMP/bin/bazel"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/bazel-repository
-          key: bazel-repository-${{ runner.os }}-android-${{ hashFiles('examples/bazel/MODULE.bazel.lock', 'bazel/MODULE.bazel.lock', 'Cargo.lock') }}
-          restore-keys: bazel-repository-${{ runner.os }}-
-      - name: The Android SDK and NDK r27 (a failed download is tried again)
-        run: bash scripts/android-sdk-install.sh "ndk;$NDK_VERSION" "platforms;android-35" "build-tools;35.0.0"
-      - name: The Android core (//:mobile_android, linked with the NDK)
-        working-directory: examples/bazel
-        run: |
-          # On its own line, so that a failed script stops the step (bash -e ignores a failed substitution inside an argument),
-          # where Bazel would otherwise download the 664 MB archive.
-          flags="$(android/use-installed-ndk.sh "$ANDROID_HOME/ndk/$NDK_VERSION")"
-          echo "NDK_FLAGS=$flags" >> "$GITHUB_ENV"
-          bazel build //:mobile_android $flags --repository_cache="$HOME/.cache/bazel-repository"
-          # The build used the installed NDK and not the archive: an NDK repository of the output base links into it. (Were the
-          # override to stop working, Bazel would download the archive and this job would be green for the wrong reason.)
-          ndk_real="$(cd "$ANDROID_HOME/ndk/$NDK_VERSION" && pwd -P)"
-          used=0
-          for repo in "$(bazel info output_base)"/external/*android_ndk_linux; do
-            [ -e "$repo/source.properties" ] || continue
-            case "$(readlink -f "$repo/source.properties")" in "$ndk_real"/*) used=1 ;; esac
-          done
-          [ "$used" = 1 ] || { echo "the build did not use the installed NDK: no NDK repository of the output base links into $ndk_real" >&2; exit 1; }
-      - name: The Kotlin bindings as an Android library (//android:hello)
-        working-directory: examples/bazel
-        run: bazel build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
-      # Both at the ruleset minimums and on the newest 9.x, as the other two Bazel jobs run their targets (the same script and
-      # pin; a newer 9.x moves with theirs).
-      - name: The Android core and library at the ruleset minimums
-        working-directory: examples/bazel
-        run: |
-          scripts/at-minimums.sh build //:mobile_android $NDK_FLAGS --repository_cache="$HOME/.cache/bazel-repository"
-          scripts/at-minimums.sh build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
-      - name: The Android core and library on Bazel 9.x
-        working-directory: examples/bazel
-        env:
-          USE_BAZEL_VERSION: "9.2.0"
-        run: |
-          bazel build //:mobile_android $NDK_FLAGS --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
-          bazel build //android:hello --config=android --lockfile_mode=off --repository_cache="$HOME/.cache/bazel-repository"
-      - name: The Android core and library on Bazel 9.x at the ruleset minimums
-        working-directory: examples/bazel
-        env:
-          USE_BAZEL_VERSION: "9.2.0"
-        run: |
-          scripts/at-minimums.sh build //:mobile_android $NDK_FLAGS --repository_cache="$HOME/.cache/bazel-repository"
-          scripts/at-minimums.sh build //android:hello --config=android --repository_cache="$HOME/.cache/bazel-repository"
-
-  playground-web:
-    # The playground's web app and its stories page (src/stories, rendered by stories.html with Vite alone; the modules are Component Story Format
-    # over @undra/testkit): type-checked and built against the wasm core `undra build` makes.
-    name: Playground web (app and stories)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99.0
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: The undra CLI, then the playground core for the web
-        run: |
-          cargo build -p undra-cli
-          target/debug/undra build -C examples/playground --platform web
-      - name: Type-check and build the app and the stories page
-        working-directory: examples/playground/web
-        run: |
-          npm ci --no-audit --no-fund
-          npm run build
 
   react-native:
     # The React Native runtime without a device (docs/REACT_NATIVE.md, "What is tested where"): the C++ host
@@ -798,13 +706,197 @@ jobs:
           npm test
           npm run test:contract
 
+  # ADR-042: the types of other crates that cross as a wire leaf are opt-in features of `undra`. Each must
+  # build for every platform the core ships to, and none may bring a clock or randomness along (R12): a
+  # `chrono` with `clock` or a `uuid` with `v4` would pull `wasm-bindgen` and `getrandom` into the wasm core.
+  leaf-features:
+    name: Leaf-type features (uuid, chrono, time, rust_decimal, bytes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: wasm32-unknown-unknown, aarch64-apple-ios, aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - name: Tests with every feature on (the codecs, the facade, the macros that name a missing feature)
+        run: |
+          features=uuid,chrono,time,rust_decimal,bytes
+          cargo test -p undra-wire --features $features
+          cargo test -p undra --features $features
+          cargo test -p undra-macros --lib --features $features
+      - name: Each feature builds for wasm32, iOS and Android
+        run: |
+          for target in wasm32-unknown-unknown aarch64-apple-ios aarch64-linux-android; do
+            for feature in uuid chrono time rust_decimal bytes; do
+              cargo build -p undra-wire --features $feature --target $target
+              cargo build -p undra --features $feature --target $target
+            done
+          done
+      - name: No clock and no randomness comes with them
+        run: |
+          if cargo tree -p undra --features uuid,chrono,time,rust_decimal,bytes -e features,normal --target wasm32-unknown-unknown | grep -E 'getrandom|wasm-bindgen|js-sys|iana-time-zone'; then
+            echo "a leaf-type feature pulled a clock or randomness source into the core (R12)"
+            exit 1
+          fi
+
+  kotlin:
+    name: Kotlin runtime (JVM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install kotlinc
+        run: |
+          curl -sSfL -o kotlinc.zip https://github.com/JetBrains/kotlin/releases/download/v2.0.21/kotlin-compiler-2.0.21.zip
+          unzip -q kotlinc.zip -d "$HOME/kotlin"
+          echo "$HOME/kotlin/kotlinc/bin" >> "$GITHUB_PATH"
+      - name: Fetch kotlinx-coroutines
+        run: |
+          mkdir -p "$HOME/lib"
+          curl -sSfLo "$HOME/lib/kotlinx-coroutines-core-jvm-1.6.4.jar" \
+            https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.6.4/kotlinx-coroutines-core-jvm-1.6.4.jar
+          # The SQLite JDBC driver of the Db port's JVM tests and the Kotlin S25 column (ADR-048);
+          # never a dependency of the runtime module.
+          curl -sSfLo "$HOME/lib/sqlite-jdbc-3.53.4.0.jar" \
+            https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.53.4.0/sqlite-jdbc-3.53.4.0.jar
+          echo "47e21dd53efe1524fe0df6965cb65003ffe17172  $HOME/lib/sqlite-jdbc-3.53.4.0.jar" | sha1sum -c -
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the JNI library (the fixture core, namespace undra_fixture)
+        run: cargo build --manifest-path crates/undra-ffi/tests/fixture/Cargo.toml
+      - name: Test (incl. JNI smoke against the real library)
+        env:
+          UNDRA_KOTLINX_COROUTINES: /home/runner/lib/kotlinx-coroutines-core-jvm-1.6.4.jar
+          UNDRA_SQLITE_JDBC: /home/runner/lib/sqlite-jdbc-3.53.4.0.jar
+          UNDRA_NATIVE_LIB_DIR: ${{ github.workspace }}/crates/undra-ffi/tests/fixture/target/debug
+        run: runtimes/kotlin/undra-runtime/scripts/test-local.sh
+
+  ts:
+    name: TypeScript runtime
+    runs-on: ubuntu-latest
+    env:
+      # The runtime's call-path guard (test/call-path.test.ts, the `[web."node/..."]` budgets of bench/budgets.toml; read by
+      # scripts/web-budgets.mjs) is the one test of this workflow that holds an absolute time to a budget. Runner classes
+      # measured 3.5x-6.2x slower than the M5 host in Oct 2026, against the 5x the budgets were set with; the same
+      # 2x of headroom bench.yml carries keeps the guard honest about a real regression and stops it failing on the slowest
+      # runner (callSync measured 952 ns against 800 ns). It scales ceilings only. No other job runs the test.
+      UNDRA_BENCH_SCALE: "2"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Test
+        working-directory: runtimes/ts/@undra/runtime
+        run: |
+          npm ci
+          npm test
+      # ADR-057: the package publishes a production build whose private properties are renamed. The same suite, run against it (the
+      # sources' own tests of the build: `scripts/mangle.mjs`, the flavours).
+      - name: Test against the production build (renamed private properties)
+        working-directory: runtimes/ts/@undra/runtime
+        run: npm run test:dist
+      # The testing kit (docs/TESTING.md): its tests, and its build config, which compiles against the runtime's emitted declarations.
+      - name: Testing kit (@undra/testkit)
+        run: |
+          (cd runtimes/ts/@undra/runtime && npm run build)
+          cd runtimes/ts/@undra/testkit
+          npm ci
+          npm test
+          UNDRA_TS_DIST="$GITHUB_WORKSPACE/runtimes/ts/@undra/runtime/dist/index.js" npm test
+          npm run typecheck
+      # The devtools page of `undra dev` (ADR-054): its tests, and the committed assets must be what its
+      # sources build to (the CLI embeds them, so `cargo build` needs no Node).
+      - name: Devtools page (typecheck, tests, committed assets equal a rebuild, size budget)
+        working-directory: runtimes/ts/devtools
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          UNDRA_TS_DIST="$GITHUB_WORKSPACE/runtimes/ts/@undra/runtime/dist/index.js" npm test
+          bash build.sh --check
+
+  wasm-ffi:
+    name: wasm ABI (real module, TS runtime)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install the TypeScript runtime's dependencies
+        working-directory: runtimes/ts/@undra/runtime
+        run: npm ci
+      # run.sh builds the TypeScript runtime from source into a scratch directory and fails (it does
+      # not skip) when it cannot, so this leg can neither be stale nor silently absent.
+      - name: wasm acceptance (raw host + TS runtime)
+        run: bash crates/undra-ffi/tests/wasm/run.sh
+      # The same acceptance against the package's production build (ADR-057: private properties renamed, messages as codes).
+      - name: wasm acceptance against the production build
+        run: |
+          (cd runtimes/ts/@undra/runtime && npm run build)
+          UNDRA_TS_DIST="$GITHUB_WORKSPACE/runtimes/ts/@undra/runtime/dist/index.js" bash crates/undra-ffi/tests/wasm/run.sh
+
+  ffi-asan:
+    name: undra-ffi under ASan
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - uses: Swatinem/rust-cache@v2
+      - name: AddressSanitizer (memory safety; host_contract is the port-callback lifetime regression)
+        # The memory-safety targets only. `sync_alloc` asserts EXACT Rust allocation counts, which
+        # ASan instrumentation perturbs (it is a performance-accounting test, not a safety one, and
+        # runs unmodified in the normal Rust job).
+        run: |
+          RUSTFLAGS="-Z sanitizer=address" cargo +nightly test -p undra-ffi \
+            --target x86_64-unknown-linux-gnu --lib --test abi --test host_contract
+
+  playground-web:
+    # The playground's web app and its stories page (src/stories, rendered by stories.html with Vite alone; the modules are Component Story Format
+    # over @undra/testkit): type-checked and built against the wasm core `undra build` makes.
+    name: Playground web (app and stories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: The undra CLI, then the playground core for the web
+        run: |
+          cargo build -p undra-cli
+          target/debug/undra build -C examples/playground --platform web
+      - name: Type-check and build the app and the stories page
+        working-directory: examples/playground/web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
   # This workflow's own roll-up: green only when every job above succeeded (a failed, cancelled or skipped job fails it;
   # `if: always()` so it reports after failures too). The Gate workflow needs it for every workflow it calls, and
   # ends in the one check the ruleset requires. Named "Complete" so that only the Gate's last job is called "All green".
   complete:
     name: Complete
     if: always()
-    needs: [rust, leaf-features, ts, kotlin, wasm-ffi, macos, ios-floor, android, ffi-miri, ffi-asan, contracts, contracts-swift, bazel-example, bazel-example-macos, bazel-android, playground-web, react-native]
+    needs: [bazel-example-macos, bazel-example-macos-minimums, macos, macos-apps, ios-floor, contracts-swift, ffi-miri, rust, rust-cli, bazel-example, bazel-example-minimums, bazel-android, android, contracts, react-native, leaf-features, kotlin, ts, wasm-ffi, ffi-asan, playground-web]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
