@@ -23,7 +23,7 @@ plain `final class MyKv: Kv` (async). The exact errors, in the order a team meet
   generated port protocol (which refines `Sendable`) is inferred **nonisolated** under the mode, not `@MainActor`
   as the rest of the file is, so its `var`s are refused the way they are under plain strict concurrency.
 * `error: call to main actor-isolated global function 'mainFn()' in a synchronous nonisolated context`, and for
-  a property `error: main actor-isolated var 'offset' can not be referenced from a nonisolated context`: a witness
+  a property `error: main actor-isolated property 'offset' can not be referenced from a nonisolated context`: a witness
   that reads what the rest of the app keeps on the main actor.
 * When the generated file is compiled inside a module that has the setting (an app that drops the generated
   sources into its own target rather than depending on the package): `error: call to main actor-isolated instance
@@ -45,7 +45,8 @@ What makes a plain conformer compile under the mode, measured:
 * `nonisolated final class` on the conformer: what the compiler infers anyway; it buys nothing.
 * Closures passed to `@Sendable` parameters: nonisolated whatever the file's default, so an app registers a port
   without conforming to anything, and an async closure reads main-actor state with `await MainActor.run { .. }`.
-  A synchronous closure that reads it directly is refused with a clear diagnostic. One Swift rule to know: a
+  A synchronous closure that reads it directly is refused (`main actor-isolated property 'offset' can not be
+  referenced from a Sendable closure`). One Swift rule to know: a
   closure that throws is inferred as throwing `any Error` unless its clause names the type, so a method with a
   typed error takes `{ req async throws(HttpError) in .. }` (measured on a local error type too: it is not the
   golden's name clash).
